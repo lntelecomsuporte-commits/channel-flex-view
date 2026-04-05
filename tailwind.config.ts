@@ -47,6 +47,12 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        "channel-osd": {
+          DEFAULT: "hsl(var(--channel-osd-bg))",
+          foreground: "hsl(var(--channel-osd-foreground))",
+        },
+        "channel-active": "hsl(var(--channel-active))",
+        success: "hsl(var(--success))",
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
