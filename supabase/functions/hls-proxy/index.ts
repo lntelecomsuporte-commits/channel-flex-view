@@ -149,7 +149,9 @@ Deno.serve(async (request) => {
   });
 
   const contentType = upstreamResponse.headers.get("content-type")?.toLowerCase() ?? "";
-  const proxyEndpoint = `${requestUrl.origin}${requestUrl.pathname}`;
+  const forwardedHost = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? requestUrl.host;
+  const forwardedProto = request.headers.get("x-forwarded-proto") ?? requestUrl.protocol.replace(":", "") ?? "https";
+  const proxyEndpoint = `${forwardedProto}://${forwardedHost}/functions/v1/hls-proxy`;
 
   if (
     upstreamResponse.url.toLowerCase().includes(".m3u8") ||
