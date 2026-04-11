@@ -5,6 +5,11 @@ import ChannelOSD from "@/components/player/ChannelOSD";
 import ChannelPreview from "@/components/player/ChannelPreview";
 
 const PlayerPage = () => {
+  useEffect(() => {
+    document.body.classList.add("player-mode");
+    return () => document.body.classList.remove("player-mode");
+  }, []);
+
   const { data: channels, isLoading } = useChannels();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showOSD, setShowOSD] = useState(true);
