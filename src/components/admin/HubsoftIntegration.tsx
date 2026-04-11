@@ -118,13 +118,36 @@ const HubsoftIntegration = () => {
         <CardHeader>
           <CardTitle>Parâmetros para o Hubsoft</CardTitle>
           <CardDescription>
-            Configure estes parâmetros na integração do Hubsoft. Copie os valores e cole no campo "Valor" de cada parâmetro.
+            Configure estes parâmetros na integração do Hubsoft (gateway "Outros"). Copie os valores e cole no campo "Valor" de cada parâmetro.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* url (obrigatório) */}
+          <div className="space-y-2">
+            <Label>Parâmetro 1: <code className="text-xs bg-muted px-1 py-0.5 rounded">url</code> <span className="text-xs text-destructive">(obrigatório)</span></Label>
+            <div className="flex items-center gap-2">
+              <Input value={callbackUrl} readOnly className="font-mono text-xs" />
+              <Button variant="outline" size="sm" onClick={() => copyToClipboard(callbackUrl, "url")}>
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">Mesmo valor da Callback URL</p>
+          </div>
+
+          {/* metodo (obrigatório) */}
+          <div className="space-y-2">
+            <Label>Parâmetro 2: <code className="text-xs bg-muted px-1 py-0.5 rounded">metodo</code> <span className="text-xs text-destructive">(obrigatório)</span></Label>
+            <div className="flex items-center gap-2">
+              <Input value="POST" readOnly className="font-mono text-xs" />
+              <Button variant="outline" size="sm" onClick={() => copyToClipboard("POST", "metodo")}>
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
           {/* API Key */}
           <div className="space-y-2">
-            <Label>Parâmetro 1: <code className="text-xs bg-muted px-1 py-0.5 rounded">api_key</code></Label>
+            <Label>Parâmetro 3: <code className="text-xs bg-muted px-1 py-0.5 rounded">api_key</code></Label>
             <div className="flex items-center gap-2">
               <Input value={form.api_key} readOnly className="font-mono text-xs" placeholder="Clique em Gerar para criar uma API Key" />
               <Button variant="outline" size="sm" onClick={handleGenerateApiKey} title="Gerar nova API Key">
@@ -138,7 +161,7 @@ const HubsoftIntegration = () => {
 
           {/* Login */}
           <div className="space-y-2">
-            <Label>Parâmetro 2: <code className="text-xs bg-muted px-1 py-0.5 rounded">login</code></Label>
+            <Label>Parâmetro 4: <code className="text-xs bg-muted px-1 py-0.5 rounded">login</code></Label>
             <div className="flex items-center gap-2">
               <Input
                 value={form.username}
@@ -153,7 +176,7 @@ const HubsoftIntegration = () => {
 
           {/* Senha */}
           <div className="space-y-2">
-            <Label>Parâmetro 3: <code className="text-xs bg-muted px-1 py-0.5 rounded">senha</code></Label>
+            <Label>Parâmetro 5: <code className="text-xs bg-muted px-1 py-0.5 rounded">senha</code></Label>
             <div className="flex items-center gap-2">
               <Input
                 value={form.password}
@@ -168,7 +191,7 @@ const HubsoftIntegration = () => {
 
           {/* API URL */}
           <div className="space-y-2">
-            <Label>Parâmetro 4: <code className="text-xs bg-muted px-1 py-0.5 rounded">api_url</code></Label>
+            <Label>Parâmetro 6: <code className="text-xs bg-muted px-1 py-0.5 rounded">api_url</code></Label>
             <div className="flex items-center gap-2">
               <Input value={callbackUrl} readOnly className="font-mono text-xs" />
               <Button variant="outline" size="sm" onClick={() => copyToClipboard(callbackUrl, "API URL")}>
@@ -181,10 +204,11 @@ const HubsoftIntegration = () => {
             <p><strong>📋 Como configurar no Hubsoft:</strong></p>
             <ol className="list-decimal list-inside space-y-1">
               <li>Vá em <strong>Integrações → Plataforma de Conteúdo</strong></li>
+              <li>Gateway: <strong>Outros</strong></li>
               <li>Cole a <strong>Callback URL</strong> acima</li>
               <li>Marque <strong>"Pacote único"</strong></li>
               <li>Marque <strong>"Habilitar/Suspender Assinaturas"</strong></li>
-              <li>Adicione os 4 parâmetros acima com seus respectivos valores</li>
+              <li>Adicione os <strong>6 parâmetros</strong> acima com seus respectivos valores</li>
               <li>Salve a integração</li>
             </ol>
           </div>
