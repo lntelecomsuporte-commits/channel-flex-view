@@ -138,7 +138,7 @@ const HubsoftIntegration = () => {
                 <Copy className="h-4 w-4" />
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">Cole a URL completa, incluindo os parâmetros já embutidos</p>
+            <p className="text-xs text-muted-foreground">Cole a URL completa, incluindo a chave embutida no final do caminho</p>
           </div>
 
           {/* metodo (obrigatório) */}
