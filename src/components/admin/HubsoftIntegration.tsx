@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Save, Copy } from "lucide-react";
+import { Save, Copy, RefreshCw } from "lucide-react";
 
 function useHubsoftConfig() {
   return useQuery({
@@ -24,13 +24,21 @@ function useHubsoftConfig() {
   });
 }
 
+function generateApiKey() {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let key = "";
+  for (let i = 0; i < 32; i++) {
+    key += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return key;
+}
+
 const HubsoftIntegration = () => {
   const { data: config, isLoading } = useHubsoftConfig();
   const queryClient = useQueryClient();
   const [form, setForm] = useState({
     api_url: "",
-    client_id: "",
-    client_secret: "",
+    api_key: "",
     username: "",
     password: "",
     package_id: "",
@@ -42,8 +50,7 @@ const HubsoftIntegration = () => {
     if (config) {
       setForm({
         api_url: config.api_url,
-        client_id: config.client_id,
-        client_secret: config.client_secret,
+        api_key: config.api_key,
         username: config.username,
         password: config.password,
         package_id: config.package_id,
@@ -52,7 +59,7 @@ const HubsoftIntegration = () => {
     }
   }, [config]);
 
-  const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/hubsoft-webhook`;
+  const callbackUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/hubsoft-webhook`;
 
   const handleSave = async () => {
     if (!config) return;
@@ -71,9 +78,15 @@ const HubsoftIntegration = () => {
     }
   };
 
-  const copyWebhook = () => {
-    navigator.clipboard.writeText(webhookUrl);
-    toast.success("URL do webhook copiada!");
+  const handleGenerateApiKey = () => {
+    const key = generateApiKey();
+    setForm((f) => ({ ...f, api_key: key }));
+    toast.info("API Key gerada! Clique em Salvar para confirmar.");
+  };
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success(`${label} copiado!`);
   };
 
   if (isLoading) {
@@ -82,37 +95,108 @@ const HubsoftIntegration = () => {
 
   return (
     <div className="space-y-6">
+      {/* Callback URL */}
       <Card>
         <CardHeader>
-          <CardTitle>Webhook URL</CardTitle>
+          <CardTitle>Callback URL</CardTitle>
           <CardDescription>
-            Configure esta URL no Hubsoft para receber notificações de criação, bloqueio e exclusão de clientes.
+            Configure esta URL como Callback URL da integração de Plataforma de Conteúdo no Hubsoft.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-2">
-            <Input value={webhookUrl} readOnly className="font-mono text-xs" />
-            <Button variant="outline" size="sm" onClick={copyWebhook}>
+            <Input value={callbackUrl} readOnly className="font-mono text-xs" />
+            <Button variant="outline" size="sm" onClick={() => copyToClipboard(callbackUrl, "Callback URL")}>
               <Copy className="h-4 w-4" />
             </Button>
-          </div>
-          <div className="mt-4 text-sm text-muted-foreground space-y-1">
-            <p><strong>Ações suportadas:</strong></p>
-            <ul className="list-disc list-inside space-y-1">
-              <li><code>create</code> — Cria usuário de TV (email + senha)</li>
-              <li><code>block</code> — Bloqueia o acesso do usuário</li>
-              <li><code>unblock</code> — Desbloqueia o acesso do usuário</li>
-              <li><code>delete</code> — Exclui o usuário de TV</li>
-            </ul>
           </div>
         </CardContent>
       </Card>
 
+      {/* Parâmetros para configurar no Hubsoft */}
       <Card>
         <CardHeader>
-          <CardTitle>Configuração da API Hubsoft</CardTitle>
+          <CardTitle>Parâmetros para o Hubsoft</CardTitle>
           <CardDescription>
-            Credenciais para conectar com a API do Hubsoft (opcional, para sincronização ativa).
+            Configure estes parâmetros na integração do Hubsoft. Copie os valores e cole no campo "Valor" de cada parâmetro.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* API Key */}
+          <div className="space-y-2">
+            <Label>Parâmetro 1: <code className="text-xs bg-muted px-1 py-0.5 rounded">api_key</code></Label>
+            <div className="flex items-center gap-2">
+              <Input value={form.api_key} readOnly className="font-mono text-xs" placeholder="Clique em Gerar para criar uma API Key" />
+              <Button variant="outline" size="sm" onClick={handleGenerateApiKey} title="Gerar nova API Key">
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => copyToClipboard(form.api_key, "API Key")} disabled={!form.api_key}>
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Login */}
+          <div className="space-y-2">
+            <Label>Parâmetro 2: <code className="text-xs bg-muted px-1 py-0.5 rounded">login</code></Label>
+            <div className="flex items-center gap-2">
+              <Input
+                value={form.username}
+                onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+                placeholder="Seu login de identificação"
+              />
+              <Button variant="outline" size="sm" onClick={() => copyToClipboard(form.username, "Login")} disabled={!form.username}>
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Senha */}
+          <div className="space-y-2">
+            <Label>Parâmetro 3: <code className="text-xs bg-muted px-1 py-0.5 rounded">senha</code></Label>
+            <div className="flex items-center gap-2">
+              <Input
+                value={form.password}
+                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                placeholder="Sua senha de autenticação"
+              />
+              <Button variant="outline" size="sm" onClick={() => copyToClipboard(form.password, "Senha")} disabled={!form.password}>
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* API URL */}
+          <div className="space-y-2">
+            <Label>Parâmetro 4: <code className="text-xs bg-muted px-1 py-0.5 rounded">api_url</code></Label>
+            <div className="flex items-center gap-2">
+              <Input value={callbackUrl} readOnly className="font-mono text-xs" />
+              <Button variant="outline" size="sm" onClick={() => copyToClipboard(callbackUrl, "API URL")}>
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-4 p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground space-y-2">
+            <p><strong>📋 Como configurar no Hubsoft:</strong></p>
+            <ol className="list-decimal list-inside space-y-1">
+              <li>Vá em <strong>Integrações → Plataforma de Conteúdo</strong></li>
+              <li>Cole a <strong>Callback URL</strong> acima</li>
+              <li>Marque <strong>"Pacote único"</strong></li>
+              <li>Marque <strong>"Habilitar/Suspender Assinaturas"</strong></li>
+              <li>Adicione os 4 parâmetros acima com seus respectivos valores</li>
+              <li>Salve a integração</li>
+            </ol>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Configurações internas */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Configurações da Integração</CardTitle>
+          <CardDescription>
+            Configurações internas do sistema. O ID do pacote é opcional.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -120,31 +204,9 @@ const HubsoftIntegration = () => {
             <Switch checked={form.is_active} onCheckedChange={(v) => setForm((f) => ({ ...f, is_active: v }))} />
             <Label>Integração ativa</Label>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>URL da API</Label>
-              <Input value={form.api_url} onChange={(e) => setForm((f) => ({ ...f, api_url: e.target.value }))} placeholder="https://api.seuprovedor.com.br" />
-            </div>
-            <div className="space-y-2">
-              <Label>Client ID</Label>
-              <Input value={form.client_id} onChange={(e) => setForm((f) => ({ ...f, client_id: e.target.value }))} placeholder="89" />
-            </div>
-            <div className="space-y-2">
-              <Label>Client Secret</Label>
-              <Input type="password" value={form.client_secret} onChange={(e) => setForm((f) => ({ ...f, client_secret: e.target.value }))} placeholder="Secret" />
-            </div>
-            <div className="space-y-2">
-              <Label>Username</Label>
-              <Input value={form.username} onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))} placeholder="api@provedor.com" />
-            </div>
-            <div className="space-y-2">
-              <Label>Password</Label>
-              <Input type="password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} placeholder="Senha" />
-            </div>
-            <div className="space-y-2">
-              <Label>ID do Pacote</Label>
-              <Input value={form.package_id} onChange={(e) => setForm((f) => ({ ...f, package_id: e.target.value }))} placeholder="ID do pacote de TV no Hubsoft" />
-            </div>
+          <div className="space-y-2">
+            <Label>ID do Pacote (opcional)</Label>
+            <Input value={form.package_id} onChange={(e) => setForm((f) => ({ ...f, package_id: e.target.value }))} placeholder="ID do pacote de TV no Hubsoft" />
           </div>
           <Button onClick={handleSave} disabled={saving}>
             <Save className="h-4 w-4 mr-1" /> {saving ? "Salvando..." : "Salvar Configuração"}
