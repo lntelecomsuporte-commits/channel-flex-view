@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import Hls from "hls.js";
 
 interface VideoPlayerProps {
@@ -9,6 +9,7 @@ interface VideoPlayerProps {
 const VideoPlayer = ({ streamUrl, autoPlay = true }: VideoPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const [muted, setMuted] = useState(true);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -42,12 +43,30 @@ const VideoPlayer = ({ streamUrl, autoPlay = true }: VideoPlayerProps) => {
     };
   }, [streamUrl, autoPlay]);
 
+  // Unmute after first user interaction
+  useEffect(() => {
+    const unmute = () => {
+      setMuted(false);
+      window.removeEventListener("click", unmute);
+      window.removeEventListener("keydown", unmute);
+      window.removeEventListener("touchstart", unmute);
+    };
+    window.addEventListener("click", unmute);
+    window.addEventListener("keydown", unmute);
+    window.addEventListener("touchstart", unmute);
+    return () => {
+      window.removeEventListener("click", unmute);
+      window.removeEventListener("keydown", unmute);
+      window.removeEventListener("touchstart", unmute);
+    };
+  }, []);
+
   return (
     <video
       ref={videoRef}
       className="absolute inset-0 w-full h-full object-cover"
       playsInline
-      muted={false}
+      muted={muted}
     />
   );
 };
