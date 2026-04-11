@@ -37,9 +37,9 @@ const PlayerPage = () => {
 
       setCurrentIndex((prev) => {
         if (direction === "up") {
-          return prev > 0 ? prev - 1 : channels.length - 1;
+          return prev < channels.length - 1 ? prev + 1 : 0;
         }
-        return prev < channels.length - 1 ? prev + 1 : 0;
+        return prev > 0 ? prev - 1 : channels.length - 1;
       });
       showOSDTemporarily();
     },
