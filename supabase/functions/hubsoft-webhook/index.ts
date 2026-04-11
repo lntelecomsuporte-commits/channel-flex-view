@@ -17,8 +17,14 @@ Deno.serve(async (req) => {
     );
 
     // Parse credentials from multiple sources because Hubsoft may forward
-    // custom parameters as query params, headers, or embedded callback URL params.
+    // custom parameters in different ways depending on the integration mode.
     const url = new URL(req.url);
+    const pathSegments = url.pathname.split("/").filter(Boolean);
+    const hubsoftWebhookIndex = pathSegments.lastIndexOf("hubsoft-webhook");
+    const apiKeyFromPath =
+      hubsoftWebhookIndex >= 0 && pathSegments[hubsoftWebhookIndex + 1]
+        ? pathSegments[hubsoftWebhookIndex + 1]
+        : null;
     const apiKeyParam = url.searchParams.get("api_key");
     const loginParam = url.searchParams.get("login");
     const senhaParam = url.searchParams.get("senha");
@@ -29,6 +35,10 @@ Deno.serve(async (req) => {
       req.headers.get("api_key") ||
       req.headers.get("apikey") ||
       req.headers.get("x-api-key");
+    const authorizationHeader = req.headers.get("authorization");
+    const bearerApiKey = authorizationHeader?.toLowerCase().startsWith("bearer ")
+      ? authorizationHeader.slice(7).trim()
+      : null;
     const loginHeader =
       req.headers.get("login") ||
       req.headers.get("x-login");
@@ -38,21 +48,23 @@ Deno.serve(async (req) => {
 
     // Log the full payload for debugging
     console.log("=== HUBSOFT WEBHOOK ===");
+    console.log("Request target:", { pathname: url.pathname, hasPathApiKey: Boolean(apiKeyFromPath) });
     console.log("Query params:", { api_key: apiKeyParam, login: loginParam, senha: senhaParam ? "***" : null });
     console.log("Credential headers present:", {
       api_key: Boolean(apiKeyHeader),
+      authorization: Boolean(bearerApiKey),
       login: Boolean(loginHeader),
       senha: Boolean(senhaHeader),
     });
     console.log("Body:", JSON.stringify(body, null, 2));
 
-    const api_key = apiKeyParam || apiKeyHeader || body.api_key || null;
+    const api_key = apiKeyFromPath || apiKeyParam || apiKeyHeader || bearerApiKey || body.api_key || null;
     const login = loginParam || loginHeader || body.login || null;
     const senha = senhaParam || senhaHeader || body.senha || null;
 
     if (!api_key) {
       console.error("Missing api_key in request");
-      return new Response(JSON.stringify({ error: "api_key is required in the callback URL or headers" }), {
+      return new Response(JSON.stringify({ error: "api_key is required in the callback URL path, query string, or headers" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
