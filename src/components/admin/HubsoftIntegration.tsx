@@ -33,6 +33,24 @@ function generateApiKey() {
   return key;
 }
 
+function buildCallbackUrl(credentials: { api_key: string; username: string; password: string }) {
+  const url = new URL(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/hubsoft-webhook`);
+
+  if (credentials.api_key) {
+    url.searchParams.set("api_key", credentials.api_key);
+  }
+
+  if (credentials.username) {
+    url.searchParams.set("login", credentials.username);
+  }
+
+  if (credentials.password) {
+    url.searchParams.set("senha", credentials.password);
+  }
+
+  return url.toString();
+}
+
 const HubsoftIntegration = () => {
   const { data: config, isLoading } = useHubsoftConfig();
   const queryClient = useQueryClient();
@@ -59,7 +77,7 @@ const HubsoftIntegration = () => {
     }
   }, [config]);
 
-  const callbackUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/hubsoft-webhook`;
+  const callbackUrl = buildCallbackUrl(form);
 
   const handleSave = async () => {
     if (!config) return;
@@ -100,7 +118,7 @@ const HubsoftIntegration = () => {
         <CardHeader>
           <CardTitle>Callback URL</CardTitle>
           <CardDescription>
-            Configure esta URL como Callback URL da integração de Plataforma de Conteúdo no Hubsoft.
+            Use exatamente esta URL no Hubsoft. Ela já leva as credenciais na própria URL para evitar falhas no envio dos parâmetros extras.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -131,7 +149,7 @@ const HubsoftIntegration = () => {
                 <Copy className="h-4 w-4" />
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">Mesmo valor da Callback URL</p>
+            <p className="text-xs text-muted-foreground">Cole a URL completa, incluindo os parâmetros já embutidos</p>
           </div>
 
           {/* metodo (obrigatório) */}
@@ -205,10 +223,11 @@ const HubsoftIntegration = () => {
             <ol className="list-decimal list-inside space-y-1">
               <li>Vá em <strong>Integrações → Plataforma de Conteúdo</strong></li>
               <li>Gateway: <strong>Outros</strong></li>
-              <li>Cole a <strong>Callback URL</strong> acima</li>
+              <li>Cole a <strong>Callback URL completa</strong> acima no parâmetro <strong>url</strong></li>
               <li>Marque <strong>"Pacote único"</strong></li>
               <li>Marque <strong>"Habilitar/Suspender Assinaturas"</strong></li>
-              <li>Adicione os <strong>6 parâmetros</strong> acima com seus respectivos valores</li>
+              <li>Defina <strong>metodo</strong> como <strong>POST</strong></li>
+              <li>Se quiser, mantenha os demais parâmetros também preenchidos, mas a autenticação principal já vai na URL</li>
               <li>Salve a integração</li>
             </ol>
           </div>
