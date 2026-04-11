@@ -85,6 +85,7 @@ const PlayerPage = () => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (showChannelList) return; // Let ChannelList handle keys
       switch (e.key) {
         case "ArrowUp":
           e.preventDefault();
@@ -107,7 +108,7 @@ const PlayerPage = () => {
           if (showPreview) {
             confirmPreview();
           } else {
-            setShowOSD((prev) => !prev);
+            setShowChannelList(true);
           }
           break;
       }
@@ -115,7 +116,7 @@ const PlayerPage = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [changeChannel, showNextPreview, confirmPreview, showPreview]);
+  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList]);
 
   // Auto-hide OSD after initial show
   useEffect(() => {
