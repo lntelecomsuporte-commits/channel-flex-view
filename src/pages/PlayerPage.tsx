@@ -165,11 +165,23 @@ const PlayerPage = () => {
             <div className="absolute top-0 left-0 right-0 osd-top-gradient p-4 animate-fade-in z-10">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">
-                  ↑↓ Trocar canal • →← Ver próximo • OK Confirmar
+                  ↑↓ Trocar canal • →← Ver próximo • OK Lista de canais
                 </span>
               </div>
             </div>
           )}
+
+          <ChannelList
+            channels={channels}
+            currentIndex={currentIndex}
+            visible={showChannelList}
+            onSelect={(index) => {
+              setCurrentIndex(index);
+              setShowChannelList(false);
+              showOSDTemporarily();
+            }}
+            onClose={() => setShowChannelList(false)}
+          />
         </>
       )}
     </div>
