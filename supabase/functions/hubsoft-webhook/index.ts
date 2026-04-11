@@ -257,7 +257,7 @@ Deno.serve(async (req) => {
     }
 
     // Handle "cancelar" / "excluir" / "remover"
-    if (["cancelar", "excluir", "remover", "delete", "cancel", "remove"].includes(normalizedTipo)) {
+    if (["cancelar", "excluir", "remover", "remocao", "delete", "cancel", "remove"].includes(normalizedTipo)) {
       const identifier = idCliente;
       if (!identifier) {
         return new Response(JSON.stringify({ error: "client identifier is required" }), {
