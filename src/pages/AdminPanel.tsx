@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useAllChannels, useCategories } from "@/hooks/useChannels";
@@ -32,6 +32,13 @@ const AdminPanel = () => {
 
   const [categoryForm, setCategoryForm] = useState({ name: "", position: "" });
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate("/admin/login");
+    }
+  }, [authLoading, user, navigate]);
 
   if (authLoading) {
     return (
@@ -42,7 +49,6 @@ const AdminPanel = () => {
   }
 
   if (!user) {
-    navigate("/admin/login");
     return null;
   }
 
@@ -66,6 +72,7 @@ const AdminPanel = () => {
       return;
     }
 
+    setSaving(true);
     const payload = {
       name: channelForm.name,
       channel_number: parseInt(channelForm.channel_number),
@@ -82,8 +89,10 @@ const AdminPanel = () => {
       ({ error } = await supabase.from("channels").insert(payload));
     }
 
+    setSaving(false);
     if (error) {
       toast.error("Erro ao salvar canal: " + error.message);
+      console.error("Erro ao salvar canal:", error);
     } else {
       toast.success(editingChannelId ? "Canal atualizado!" : "Canal adicionado!");
       setChannelForm({ name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true });
@@ -97,6 +106,7 @@ const AdminPanel = () => {
     const { error } = await supabase.from("channels").delete().eq("id", id);
     if (error) {
       toast.error("Erro ao excluir: " + error.message);
+      console.error("Erro ao excluir canal:", error);
     } else {
       toast.success("Canal excluído");
       queryClient.invalidateQueries({ queryKey: ["channels-all"] });
@@ -117,13 +127,21 @@ const AdminPanel = () => {
   };
 
   const handleSaveCategory = async () => {
-    if (!categoryForm.name) { toast.error("Informe o nome da categoria"); return; }
+    if (!categoryForm.name) {
+      toast.error("Informe o nome da categoria");
+      return;
+    }
+
+    setSaving(true);
     const { error } = await supabase.from("categories").insert({
       name: categoryForm.name,
       position: parseInt(categoryForm.position) || 0,
     });
+    setSaving(false);
+
     if (error) {
-      toast.error("Erro: " + error.message);
+      toast.error("Erro ao salvar categoria: " + error.message);
+      console.error("Erro ao salvar categoria:", error);
     } else {
       toast.success("Categoria criada!");
       setCategoryForm({ name: "", position: "" });
@@ -133,8 +151,10 @@ const AdminPanel = () => {
 
   const handleDeleteCategory = async (id: string) => {
     const { error } = await supabase.from("categories").delete().eq("id", id);
-    if (error) toast.error("Erro: " + error.message);
-    else {
+    if (error) {
+      toast.error("Erro: " + error.message);
+      console.error("Erro ao excluir categoria:", error);
+    } else {
       toast.success("Categoria excluída");
       queryClient.invalidateQueries({ queryKey: ["categories"] });
     }
@@ -169,15 +189,15 @@ const AdminPanel = () => {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Nome do Canal</Label>
+                    <Label>Nome do Canal <span className="text-destructive">*</span></Label>
                     <Input value={channelForm.name} onChange={(e) => setChannelForm((f) => ({ ...f, name: e.target.value }))} placeholder="Ex: Globo HD" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Número</Label>
+                    <Label>Número <span className="text-destructive">*</span></Label>
                     <Input type="number" value={channelForm.channel_number} onChange={(e) => setChannelForm((f) => ({ ...f, channel_number: e.target.value }))} placeholder="Ex: 1" />
                   </div>
                   <div className="space-y-2 md:col-span-2">
-                    <Label>URL do Stream (Flussonic HLS)</Label>
+                    <Label>URL do Stream (HLS) <span className="text-destructive">*</span></Label>
                     <Input value={channelForm.stream_url} onChange={(e) => setChannelForm((f) => ({ ...f, stream_url: e.target.value }))} placeholder="https://seu-flussonic.com/canal/index.m3u8" />
                   </div>
                   <div className="space-y-2">
@@ -201,8 +221,8 @@ const AdminPanel = () => {
                   <Label>Ativo</Label>
                 </div>
                 <div className="flex gap-2">
-                  <Button onClick={handleSaveChannel}>
-                    <Plus className="h-4 w-4 mr-1" /> {editingChannelId ? "Salvar" : "Adicionar"}
+                  <Button onClick={handleSaveChannel} disabled={saving}>
+                    <Plus className="h-4 w-4 mr-1" /> {saving ? "Salvando..." : editingChannelId ? "Salvar" : "Adicionar"}
                   </Button>
                   {editingChannelId && (
                     <Button variant="outline" onClick={() => { setEditingChannelId(null); setChannelForm({ name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true }); }}>
@@ -255,7 +275,7 @@ const AdminPanel = () => {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Nome</Label>
+                    <Label>Nome <span className="text-destructive">*</span></Label>
                     <Input value={categoryForm.name} onChange={(e) => setCategoryForm((f) => ({ ...f, name: e.target.value }))} placeholder="Ex: Esportes" />
                   </div>
                   <div className="space-y-2">
@@ -263,7 +283,9 @@ const AdminPanel = () => {
                     <Input type="number" value={categoryForm.position} onChange={(e) => setCategoryForm((f) => ({ ...f, position: e.target.value }))} placeholder="0" />
                   </div>
                 </div>
-                <Button onClick={handleSaveCategory}><Plus className="h-4 w-4 mr-1" /> Adicionar</Button>
+                <Button onClick={handleSaveCategory} disabled={saving}>
+                  <Plus className="h-4 w-4 mr-1" /> {saving ? "Salvando..." : "Adicionar"}
+                </Button>
               </CardContent>
             </Card>
 
