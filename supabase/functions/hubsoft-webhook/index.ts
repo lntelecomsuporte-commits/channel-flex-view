@@ -16,15 +16,23 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // Parse query parameters (Hubsoft sends api_key, login, senha as query params)
+    const url = new URL(req.url);
+    const apiKeyParam = url.searchParams.get("api_key");
+    const loginParam = url.searchParams.get("login");
+    const senhaParam = url.searchParams.get("senha");
+
     const body = await req.json();
 
     // Log the full payload for debugging
-    console.log("=== HUBSOFT WEBHOOK PAYLOAD ===");
-    console.log(JSON.stringify(body, null, 2));
-    console.log("=== END PAYLOAD ===");
+    console.log("=== HUBSOFT WEBHOOK ===");
+    console.log("Query params:", { api_key: apiKeyParam, login: loginParam, senha: senhaParam ? "***" : null });
+    console.log("Body:", JSON.stringify(body, null, 2));
 
-    // Validate authentication using api_key, login, senha
-    const { api_key, login, senha } = body;
+    // Try api_key from query params, headers, or body
+    const api_key = apiKeyParam || req.headers.get("x-api-key") || body.api_key || null;
+    const login = loginParam || body.login || null;
+    const senha = senhaParam || body.senha || null;
 
     if (!api_key) {
       console.error("Missing api_key in request");
@@ -81,57 +89,71 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Try to determine the action from the payload
-    // The Hubsoft may send: action, acao, tipo, status, evento, or other fields
-    const action = body.action || body.acao || body.tipo || body.evento || body.status || null;
+    // Parse the Hubsoft payload
+    const tipo = body.tipo; // "cadastro", "suspender", "habilitar", "cancelar", etc.
+    const status = body.status; // "aguardando_cadastro", etc.
+    const pacote = body.pacote; // { id_pacote, descricao, ... }
+    const clienteServico = body.cliente_servico; // { id_cliente_servico, cliente, servico_status, ... }
+    const idClienteServicoPacote = body.id_cliente_servico_pacote;
 
-    // Extract client data - try common field names
-    const email = body.email || body.cliente_email || body.usuario_email || body.login_email || null;
-    const password = body.password || body.senha_cliente || body.cliente_senha || body.usuario_senha || null;
-    const displayName = body.display_name || body.nome || body.cliente_nome || body.usuario_nome || null;
-    const clientId = body.hubsoft_client_id || body.cliente_id || body.client_id || body.id_cliente || body.codigo || null;
+    console.log("Parsed event:", { tipo, status, pacoteDesc: pacote?.descricao, idClienteServicoPacote });
 
-    console.log("Parsed fields:", { action, email, displayName, clientId, hasPassword: !!password });
-
-    // If we can't determine the action, log and return success (discovery mode)
-    if (!action) {
-      console.log("NO ACTION DETECTED - Full payload logged above for analysis");
+    if (!tipo) {
+      console.log("NO TIPO DETECTED - Full payload logged above");
       return new Response(
-        JSON.stringify({
-          success: true,
-          message: "Payload received and logged. No action field detected. Check logs for payload structure.",
-        }),
+        JSON.stringify({ success: true, message: "Payload received. No 'tipo' field." }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const normalizedAction = String(action).toLowerCase().trim();
+    // Optional: filter by package description (e.g., only process "TVLN")
+    if (config.package_id && pacote?.id_pacote && String(pacote.id_pacote) !== config.package_id) {
+      console.log(`Ignoring package ${pacote.id_pacote} (configured: ${config.package_id})`);
+      return new Response(
+        JSON.stringify({ success: true, message: "Package ignored" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-    // Handle create / activate / habilitar
-    if (["create", "criar", "ativar", "habilitar", "activate", "enable"].includes(normalizedAction)) {
-      if (!email) {
-        return new Response(JSON.stringify({ error: "email is required for create action" }), {
+    const cliente = clienteServico?.cliente;
+    const email = cliente?.email_principal || null;
+    const nome = cliente?.nome_razaosocial || null;
+    const cpf = cliente?.cpf_cnpj || null;
+    const idCliente = cliente?.id_cliente ? String(cliente.id_cliente) : null;
+    const idClienteServico = clienteServico?.id_cliente_servico ? String(clienteServico.id_cliente_servico) : null;
+
+    console.log("Client data:", { email, nome, cpf, idCliente, idClienteServico });
+
+    const normalizedTipo = String(tipo).toLowerCase().trim();
+
+    // Handle "cadastro" (create/register)
+    if (normalizedTipo === "cadastro") {
+      // Generate email from CPF if no email provided
+      const userEmail = email || (cpf ? `${cpf}@tvln.local` : null);
+      if (!userEmail) {
+        return new Response(JSON.stringify({ error: "No email or CPF to create user" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      const userPassword = password || email; // fallback to email as password
+      // Use CPF as password if no specific password
+      const userPassword = cpf || userEmail;
 
       const { data, error } = await supabaseAdmin.auth.admin.createUser({
-        email,
+        email: userEmail,
         password: userPassword,
         email_confirm: true,
-        user_metadata: { display_name: displayName || email },
+        user_metadata: { display_name: nome || userEmail },
       });
 
       if (error) {
-        // If user already exists, try to unblock them
         if (error.message?.includes("already") || error.message?.includes("exists")) {
-          console.log("User already exists, attempting to unblock");
-          const updateQuery = clientId
-            ? supabaseAdmin.from("profiles").update({ is_blocked: false, is_active: true }).eq("hubsoft_client_id", clientId)
-            : supabaseAdmin.from("profiles").update({ is_blocked: false, is_active: true }).eq("username", email);
+          console.log("User already exists, ensuring unblocked");
+          // Find by hubsoft_client_id or username
+          const updateQuery = idCliente
+            ? supabaseAdmin.from("profiles").update({ is_blocked: false, is_active: true }).eq("hubsoft_client_id", idCliente)
+            : supabaseAdmin.from("profiles").update({ is_blocked: false, is_active: true }).eq("username", userEmail);
           await updateQuery;
           return new Response(JSON.stringify({ success: true, message: "User reactivated" }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -144,9 +166,13 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Update profile with hubsoft_client_id
-      if (clientId && data.user) {
-        await supabaseAdmin.from("profiles").update({ hubsoft_client_id: clientId }).eq("user_id", data.user.id);
+      // Update profile with hubsoft data
+      if (data.user) {
+        const profileUpdate: Record<string, string> = {};
+        if (idCliente) profileUpdate.hubsoft_client_id = idCliente;
+        if (Object.keys(profileUpdate).length > 0) {
+          await supabaseAdmin.from("profiles").update(profileUpdate).eq("user_id", data.user.id);
+        }
       }
 
       return new Response(JSON.stringify({ success: true, user_id: data.user.id }), {
@@ -154,9 +180,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Handle block / suspend / bloquear / suspender / inadimplente
-    if (["block", "bloquear", "suspender", "suspend", "inadimplente", "desabilitar", "disable"].includes(normalizedAction)) {
-      const identifier = clientId || email;
+    // Handle "suspender" / "bloquear" / "inadimplente"
+    if (["suspender", "bloquear", "inadimplente", "suspend", "block", "desabilitar", "disable"].includes(normalizedTipo)) {
+      const identifier = idCliente;
       if (!identifier) {
         return new Response(JSON.stringify({ error: "client identifier is required" }), {
           status: 400,
@@ -164,11 +190,7 @@ Deno.serve(async (req) => {
         });
       }
 
-      const query = clientId
-        ? supabaseAdmin.from("profiles").update({ is_blocked: true }).eq("hubsoft_client_id", clientId)
-        : supabaseAdmin.from("profiles").update({ is_blocked: true }).eq("username", email);
-
-      const { error } = await query;
+      const { error } = await supabaseAdmin.from("profiles").update({ is_blocked: true }).eq("hubsoft_client_id", identifier);
       if (error) {
         console.error("Error blocking user:", error);
         return new Response(JSON.stringify({ error: error.message }), {
@@ -182,9 +204,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Handle unblock / reactivate / desbloquear / adimplente
-    if (["unblock", "desbloquear", "reativar", "reactivate", "adimplente", "enable", "liberar"].includes(normalizedAction)) {
-      const identifier = clientId || email;
+    // Handle "habilitar" / "reativar" / "adimplente"
+    if (["habilitar", "reativar", "adimplente", "desbloquear", "enable", "unblock", "liberar"].includes(normalizedTipo)) {
+      const identifier = idCliente;
       if (!identifier) {
         return new Response(JSON.stringify({ error: "client identifier is required" }), {
           status: 400,
@@ -192,11 +214,7 @@ Deno.serve(async (req) => {
         });
       }
 
-      const query = clientId
-        ? supabaseAdmin.from("profiles").update({ is_blocked: false, is_active: true }).eq("hubsoft_client_id", clientId)
-        : supabaseAdmin.from("profiles").update({ is_blocked: false, is_active: true }).eq("username", email);
-
-      const { error } = await query;
+      const { error } = await supabaseAdmin.from("profiles").update({ is_blocked: false, is_active: true }).eq("hubsoft_client_id", identifier);
       if (error) {
         console.error("Error unblocking user:", error);
         return new Response(JSON.stringify({ error: error.message }), {
@@ -210,9 +228,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Handle delete / excluir / cancelar / remover
-    if (["delete", "excluir", "cancelar", "remover", "remove", "cancel"].includes(normalizedAction)) {
-      const identifier = clientId || email;
+    // Handle "cancelar" / "excluir" / "remover"
+    if (["cancelar", "excluir", "remover", "delete", "cancel", "remove"].includes(normalizedTipo)) {
+      const identifier = idCliente;
       if (!identifier) {
         return new Response(JSON.stringify({ error: "client identifier is required" }), {
           status: 400,
@@ -220,11 +238,12 @@ Deno.serve(async (req) => {
         });
       }
 
-      const profileQuery = clientId
-        ? supabaseAdmin.from("profiles").select("user_id").eq("hubsoft_client_id", clientId)
-        : supabaseAdmin.from("profiles").select("user_id").eq("username", email);
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("user_id")
+        .eq("hubsoft_client_id", identifier)
+        .single();
 
-      const { data: profile } = await profileQuery.single();
       if (profile) {
         await supabaseAdmin.auth.admin.deleteUser(profile.user_id);
       }
@@ -234,13 +253,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Unknown action - log it
-    console.log("UNKNOWN ACTION:", normalizedAction, "- Full payload logged above");
+    // Unknown tipo - log it
+    console.log("UNKNOWN TIPO:", normalizedTipo);
     return new Response(
-      JSON.stringify({
-        success: true,
-        message: `Unknown action '${normalizedAction}'. Payload logged for analysis.`,
-      }),
+      JSON.stringify({ success: true, message: `Unknown tipo '${normalizedTipo}'. Logged.` }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
