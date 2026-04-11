@@ -161,7 +161,7 @@ const AdminPanel = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
+    <div className="min-h-screen bg-background p-4 md:p-8 overflow-y-auto">
       <div className="mx-auto max-w-5xl">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-2xl font-bold text-foreground">Painel de Administração</h1>
