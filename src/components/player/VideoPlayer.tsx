@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from "react";
 import Hls from "hls.js";
+import { getPlayableStreamUrl } from "@/lib/stream";
 
 interface VideoPlayerProps {
   streamUrl: string;
@@ -10,13 +11,19 @@ const VideoPlayer = ({ streamUrl, autoPlay = true }: VideoPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [muted, setMuted] = useState(true);
+  const playableStreamUrl = getPlayableStreamUrl(streamUrl);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !streamUrl) return;
+    if (!video || !playableStreamUrl) return;
+
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
 
     if (hlsRef.current) {
       hlsRef.current.destroy();
+      hlsRef.current = null;
     }
 
     if (Hls.isSupported()) {
@@ -25,13 +32,13 @@ const VideoPlayer = ({ streamUrl, autoPlay = true }: VideoPlayerProps) => {
         lowLatencyMode: true,
       });
       hlsRef.current = hls;
-      hls.loadSource(streamUrl);
+      hls.loadSource(playableStreamUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         if (autoPlay) video.play().catch(() => {});
       });
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = streamUrl;
+      video.src = playableStreamUrl;
       if (autoPlay) video.play().catch(() => {});
     }
 
@@ -41,7 +48,7 @@ const VideoPlayer = ({ streamUrl, autoPlay = true }: VideoPlayerProps) => {
         hlsRef.current = null;
       }
     };
-  }, [streamUrl, autoPlay]);
+  }, [playableStreamUrl, autoPlay]);
 
   // Unmute after first user interaction
   useEffect(() => {
