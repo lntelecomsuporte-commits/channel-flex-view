@@ -1,7 +1,17 @@
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, range",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, range, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+};
+
+const getProxyEndpoint = () => {
+  const backendUrl = Deno.env.get("SUPABASE_URL");
+
+  if (!backendUrl) {
+    throw new Error("SUPABASE_URL is not configured");
+  }
+
+  return `${backendUrl.replace(/\/$/, "")}/functions/v1/hls-proxy`;
 };
 
 const mediaExtensions = [
@@ -149,9 +159,7 @@ Deno.serve(async (request) => {
   });
 
   const contentType = upstreamResponse.headers.get("content-type")?.toLowerCase() ?? "";
-  const forwardedHost = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? requestUrl.host;
-  const forwardedProto = request.headers.get("x-forwarded-proto") ?? requestUrl.protocol.replace(":", "") ?? "https";
-  const proxyEndpoint = `${forwardedProto}://${forwardedHost}/functions/v1/hls-proxy`;
+  const proxyEndpoint = getProxyEndpoint();
 
   if (
     upstreamResponse.url.toLowerCase().includes(".m3u8") ||
