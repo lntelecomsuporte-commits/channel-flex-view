@@ -34,21 +34,10 @@ function generateApiKey() {
 }
 
 function buildCallbackUrl(credentials: { api_key: string; username: string; password: string }) {
-  const url = new URL(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/hubsoft-webhook`);
+  const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/hubsoft-webhook`;
+  const encodedApiKey = credentials.api_key ? encodeURIComponent(credentials.api_key) : "sem-chave";
 
-  if (credentials.api_key) {
-    url.searchParams.set("api_key", credentials.api_key);
-  }
-
-  if (credentials.username) {
-    url.searchParams.set("login", credentials.username);
-  }
-
-  if (credentials.password) {
-    url.searchParams.set("senha", credentials.password);
-  }
-
-  return url.toString();
+  return `${baseUrl}/${encodedApiKey}`;
 }
 
 const HubsoftIntegration = () => {
@@ -118,7 +107,7 @@ const HubsoftIntegration = () => {
         <CardHeader>
           <CardTitle>Callback URL</CardTitle>
           <CardDescription>
-            Use exatamente esta URL no Hubsoft. Ela já leva as credenciais na própria URL para evitar falhas no envio dos parâmetros extras.
+            Use exatamente esta URL no Hubsoft. A autenticação já vai embutida no caminho da URL, que é a forma mais confiável para o gateway Outros.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -136,7 +125,7 @@ const HubsoftIntegration = () => {
         <CardHeader>
           <CardTitle>Parâmetros para o Hubsoft</CardTitle>
           <CardDescription>
-            Configure estes parâmetros na integração do Hubsoft (gateway "Outros"). Copie os valores e cole no campo "Valor" de cada parâmetro.
+            No Hubsoft, os obrigatórios são <strong>url</strong> e <strong>metodo</strong>. A chave já está dentro da Callback URL acima.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -149,7 +138,7 @@ const HubsoftIntegration = () => {
                 <Copy className="h-4 w-4" />
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">Cole a URL completa, incluindo os parâmetros já embutidos</p>
+            <p className="text-xs text-muted-foreground">Cole a URL completa, incluindo a chave embutida no final do caminho</p>
           </div>
 
           {/* metodo (obrigatório) */}
@@ -175,6 +164,7 @@ const HubsoftIntegration = () => {
                 <Copy className="h-4 w-4" />
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground">Referência interna. No Hubsoft, prefira usar a Callback URL completa no campo <code>url</code>.</p>
           </div>
 
           {/* Login */}
@@ -227,7 +217,7 @@ const HubsoftIntegration = () => {
               <li>Marque <strong>"Pacote único"</strong></li>
               <li>Marque <strong>"Habilitar/Suspender Assinaturas"</strong></li>
               <li>Defina <strong>metodo</strong> como <strong>POST</strong></li>
-              <li>Se quiser, mantenha os demais parâmetros também preenchidos, mas a autenticação principal já vai na URL</li>
+              <li>Se quiser, mantenha os demais parâmetros só como referência, mas a autenticação principal já vai na própria URL</li>
               <li>Salve a integração</li>
             </ol>
           </div>
