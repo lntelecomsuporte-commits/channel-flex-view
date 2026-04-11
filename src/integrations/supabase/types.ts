@@ -82,6 +82,81 @@ export type Database = {
           },
         ]
       }
+      hubsoft_config: {
+        Row: {
+          api_url: string
+          client_id: string
+          client_secret: string
+          created_at: string
+          id: string
+          is_active: boolean
+          package_id: string
+          password: string
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          api_url?: string
+          client_id?: string
+          client_secret?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          package_id?: string
+          password?: string
+          updated_at?: string
+          username?: string
+        }
+        Update: {
+          api_url?: string
+          client_id?: string
+          client_secret?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          package_id?: string
+          password?: string
+          updated_at?: string
+          username?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          hubsoft_client_id: string | null
+          id: string
+          is_active: boolean
+          is_blocked: boolean
+          updated_at: string
+          user_id: string
+          username: string | null
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          hubsoft_client_id?: string | null
+          id?: string
+          is_active?: boolean
+          is_blocked?: boolean
+          updated_at?: string
+          user_id: string
+          username?: string | null
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          hubsoft_client_id?: string | null
+          id?: string
+          is_active?: boolean
+          is_blocked?: boolean
+          updated_at?: string
+          user_id?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           id: string

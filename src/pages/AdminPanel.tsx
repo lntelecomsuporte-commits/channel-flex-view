@@ -11,8 +11,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Trash2, LogOut, Tv, Layers } from "lucide-react";
+import { Plus, Trash2, LogOut, Tv, Layers, Users, Link } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import UserManagement from "@/components/admin/UserManagement";
+import HubsoftIntegration from "@/components/admin/HubsoftIntegration";
 
 const AdminPanel = () => {
   const { user, isAdmin, loading: authLoading, signOut } = useAuth();
@@ -22,22 +24,14 @@ const AdminPanel = () => {
   const navigate = useNavigate();
 
   const [channelForm, setChannelForm] = useState({
-    name: "",
-    channel_number: "",
-    stream_url: "",
-    logo_url: "",
-    category_id: "",
-    is_active: true,
+    name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true,
   });
-
   const [categoryForm, setCategoryForm] = useState({ name: "", position: "" });
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      navigate("/admin/login");
-    }
+    if (!authLoading && !user) navigate("/admin/login");
   }, [authLoading, user, navigate]);
 
   if (authLoading) {
@@ -48,9 +42,7 @@ const AdminPanel = () => {
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   if (!isAdmin) {
     return (
@@ -71,28 +63,21 @@ const AdminPanel = () => {
       toast.error("Preencha nome, número e URL do stream");
       return;
     }
-
     setSaving(true);
     const payload = {
-      name: channelForm.name,
-      channel_number: parseInt(channelForm.channel_number),
-      stream_url: channelForm.stream_url,
-      logo_url: channelForm.logo_url || null,
-      category_id: channelForm.category_id || null,
-      is_active: channelForm.is_active,
+      name: channelForm.name, channel_number: parseInt(channelForm.channel_number),
+      stream_url: channelForm.stream_url, logo_url: channelForm.logo_url || null,
+      category_id: channelForm.category_id || null, is_active: channelForm.is_active,
     };
-
     let error;
     if (editingChannelId) {
       ({ error } = await supabase.from("channels").update(payload).eq("id", editingChannelId));
     } else {
       ({ error } = await supabase.from("channels").insert(payload));
     }
-
     setSaving(false);
     if (error) {
       toast.error("Erro ao salvar canal: " + error.message);
-      console.error("Erro ao salvar canal:", error);
     } else {
       toast.success(editingChannelId ? "Canal atualizado!" : "Canal adicionado!");
       setChannelForm({ name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true });
@@ -104,65 +89,33 @@ const AdminPanel = () => {
 
   const handleDeleteChannel = async (id: string) => {
     const { error } = await supabase.from("channels").delete().eq("id", id);
-    if (error) {
-      toast.error("Erro ao excluir: " + error.message);
-      console.error("Erro ao excluir canal:", error);
-    } else {
-      toast.success("Canal excluído");
-      queryClient.invalidateQueries({ queryKey: ["channels-all"] });
-      queryClient.invalidateQueries({ queryKey: ["channels"] });
-    }
+    if (error) { toast.error("Erro ao excluir: " + error.message); }
+    else { toast.success("Canal excluído"); queryClient.invalidateQueries({ queryKey: ["channels-all"] }); queryClient.invalidateQueries({ queryKey: ["channels"] }); }
   };
 
   const handleEditChannel = (ch: NonNullable<typeof channels>[0]) => {
     setEditingChannelId(ch.id);
-    setChannelForm({
-      name: ch.name,
-      channel_number: String(ch.channel_number),
-      stream_url: ch.stream_url,
-      logo_url: ch.logo_url ?? "",
-      category_id: ch.category_id ?? "",
-      is_active: ch.is_active,
-    });
+    setChannelForm({ name: ch.name, channel_number: String(ch.channel_number), stream_url: ch.stream_url, logo_url: ch.logo_url ?? "", category_id: ch.category_id ?? "", is_active: ch.is_active });
   };
 
   const handleSaveCategory = async () => {
-    if (!categoryForm.name) {
-      toast.error("Informe o nome da categoria");
-      return;
-    }
-
+    if (!categoryForm.name) { toast.error("Informe o nome da categoria"); return; }
     setSaving(true);
-    const { error } = await supabase.from("categories").insert({
-      name: categoryForm.name,
-      position: parseInt(categoryForm.position) || 0,
-    });
+    const { error } = await supabase.from("categories").insert({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0 });
     setSaving(false);
-
-    if (error) {
-      toast.error("Erro ao salvar categoria: " + error.message);
-      console.error("Erro ao salvar categoria:", error);
-    } else {
-      toast.success("Categoria criada!");
-      setCategoryForm({ name: "", position: "" });
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
-    }
+    if (error) { toast.error("Erro ao salvar categoria: " + error.message); }
+    else { toast.success("Categoria criada!"); setCategoryForm({ name: "", position: "" }); queryClient.invalidateQueries({ queryKey: ["categories"] }); }
   };
 
   const handleDeleteCategory = async (id: string) => {
     const { error } = await supabase.from("categories").delete().eq("id", id);
-    if (error) {
-      toast.error("Erro: " + error.message);
-      console.error("Erro ao excluir categoria:", error);
-    } else {
-      toast.success("Categoria excluída");
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
-    }
+    if (error) { toast.error("Erro: " + error.message); }
+    else { toast.success("Categoria excluída"); queryClient.invalidateQueries({ queryKey: ["categories"] }); }
   };
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8 overflow-y-auto">
-      <div className="mx-auto max-w-5xl">
+    <div className="min-h-screen bg-background overflow-auto">
+      <div className="mx-auto max-w-5xl p-4 md:p-8">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-2xl font-bold text-foreground">Painel de Administração</h1>
           <div className="flex gap-2">
@@ -176,16 +129,17 @@ const AdminPanel = () => {
         </div>
 
         <Tabs defaultValue="channels">
-          <TabsList className="mb-6">
+          <TabsList className="mb-6 flex-wrap">
             <TabsTrigger value="channels"><Tv className="h-4 w-4 mr-1" /> Canais</TabsTrigger>
             <TabsTrigger value="categories"><Layers className="h-4 w-4 mr-1" /> Categorias</TabsTrigger>
+            <TabsTrigger value="users"><Users className="h-4 w-4 mr-1" /> Usuários</TabsTrigger>
+            <TabsTrigger value="hubsoft"><Link className="h-4 w-4 mr-1" /> Hubsoft</TabsTrigger>
           </TabsList>
 
           <TabsContent value="channels">
+            {/* Channel form */}
             <Card className="mb-6">
-              <CardHeader>
-                <CardTitle>{editingChannelId ? "Editar Canal" : "Novo Canal"}</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle>{editingChannelId ? "Editar Canal" : "Novo Canal"}</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -209,9 +163,7 @@ const AdminPanel = () => {
                     <Select value={channelForm.category_id} onValueChange={(v) => setChannelForm((f) => ({ ...f, category_id: v }))}>
                       <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                       <SelectContent>
-                        {categories?.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                        ))}
+                        {categories?.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -313,6 +265,14 @@ const AdminPanel = () => {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="users">
+            <UserManagement />
+          </TabsContent>
+
+          <TabsContent value="hubsoft">
+            <HubsoftIntegration />
           </TabsContent>
         </Tabs>
       </div>
