@@ -16,7 +16,8 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Parse query parameters (Hubsoft sends api_key, login, senha as query params)
+    // Parse credentials from multiple sources because Hubsoft may forward
+    // custom parameters as query params, headers, or embedded callback URL params.
     const url = new URL(req.url);
     const apiKeyParam = url.searchParams.get("api_key");
     const loginParam = url.searchParams.get("login");
@@ -24,19 +25,34 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
 
+    const apiKeyHeader =
+      req.headers.get("api_key") ||
+      req.headers.get("apikey") ||
+      req.headers.get("x-api-key");
+    const loginHeader =
+      req.headers.get("login") ||
+      req.headers.get("x-login");
+    const senhaHeader =
+      req.headers.get("senha") ||
+      req.headers.get("x-senha");
+
     // Log the full payload for debugging
     console.log("=== HUBSOFT WEBHOOK ===");
     console.log("Query params:", { api_key: apiKeyParam, login: loginParam, senha: senhaParam ? "***" : null });
+    console.log("Credential headers present:", {
+      api_key: Boolean(apiKeyHeader),
+      login: Boolean(loginHeader),
+      senha: Boolean(senhaHeader),
+    });
     console.log("Body:", JSON.stringify(body, null, 2));
 
-    // Try api_key from query params, headers, or body
-    const api_key = apiKeyParam || req.headers.get("x-api-key") || body.api_key || null;
-    const login = loginParam || body.login || null;
-    const senha = senhaParam || body.senha || null;
+    const api_key = apiKeyParam || apiKeyHeader || body.api_key || null;
+    const login = loginParam || loginHeader || body.login || null;
+    const senha = senhaParam || senhaHeader || body.senha || null;
 
     if (!api_key) {
       console.error("Missing api_key in request");
-      return new Response(JSON.stringify({ error: "api_key is required" }), {
+      return new Response(JSON.stringify({ error: "api_key is required in the callback URL or headers" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
