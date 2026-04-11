@@ -140,7 +140,7 @@ const PlayerPage = () => {
   }
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-background select-none">
+    <div className="relative w-full h-full overflow-hidden bg-background select-none" style={{ width: '100vw', height: '100vh' }}>
       {currentChannel && (
         <>
           <VideoPlayer streamUrl={currentChannel.stream_url} />
