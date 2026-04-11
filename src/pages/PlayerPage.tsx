@@ -44,13 +44,14 @@ const PlayerPage = () => {
   const showNextPreview = useCallback(
     (direction: "next" | "prev") => {
       if (!channels?.length) return;
+      const baseIdx = previewIndex !== null ? previewIndex : currentIndex;
       const nextIdx =
         direction === "next"
-          ? currentIndex < channels.length - 1
-            ? currentIndex + 1
+          ? baseIdx < channels.length - 1
+            ? baseIdx + 1
             : 0
-          : currentIndex > 0
-          ? currentIndex - 1
+          : baseIdx > 0
+          ? baseIdx - 1
           : channels.length - 1;
       setPreviewIndex(nextIdx);
       setShowPreview(true);
@@ -62,7 +63,7 @@ const PlayerPage = () => {
       }, 5000);
       setPreviewTimeout(t);
     },
-    [channels, currentIndex, previewTimeout]
+    [channels, currentIndex, previewIndex, previewTimeout]
   );
 
   const confirmPreview = useCallback(() => {
