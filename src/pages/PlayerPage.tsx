@@ -3,6 +3,7 @@ import { useChannels, type Channel } from "@/hooks/useChannels";
 import VideoPlayer from "@/components/player/VideoPlayer";
 import ChannelOSD from "@/components/player/ChannelOSD";
 import ChannelPreview from "@/components/player/ChannelPreview";
+import ChannelList from "@/components/player/ChannelList";
 
 const PlayerPage = () => {
   useEffect(() => {
