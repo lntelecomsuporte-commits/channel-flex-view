@@ -15,6 +15,7 @@ const PlayerPage = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showOSD, setShowOSD] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
+  const [showChannelList, setShowChannelList] = useState(false);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [osdTimeout, setOsdTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [previewTimeout, setPreviewTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
