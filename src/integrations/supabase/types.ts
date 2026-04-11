@@ -84,9 +84,8 @@ export type Database = {
       }
       hubsoft_config: {
         Row: {
+          api_key: string
           api_url: string
-          client_id: string
-          client_secret: string
           created_at: string
           id: string
           is_active: boolean
@@ -96,9 +95,8 @@ export type Database = {
           username: string
         }
         Insert: {
+          api_key?: string
           api_url?: string
-          client_id?: string
-          client_secret?: string
           created_at?: string
           id?: string
           is_active?: boolean
@@ -108,9 +106,8 @@ export type Database = {
           username?: string
         }
         Update: {
+          api_key?: string
           api_url?: string
-          client_id?: string
-          client_secret?: string
           created_at?: string
           id?: string
           is_active?: boolean
