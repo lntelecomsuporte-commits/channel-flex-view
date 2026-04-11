@@ -3,6 +3,7 @@ import { useChannels, type Channel } from "@/hooks/useChannels";
 import VideoPlayer from "@/components/player/VideoPlayer";
 import ChannelOSD from "@/components/player/ChannelOSD";
 import ChannelPreview from "@/components/player/ChannelPreview";
+import ChannelList from "@/components/player/ChannelList";
 
 const PlayerPage = () => {
   useEffect(() => {
@@ -14,6 +15,7 @@ const PlayerPage = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showOSD, setShowOSD] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
+  const [showChannelList, setShowChannelList] = useState(false);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [osdTimeout, setOsdTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [previewTimeout, setPreviewTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
@@ -83,6 +85,7 @@ const PlayerPage = () => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (showChannelList) return; // Let ChannelList handle keys
       switch (e.key) {
         case "ArrowUp":
           e.preventDefault();
@@ -105,7 +108,7 @@ const PlayerPage = () => {
           if (showPreview) {
             confirmPreview();
           } else {
-            setShowOSD((prev) => !prev);
+            setShowChannelList(true);
           }
           break;
       }
@@ -113,7 +116,7 @@ const PlayerPage = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [changeChannel, showNextPreview, confirmPreview, showPreview]);
+  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList]);
 
   // Auto-hide OSD after initial show
   useEffect(() => {
@@ -162,11 +165,23 @@ const PlayerPage = () => {
             <div className="absolute top-0 left-0 right-0 osd-top-gradient p-4 animate-fade-in z-10">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">
-                  ↑↓ Trocar canal • →← Ver próximo • OK Confirmar
+                  ↑↓ Trocar canal • →← Ver próximo • OK Lista de canais
                 </span>
               </div>
             </div>
           )}
+
+          <ChannelList
+            channels={channels}
+            currentIndex={currentIndex}
+            visible={showChannelList}
+            onSelect={(index) => {
+              setCurrentIndex(index);
+              setShowChannelList(false);
+              showOSDTemporarily();
+            }}
+            onClose={() => setShowChannelList(false)}
+          />
         </>
       )}
     </div>
