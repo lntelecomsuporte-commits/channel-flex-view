@@ -214,7 +214,7 @@ Deno.serve(async (req) => {
     }
 
     // Handle "suspender" / "bloquear" / "inadimplente"
-    if (["suspender", "bloquear", "inadimplente", "suspend", "block", "desabilitar", "disable"].includes(normalizedTipo)) {
+    if (["suspender", "suspensao", "bloquear", "inadimplente", "suspend", "block", "desabilitar", "disable"].includes(normalizedTipo)) {
       const identifier = idCliente;
       if (!identifier) {
         return new Response(JSON.stringify({ error: "client identifier is required" }), {
