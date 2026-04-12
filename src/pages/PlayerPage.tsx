@@ -1,11 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
 import { useChannels, type Channel } from "@/hooks/useChannels";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useTouchControls } from "@/hooks/useTouchControls";
 import VideoPlayer from "@/components/player/VideoPlayer";
 import ChannelOSD from "@/components/player/ChannelOSD";
 import ChannelPreview from "@/components/player/ChannelPreview";
 import ChannelList from "@/components/player/ChannelList";
+import { List, ChevronUp, ChevronDown } from "lucide-react";
 
 const PlayerPage = () => {
+  const isMobile = useIsMobile();
+
   useEffect(() => {
     document.body.classList.add("player-mode");
     return () => document.body.classList.remove("player-mode");
@@ -83,9 +88,40 @@ const PlayerPage = () => {
     }
   }, [previewIndex, previewTimeout, showOSDTemporarily]);
 
+  // Touch/swipe controls for mobile
+  const touchHandlers = useTouchControls({
+    onSwipeUp: () => {
+      if (!showChannelList) changeChannel("up");
+    },
+    onSwipeDown: () => {
+      if (!showChannelList) changeChannel("down");
+    },
+    onSwipeLeft: () => {
+      if (!showChannelList) showNextPreview("next");
+    },
+    onSwipeRight: () => {
+      if (!showChannelList) {
+        if (showPreview) {
+          confirmPreview();
+        } else {
+          showNextPreview("prev");
+        }
+      }
+    },
+    onTap: () => {
+      if (!showChannelList) {
+        if (showPreview) {
+          confirmPreview();
+        } else {
+          showOSDTemporarily();
+        }
+      }
+    },
+  });
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (showChannelList) return; // Let ChannelList handle keys
+      if (showChannelList) return;
       switch (e.key) {
         case "ArrowUp":
           e.preventDefault();
@@ -149,7 +185,11 @@ const PlayerPage = () => {
   }
 
   return (
-    <div className="relative w-full h-full overflow-hidden bg-background select-none" style={{ width: '100vw', height: '100vh' }}>
+    <div
+      className="relative w-full h-full overflow-hidden bg-background select-none"
+      style={{ width: '100vw', height: '100vh' }}
+      {...touchHandlers}
+    >
       {currentChannel && (
         <>
           <VideoPlayer streamUrl={currentChannel.stream_url} />
@@ -165,9 +205,38 @@ const PlayerPage = () => {
             <div className="absolute top-0 left-0 right-0 osd-top-gradient p-4 animate-fade-in z-10">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">
-                  ↑↓ Trocar canal • →← Ver próximo • OK Lista de canais
+                  {isMobile
+                    ? "↕ Deslize para trocar • Toque para info"
+                    : "↑↓ Trocar canal • →← Ver próximo • OK Lista de canais"}
                 </span>
               </div>
+            </div>
+          )}
+
+          {/* Mobile floating controls */}
+          {isMobile && (
+            <div className="absolute right-3 bottom-20 z-20 flex flex-col items-center gap-2 animate-fade-in">
+              <button
+                onClick={(e) => { e.stopPropagation(); changeChannel("up"); }}
+                className="w-12 h-12 rounded-full bg-background/60 backdrop-blur-sm border border-border flex items-center justify-center active:bg-primary/30 transition-colors"
+                aria-label="Canal anterior"
+              >
+                <ChevronUp className="w-6 h-6 text-foreground" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowChannelList(true); }}
+                className="w-14 h-14 rounded-full bg-primary/80 backdrop-blur-sm flex items-center justify-center active:bg-primary transition-colors shadow-lg"
+                aria-label="Lista de canais"
+              >
+                <List className="w-7 h-7 text-primary-foreground" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); changeChannel("down"); }}
+                className="w-12 h-12 rounded-full bg-background/60 backdrop-blur-sm border border-border flex items-center justify-center active:bg-primary/30 transition-colors"
+                aria-label="Próximo canal"
+              >
+                <ChevronDown className="w-6 h-6 text-foreground" />
+              </button>
             </div>
           )}
 
