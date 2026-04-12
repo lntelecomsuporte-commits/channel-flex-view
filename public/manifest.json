@@ -1,25 +1,25 @@
 {
-  "name": "LN Player",
-  "short_name": "LN Player",
+  "name": "LN TV",
+  "short_name": "LN TV",
   "description": "Assista canais de TV ao vivo",
   "start_url": "/",
   "display": "standalone",
   "orientation": "landscape",
   "background_color": "#0a0a0f",
-  "theme_color": "#6d28d9",
+  "theme_color": "#dc2626",
   "icons": [
     {
-      "src": "/icon-192.png",
+      "src": "/logo.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/logo.png",
       "sizes": "512x512",
       "type": "image/png"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/logo.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
