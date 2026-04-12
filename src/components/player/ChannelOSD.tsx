@@ -1,11 +1,19 @@
 import type { Channel } from "@/hooks/useChannels";
+import { useEPG } from "@/hooks/useEPG";
 
 interface ChannelOSDProps {
   channel: Channel;
   visible: boolean;
 }
 
+function formatTime(dateStr: string) {
+  const d = new Date(dateStr);
+  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
 const ChannelOSD = ({ channel, visible }: ChannelOSDProps) => {
+  const { data: epg } = useEPG((channel as any).epg_url);
+
   if (!visible) return null;
 
   return (
@@ -21,8 +29,24 @@ const ChannelOSD = ({ channel, visible }: ChannelOSDProps) => {
             className="h-10 w-10 rounded-md object-contain bg-secondary"
           />
         )}
-        <div>
+        <div className="flex-1 min-w-0">
           <h2 className="text-xl font-bold text-foreground">{channel.name}</h2>
+          {epg?.current && (
+            <div className="mt-1 space-y-0.5">
+              <p className="text-sm text-foreground/90 truncate">
+                <span className="text-primary font-semibold">Agora</span>{" "}
+                <span className="text-muted-foreground">{formatTime(epg.current.start_date)}</span>{" "}
+                {epg.current.title}
+              </p>
+              {epg.next && (
+                <p className="text-xs text-muted-foreground truncate">
+                  <span className="font-semibold">A seguir</span>{" "}
+                  <span>{formatTime(epg.next.start_date)}</span>{" "}
+                  {epg.next.title}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
