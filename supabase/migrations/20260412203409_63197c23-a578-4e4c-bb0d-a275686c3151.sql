@@ -1,0 +1,1 @@
+ALTER TABLE public.channels ADD COLUMN epg_url text DEFAULT NULL;
