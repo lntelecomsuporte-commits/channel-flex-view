@@ -71,7 +71,7 @@ const VideoPlayer = ({ streamUrl, autoPlay = true }: VideoPlayerProps) => {
   return (
     <video
       ref={videoRef}
-      className="absolute inset-0 w-full h-full object-cover"
+      className="absolute inset-0 w-full h-full object-contain"
       playsInline
       muted={muted}
     />
