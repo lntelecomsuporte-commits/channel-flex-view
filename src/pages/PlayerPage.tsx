@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useChannels, type Channel } from "@/hooks/useChannels";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useTouchControls } from "@/hooks/useTouchControls";
 import VideoPlayer from "@/components/player/VideoPlayer";
 import ChannelOSD from "@/components/player/ChannelOSD";
 import ChannelPreview from "@/components/player/ChannelPreview";
 import ChannelList from "@/components/player/ChannelList";
+import { List, ChevronUp, ChevronDown } from "lucide-react";
 
 const PlayerPage = () => {
   useEffect(() => {
