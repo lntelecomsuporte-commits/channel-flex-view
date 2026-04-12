@@ -102,10 +102,22 @@ const AdminPanel = () => {
   const handleSaveCategory = async () => {
     if (!categoryForm.name) { toast.error("Informe o nome da categoria"); return; }
     setSaving(true);
-    const { error } = await supabase.from("categories").insert({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0 });
-    setSaving(false);
-    if (error) { toast.error("Erro ao salvar categoria: " + error.message); }
-    else { toast.success("Categoria criada!"); setCategoryForm({ name: "", position: "" }); queryClient.invalidateQueries({ queryKey: ["categories"] }); }
+    if (editingCategoryId) {
+      const { error } = await supabase.from("categories").update({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0 }).eq("id", editingCategoryId);
+      setSaving(false);
+      if (error) { toast.error("Erro: " + error.message); }
+      else { toast.success("Categoria atualizada!"); setCategoryForm({ name: "", position: "" }); setEditingCategoryId(null); queryClient.invalidateQueries({ queryKey: ["categories"] }); }
+    } else {
+      const { error } = await supabase.from("categories").insert({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0 });
+      setSaving(false);
+      if (error) { toast.error("Erro ao salvar categoria: " + error.message); }
+      else { toast.success("Categoria criada!"); setCategoryForm({ name: "", position: "" }); queryClient.invalidateQueries({ queryKey: ["categories"] }); }
+    }
+  };
+
+  const handleEditCategory = (cat: NonNullable<typeof categories>[0]) => {
+    setEditingCategoryId(cat.id);
+    setCategoryForm({ name: cat.name, position: String(cat.position) });
   };
 
   const handleDeleteCategory = async (id: string) => {
