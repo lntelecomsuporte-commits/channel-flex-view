@@ -236,7 +236,7 @@ const AdminPanel = () => {
 
           <TabsContent value="categories">
             <Card className="mb-6">
-              <CardHeader><CardTitle>Nova Categoria</CardTitle></CardHeader>
+              <CardHeader><CardTitle>{editingCategoryId ? "Editar Categoria" : "Nova Categoria"}</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -248,9 +248,16 @@ const AdminPanel = () => {
                     <Input type="number" value={categoryForm.position} onChange={(e) => setCategoryForm((f) => ({ ...f, position: e.target.value }))} placeholder="0" />
                   </div>
                 </div>
-                <Button onClick={handleSaveCategory} disabled={saving}>
-                  <Plus className="h-4 w-4 mr-1" /> {saving ? "Salvando..." : "Adicionar"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={handleSaveCategory} disabled={saving}>
+                    <Plus className="h-4 w-4 mr-1" /> {saving ? "Salvando..." : editingCategoryId ? "Salvar" : "Adicionar"}
+                  </Button>
+                  {editingCategoryId && (
+                    <Button variant="outline" onClick={() => { setEditingCategoryId(null); setCategoryForm({ name: "", position: "" }); }}>
+                      Cancelar
+                    </Button>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
@@ -269,9 +276,12 @@ const AdminPanel = () => {
                           <p className="font-medium text-foreground">{c.name}</p>
                           <p className="text-xs text-muted-foreground">Posição: {c.position}</p>
                         </div>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteCategory(c.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => handleEditCategory(c)}>Editar</Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteCategory(c.id)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
