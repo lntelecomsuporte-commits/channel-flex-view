@@ -308,12 +308,34 @@ const AdminPanel = () => {
                     <Input type="number" value={categoryForm.position} onChange={(e) => setCategoryForm((f) => ({ ...f, position: e.target.value }))} placeholder="0" />
                   </div>
                 </div>
+
+                {/* Included categories */}
+                {categories && categories.filter((c) => c.id !== editingCategoryId).length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Inclui canais de outras categorias</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Usuários desta categoria também poderão assistir canais das categorias marcadas abaixo.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                      {categories.filter((c) => c.id !== editingCategoryId).map((cat) => (
+                        <label key={cat.id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted">
+                          <Checkbox
+                            checked={categoryForm.includedCategoryIds.includes(cat.id)}
+                            onCheckedChange={() => toggleIncludedCategory(cat.id)}
+                          />
+                          <span className="text-sm text-foreground">{cat.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                   <Button onClick={handleSaveCategory} disabled={saving}>
                     <Plus className="h-4 w-4 mr-1" /> {saving ? "Salvando..." : editingCategoryId ? "Salvar" : "Adicionar"}
                   </Button>
                   {editingCategoryId && (
-                    <Button variant="outline" onClick={() => { setEditingCategoryId(null); setCategoryForm({ name: "", position: "" }); }}>
+                    <Button variant="outline" onClick={() => { setEditingCategoryId(null); resetCategoryForm(); }}>
                       Cancelar
                     </Button>
                   )}
@@ -330,20 +352,38 @@ const AdminPanel = () => {
                   <p className="text-muted-foreground">Nenhuma categoria</p>
                 ) : (
                   <div className="space-y-2">
-                    {categories.map((c) => (
-                      <div key={c.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
-                        <div>
-                          <p className="font-medium text-foreground">{c.name}</p>
-                          <p className="text-xs text-muted-foreground">Posição: {c.position}</p>
+                    {categories.map((c) => {
+                      const includes = categoryIncludes?.filter((ci) => ci.category_id === c.id) || [];
+                      const includeNames = includes.map((ci) => categories.find((cat) => cat.id === ci.included_category_id)?.name).filter(Boolean);
+                      const linkedConfigs = hubsoftConfigCategories?.filter((hcc) => hcc.category_id === c.id) || [];
+                      const configNames = linkedConfigs.map((lc) => hubsoftConfigs?.find((hc) => hc.id === lc.hubsoft_config_id)?.name).filter(Boolean);
+                      return (
+                        <div key={c.id} className="p-3 rounded-lg bg-secondary">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium text-foreground">{c.name}</p>
+                              <p className="text-xs text-muted-foreground">Posição: {c.position}</p>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => handleEditCategory(c)}>Editar</Button>
+                              <Button variant="ghost" size="sm" onClick={() => handleDeleteCategory(c.id)}>
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </div>
+                          {(includeNames.length > 0 || configNames.length > 0) && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {configNames.map((name) => (
+                                <span key={name} className="text-xs px-2 py-0.5 rounded bg-primary/20 text-primary">🔗 {name}</span>
+                              ))}
+                              {includeNames.map((name) => (
+                                <span key={name} className="text-xs px-2 py-0.5 rounded bg-accent text-accent-foreground">+ {name}</span>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => handleEditCategory(c)}>Editar</Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleDeleteCategory(c.id)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
