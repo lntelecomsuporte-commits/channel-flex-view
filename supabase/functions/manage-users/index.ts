@@ -82,28 +82,6 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    if (action === "revoke_sessions") {
-      if (!user_id) {
-        return new Response(JSON.stringify({ error: "user_id é obrigatório" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-      // Use direct REST call since admin SDK has JWT compatibility issues
-      const logoutRes = await fetch(`${supabaseUrl}/auth/v1/admin/users/${user_id}/logout`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${serviceRoleKey}`,
-          "apikey": serviceRoleKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ scope: "global" }),
-      });
-      if (!logoutRes.ok) {
-        const errBody = await logoutRes.text();
-        console.error("Logout error:", errBody);
-        return new Response(JSON.stringify({ error: "Erro ao revogar sessões" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
     if (action === "delete") {
       if (!user_id) {
         return new Response(JSON.stringify({ error: "user_id é obrigatório" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
