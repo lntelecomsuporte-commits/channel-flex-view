@@ -88,7 +88,7 @@ const UserManagement = () => {
     }
   };
 
-  const handleToggleBlock = async (profileId: string, userId: string, currentBlocked: boolean) => {
+  const handleToggleBlock = async (profileId: string, currentBlocked: boolean) => {
     const { error } = await supabase
       .from("profiles")
       .update({ is_blocked: !currentBlocked })
@@ -96,12 +96,6 @@ const UserManagement = () => {
     if (error) {
       toast.error("Erro: " + error.message);
       return;
-    }
-    // If blocking, revoke all sessions to force logout on all devices
-    if (!currentBlocked) {
-      await supabase.functions.invoke("manage-users", {
-        body: { action: "revoke_sessions", user_id: userId },
-      });
     }
     toast.success(currentBlocked ? "Usuário desbloqueado" : "Usuário bloqueado");
     queryClient.invalidateQueries({ queryKey: ["profiles"] });
@@ -173,7 +167,7 @@ const UserManagement = () => {
                     <Button variant="ghost" size="sm" onClick={() => handleEdit(p as Profile)} title="Editar">
                       <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleToggleBlock(p.id, p.user_id, p.is_blocked)} title={p.is_blocked ? "Desbloquear" : "Bloquear"}>
+                    <Button variant="ghost" size="sm" onClick={() => handleToggleBlock(p.id, p.is_blocked)} title={p.is_blocked ? "Desbloquear" : "Bloquear"}>
                       {p.is_blocked ? <ShieldCheck className="h-4 w-4 text-primary" /> : <ShieldOff className="h-4 w-4 text-destructive" />}
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => handleDelete(p.id, p.user_id)}>

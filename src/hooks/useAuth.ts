@@ -70,7 +70,7 @@ export function useAuth() {
 
     const interval = setInterval(() => {
       checkBlocked(user.id);
-    }, 30000);
+    }, 10000);
 
     return () => clearInterval(interval);
   }, [user, checkBlocked]);
