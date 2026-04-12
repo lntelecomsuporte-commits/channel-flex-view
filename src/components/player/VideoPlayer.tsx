@@ -26,7 +26,14 @@ const VideoPlayer = ({ streamUrl, autoPlay = true }: VideoPlayerProps) => {
       hlsRef.current = null;
     }
 
-    if (Hls.isSupported()) {
+    // On iOS/Safari, prefer native HLS for better AirPlay support
+    const isAppleDevice = /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent) && 
+      video.canPlayType("application/vnd.apple.mpegurl");
+
+    if (isAppleDevice) {
+      video.src = playableStreamUrl;
+      if (autoPlay) video.play().catch(() => {});
+    } else if (Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
@@ -74,6 +81,10 @@ const VideoPlayer = ({ streamUrl, autoPlay = true }: VideoPlayerProps) => {
       className="absolute inset-0 w-full h-full object-contain"
       playsInline
       muted={muted}
+      // @ts-ignore - AirPlay attributes
+      x-webkit-airplay="allow"
+      webkit-playsinline="true"
+      crossOrigin="anonymous"
     />
   );
 };
