@@ -9,11 +9,32 @@ export function useChannels() {
   return useQuery({
     queryKey: ["channels"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      let query = supabase
         .from("channels")
         .select("*")
         .eq("is_active", true)
         .order("channel_number", { ascending: true });
+
+      // If user is logged in, check category access
+      if (user) {
+        const { data: access } = await supabase
+          .from("user_category_access")
+          .select("category_id")
+          .eq("user_id", user.id)
+          .eq("is_active", true);
+
+        // If user has category restrictions, filter channels
+        if (access && access.length > 0) {
+          const categoryIds = access.map((a) => a.category_id);
+          query = query.in("category_id", categoryIds);
+        }
+        // If no access records exist, show all channels (backwards compatible for manually created users)
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data as Channel[];
     },

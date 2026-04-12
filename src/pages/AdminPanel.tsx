@@ -28,6 +28,7 @@ const AdminPanel = () => {
   });
   const [categoryForm, setCategoryForm] = useState({ name: "", position: "" });
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -101,10 +102,22 @@ const AdminPanel = () => {
   const handleSaveCategory = async () => {
     if (!categoryForm.name) { toast.error("Informe o nome da categoria"); return; }
     setSaving(true);
-    const { error } = await supabase.from("categories").insert({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0 });
-    setSaving(false);
-    if (error) { toast.error("Erro ao salvar categoria: " + error.message); }
-    else { toast.success("Categoria criada!"); setCategoryForm({ name: "", position: "" }); queryClient.invalidateQueries({ queryKey: ["categories"] }); }
+    if (editingCategoryId) {
+      const { error } = await supabase.from("categories").update({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0 }).eq("id", editingCategoryId);
+      setSaving(false);
+      if (error) { toast.error("Erro: " + error.message); }
+      else { toast.success("Categoria atualizada!"); setCategoryForm({ name: "", position: "" }); setEditingCategoryId(null); queryClient.invalidateQueries({ queryKey: ["categories"] }); }
+    } else {
+      const { error } = await supabase.from("categories").insert({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0 });
+      setSaving(false);
+      if (error) { toast.error("Erro ao salvar categoria: " + error.message); }
+      else { toast.success("Categoria criada!"); setCategoryForm({ name: "", position: "" }); queryClient.invalidateQueries({ queryKey: ["categories"] }); }
+    }
+  };
+
+  const handleEditCategory = (cat: NonNullable<typeof categories>[0]) => {
+    setEditingCategoryId(cat.id);
+    setCategoryForm({ name: cat.name, position: String(cat.position) });
   };
 
   const handleDeleteCategory = async (id: string) => {
@@ -223,7 +236,7 @@ const AdminPanel = () => {
 
           <TabsContent value="categories">
             <Card className="mb-6">
-              <CardHeader><CardTitle>Nova Categoria</CardTitle></CardHeader>
+              <CardHeader><CardTitle>{editingCategoryId ? "Editar Categoria" : "Nova Categoria"}</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -235,9 +248,16 @@ const AdminPanel = () => {
                     <Input type="number" value={categoryForm.position} onChange={(e) => setCategoryForm((f) => ({ ...f, position: e.target.value }))} placeholder="0" />
                   </div>
                 </div>
-                <Button onClick={handleSaveCategory} disabled={saving}>
-                  <Plus className="h-4 w-4 mr-1" /> {saving ? "Salvando..." : "Adicionar"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={handleSaveCategory} disabled={saving}>
+                    <Plus className="h-4 w-4 mr-1" /> {saving ? "Salvando..." : editingCategoryId ? "Salvar" : "Adicionar"}
+                  </Button>
+                  {editingCategoryId && (
+                    <Button variant="outline" onClick={() => { setEditingCategoryId(null); setCategoryForm({ name: "", position: "" }); }}>
+                      Cancelar
+                    </Button>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
@@ -256,9 +276,12 @@ const AdminPanel = () => {
                           <p className="font-medium text-foreground">{c.name}</p>
                           <p className="text-xs text-muted-foreground">Posição: {c.position}</p>
                         </div>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteCategory(c.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => handleEditCategory(c)}>Editar</Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteCategory(c.id)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>

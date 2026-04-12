@@ -16,8 +16,6 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Parse credentials from multiple sources because Hubsoft may forward
-    // custom parameters in different ways depending on the integration mode.
     const url = new URL(req.url);
     const pathSegments = url.pathname.split("/").filter(Boolean);
     const hubsoftWebhookIndex = pathSegments.lastIndexOf("hubsoft-webhook");
@@ -26,8 +24,6 @@ Deno.serve(async (req) => {
         ? pathSegments[hubsoftWebhookIndex + 1]
         : null;
     const apiKeyParam = url.searchParams.get("api_key");
-    const loginParam = url.searchParams.get("login");
-    const senhaParam = url.searchParams.get("senha");
 
     const body = await req.json();
 
@@ -39,48 +35,32 @@ Deno.serve(async (req) => {
     const bearerApiKey = authorizationHeader?.toLowerCase().startsWith("bearer ")
       ? authorizationHeader.slice(7).trim()
       : null;
-    const loginHeader =
-      req.headers.get("login") ||
-      req.headers.get("x-login");
-    const senhaHeader =
-      req.headers.get("senha") ||
-      req.headers.get("x-senha");
 
-    // Log the full payload for debugging
     console.log("=== HUBSOFT WEBHOOK ===");
-    console.log("Request target:", { pathname: url.pathname, hasPathApiKey: Boolean(apiKeyFromPath) });
-    console.log("Query params:", { api_key: apiKeyParam, login: loginParam, senha: senhaParam ? "***" : null });
-    console.log("Credential headers present:", {
-      api_key: Boolean(apiKeyHeader),
-      authorization: Boolean(bearerApiKey),
-      login: Boolean(loginHeader),
-      senha: Boolean(senhaHeader),
-    });
     console.log("Body:", JSON.stringify(body, null, 2));
 
     const api_key = apiKeyFromPath || apiKeyParam || apiKeyHeader || bearerApiKey || body.api_key || null;
-    const login = loginParam || loginHeader || body.login || null;
-    const senha = senhaParam || senhaHeader || body.senha || null;
 
     if (!api_key) {
       console.error("Missing api_key in request");
-      return new Response(JSON.stringify({ error: "api_key is required in the callback URL path, query string, or headers" }), {
+      return new Response(JSON.stringify({ error: "api_key is required" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Fetch config to validate credentials
+    // Find config by api_key (supports multiple configs)
     const { data: config, error: configError } = await supabaseAdmin
       .from("hubsoft_config")
       .select("*")
+      .eq("api_key", api_key)
       .limit(1)
       .single();
 
     if (configError || !config) {
-      console.error("Failed to fetch hubsoft config:", configError);
-      return new Response(JSON.stringify({ error: "Integration not configured" }), {
-        status: 500,
+      console.error("No config found for api_key");
+      return new Response(JSON.stringify({ error: "Invalid api_key or integration not configured" }), {
+        status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -92,49 +72,31 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Validate credentials
-    if (config.api_key && config.api_key !== api_key) {
-      console.error("Invalid api_key");
-      return new Response(JSON.stringify({ error: "Invalid api_key" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (config.username && login && config.username !== login) {
-      console.error("Invalid login");
-      return new Response(JSON.stringify({ error: "Invalid credentials" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (config.password && senha && config.password !== senha) {
-      console.error("Invalid senha");
-      return new Response(JSON.stringify({ error: "Invalid credentials" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // Fetch categories linked to this config
+    const { data: configCategories } = await supabaseAdmin
+      .from("hubsoft_config_categories")
+      .select("category_id")
+      .eq("hubsoft_config_id", config.id);
+    
+    const linkedCategoryIds = configCategories?.map((cc: any) => cc.category_id) || [];
+    console.log("Config:", config.name, "Linked categories:", linkedCategoryIds.length);
 
     // Parse the Hubsoft payload
-    const tipo = body.tipo; // "cadastro", "suspender", "habilitar", "cancelar", etc.
-    const status = body.status; // "aguardando_cadastro", etc.
-    const pacote = body.pacote; // { id_pacote, descricao, ... }
-    const clienteServico = body.cliente_servico; // { id_cliente_servico, cliente, servico_status, ... }
+    const tipo = body.tipo;
+    const pacote = body.pacote;
+    const clienteServico = body.cliente_servico;
     const idClienteServicoPacote = body.id_cliente_servico_pacote;
 
-    console.log("Parsed event:", { tipo, status, pacoteDesc: pacote?.descricao, idClienteServicoPacote });
+    console.log("Parsed event:", { tipo, pacoteDesc: pacote?.descricao, idClienteServicoPacote });
 
     if (!tipo) {
-      console.log("NO TIPO DETECTED - Full payload logged above");
       return new Response(
         JSON.stringify({ success: true, message: "Payload received. No 'tipo' field." }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Optional: filter by package description (e.g., only process "TVLN")
+    // Optional: filter by package ID
     if (config.package_id && pacote?.id_pacote && String(pacote.id_pacote) !== config.package_id) {
       console.log(`Ignoring package ${pacote.id_pacote} (configured: ${config.package_id})`);
       return new Response(
@@ -148,15 +110,36 @@ Deno.serve(async (req) => {
     const nome = cliente?.nome_razaosocial || null;
     const cpf = cliente?.cpf_cnpj || null;
     const idCliente = cliente?.id_cliente ? String(cliente.id_cliente) : null;
-    const idClienteServico = clienteServico?.id_cliente_servico ? String(clienteServico.id_cliente_servico) : null;
 
-    console.log("Client data:", { email, nome, cpf, idCliente, idClienteServico });
+    console.log("Client data:", { email, nome, cpf, idCliente });
 
     const normalizedTipo = String(tipo).toLowerCase().trim();
 
+    // Helper: grant category access for a user
+    async function grantCategoryAccess(userId: string) {
+      if (linkedCategoryIds.length === 0) return;
+      for (const categoryId of linkedCategoryIds) {
+        await supabaseAdmin.from("user_category_access").upsert(
+          { user_id: userId, category_id: categoryId, hubsoft_config_id: config.id, is_active: true },
+          { onConflict: "user_id,category_id" }
+        );
+      }
+    }
+
+    // Helper: revoke category access for a user (from this config only)
+    async function revokeCategoryAccess(userId: string) {
+      if (linkedCategoryIds.length === 0) return;
+      for (const categoryId of linkedCategoryIds) {
+        await supabaseAdmin.from("user_category_access")
+          .delete()
+          .eq("user_id", userId)
+          .eq("category_id", categoryId)
+          .eq("hubsoft_config_id", config.id);
+      }
+    }
+
     // Handle "cadastro" (create/register)
     if (normalizedTipo === "cadastro") {
-      // Generate email from CPF if no email provided
       const userEmail = email || (cpf ? `${cpf}@tvln.local` : null);
       if (!userEmail) {
         return new Response(JSON.stringify({ error: "No email or CPF to create user" }), {
@@ -165,7 +148,6 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Use CPF as password if no specific password
       const userPassword = cpf || userEmail;
 
       const { data, error } = await supabaseAdmin.auth.admin.createUser({
@@ -177,13 +159,18 @@ Deno.serve(async (req) => {
 
       if (error) {
         if (error.message?.includes("already") || error.message?.includes("exists")) {
-          console.log("User already exists, ensuring unblocked");
-          // Find by hubsoft_client_id or username
-          const updateQuery = idCliente
-            ? supabaseAdmin.from("profiles").update({ is_blocked: false, is_active: true }).eq("hubsoft_client_id", idCliente)
-            : supabaseAdmin.from("profiles").update({ is_blocked: false, is_active: true }).eq("username", userEmail);
-          await updateQuery;
-          return new Response(JSON.stringify({ success: true, message: "User reactivated" }), {
+          console.log("User already exists, ensuring unblocked and granting access");
+          // Find user profile
+          const { data: profile } = await supabaseAdmin.from("profiles")
+            .select("user_id")
+            .or(idCliente ? `hubsoft_client_id.eq.${idCliente}` : `username.eq.${userEmail}`)
+            .single();
+          
+          if (profile) {
+            await supabaseAdmin.from("profiles").update({ is_blocked: false, is_active: true }).eq("user_id", profile.user_id);
+            await grantCategoryAccess(profile.user_id);
+          }
+          return new Response(JSON.stringify({ success: true, message: "User reactivated", login: userEmail, senha: userPassword }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
@@ -201,6 +188,8 @@ Deno.serve(async (req) => {
         if (Object.keys(profileUpdate).length > 0) {
           await supabaseAdmin.from("profiles").update(profileUpdate).eq("user_id", data.user.id);
         }
+        // Grant category access
+        await grantCategoryAccess(data.user.id);
       }
 
       return new Response(JSON.stringify({ 
@@ -213,23 +202,35 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Handle "suspender" / "bloquear" / "inadimplente"
+    // Handle "suspender" / "bloquear"
     if (["suspender", "suspensao", "bloquear", "inadimplente", "suspend", "block", "desabilitar", "disable"].includes(normalizedTipo)) {
-      const identifier = idCliente;
-      if (!identifier) {
+      if (!idCliente) {
         return new Response(JSON.stringify({ error: "client identifier is required" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      const { error } = await supabaseAdmin.from("profiles").update({ is_blocked: true }).eq("hubsoft_client_id", identifier);
-      if (error) {
-        console.error("Error blocking user:", error);
-        return new Response(JSON.stringify({ error: error.message }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      const { data: profile } = await supabaseAdmin.from("profiles")
+        .select("user_id")
+        .eq("hubsoft_client_id", idCliente)
+        .single();
+
+      if (profile) {
+        // Revoke category access from this config
+        await revokeCategoryAccess(profile.user_id);
+
+        // Check if user still has any active category access
+        const { data: remainingAccess } = await supabaseAdmin
+          .from("user_category_access")
+          .select("id")
+          .eq("user_id", profile.user_id)
+          .limit(1);
+
+        // If no more access, block the user
+        if (!remainingAccess || remainingAccess.length === 0) {
+          await supabaseAdmin.from("profiles").update({ is_blocked: true }).eq("hubsoft_client_id", idCliente);
+        }
       }
 
       return new Response(JSON.stringify({ success: true, action: "blocked" }), {
@@ -237,23 +238,23 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Handle "habilitar" / "reativar" / "adimplente"
+    // Handle "habilitar" / "reativar"
     if (["habilitar", "habilitacao", "reativar", "adimplente", "desbloquear", "enable", "unblock", "liberar"].includes(normalizedTipo)) {
-      const identifier = idCliente;
-      if (!identifier) {
+      if (!idCliente) {
         return new Response(JSON.stringify({ error: "client identifier is required" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      const { error } = await supabaseAdmin.from("profiles").update({ is_blocked: false, is_active: true }).eq("hubsoft_client_id", identifier);
-      if (error) {
-        console.error("Error unblocking user:", error);
-        return new Response(JSON.stringify({ error: error.message }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      const { data: profile } = await supabaseAdmin.from("profiles")
+        .select("user_id")
+        .eq("hubsoft_client_id", idCliente)
+        .single();
+
+      if (profile) {
+        await supabaseAdmin.from("profiles").update({ is_blocked: false, is_active: true }).eq("hubsoft_client_id", idCliente);
+        await grantCategoryAccess(profile.user_id);
       }
 
       return new Response(JSON.stringify({ success: true, action: "unblocked" }), {
@@ -263,8 +264,7 @@ Deno.serve(async (req) => {
 
     // Handle "cancelar" / "excluir" / "remover"
     if (["cancelar", "excluir", "remover", "remocao", "delete", "cancel", "remove"].includes(normalizedTipo)) {
-      const identifier = idCliente;
-      if (!identifier) {
+      if (!idCliente) {
         return new Response(JSON.stringify({ error: "client identifier is required" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -274,11 +274,24 @@ Deno.serve(async (req) => {
       const { data: profile } = await supabaseAdmin
         .from("profiles")
         .select("user_id")
-        .eq("hubsoft_client_id", identifier)
+        .eq("hubsoft_client_id", idCliente)
         .single();
 
       if (profile) {
-        await supabaseAdmin.auth.admin.deleteUser(profile.user_id);
+        // Revoke this config's access
+        await revokeCategoryAccess(profile.user_id);
+
+        // Check remaining access
+        const { data: remainingAccess } = await supabaseAdmin
+          .from("user_category_access")
+          .select("id")
+          .eq("user_id", profile.user_id)
+          .limit(1);
+
+        // Only delete user if no remaining access from other integrations
+        if (!remainingAccess || remainingAccess.length === 0) {
+          await supabaseAdmin.auth.admin.deleteUser(profile.user_id);
+        }
       }
 
       return new Response(JSON.stringify({ success: true, action: "deleted" }), {
@@ -286,7 +299,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Unknown tipo - log it
+    // Unknown tipo
     console.log("UNKNOWN TIPO:", normalizedTipo);
     return new Response(
       JSON.stringify({ success: true, message: `Unknown tipo '${normalizedTipo}'. Logged.` }),
