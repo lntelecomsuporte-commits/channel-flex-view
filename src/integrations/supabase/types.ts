@@ -38,6 +38,42 @@ export type Database = {
         }
         Relationships: []
       }
+      category_includes: {
+        Row: {
+          category_id: string
+          created_at: string
+          id: string
+          included_category_id: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          id?: string
+          included_category_id: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          id?: string
+          included_category_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "category_includes_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "category_includes_included_category_id_fkey"
+            columns: ["included_category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       channels: {
         Row: {
           category_id: string | null
