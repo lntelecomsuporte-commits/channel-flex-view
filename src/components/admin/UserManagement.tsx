@@ -88,17 +88,23 @@ const UserManagement = () => {
     }
   };
 
-  const handleToggleBlock = async (profileId: string, currentBlocked: boolean) => {
+  const handleToggleBlock = async (profileId: string, userId: string, currentBlocked: boolean) => {
     const { error } = await supabase
       .from("profiles")
       .update({ is_blocked: !currentBlocked })
       .eq("id", profileId);
     if (error) {
       toast.error("Erro: " + error.message);
-    } else {
-      toast.success(currentBlocked ? "Usuário desbloqueado" : "Usuário bloqueado");
-      queryClient.invalidateQueries({ queryKey: ["profiles"] });
+      return;
     }
+    // If blocking, revoke all sessions to force logout on all devices
+    if (!currentBlocked) {
+      await supabase.functions.invoke("manage-users", {
+        body: { action: "revoke_sessions", user_id: userId },
+      });
+    }
+    toast.success(currentBlocked ? "Usuário desbloqueado" : "Usuário bloqueado");
+    queryClient.invalidateQueries({ queryKey: ["profiles"] });
   };
 
   const handleDelete = async (profileId: string, userId: string) => {
