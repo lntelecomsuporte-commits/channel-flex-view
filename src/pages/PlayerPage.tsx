@@ -189,6 +189,15 @@ const PlayerPage = () => {
       className="relative w-full h-full overflow-hidden bg-background select-none"
       style={{ width: '100vw', height: '100vh' }}
       {...touchHandlers}
+      onClick={() => {
+        if (!isMobile && !showChannelList) {
+          if (showPreview) {
+            confirmPreview();
+          } else {
+            setShowChannelList(true);
+          }
+        }
+      }}
     >
       {currentChannel && (
         <>
