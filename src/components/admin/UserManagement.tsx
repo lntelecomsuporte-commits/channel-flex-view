@@ -167,7 +167,7 @@ const UserManagement = () => {
                     <Button variant="ghost" size="sm" onClick={() => handleEdit(p as Profile)} title="Editar">
                       <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleToggleBlock(p.id, p.user_id, p.is_blocked)} title={p.is_blocked ? "Desbloquear" : "Bloquear"}>
+                    <Button variant="ghost" size="sm" onClick={() => handleToggleBlock(p.id, p.is_blocked)} title={p.is_blocked ? "Desbloquear" : "Bloquear"}>
                       {p.is_blocked ? <ShieldCheck className="h-4 w-4 text-primary" /> : <ShieldOff className="h-4 w-4 text-destructive" />}
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => handleDelete(p.id, p.user_id)}>
