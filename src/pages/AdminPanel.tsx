@@ -27,10 +27,39 @@ const AdminPanel = () => {
   const [channelForm, setChannelForm] = useState({
     name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true,
   });
-  const [categoryForm, setCategoryForm] = useState({ name: "", position: "" });
+  const [categoryForm, setCategoryForm] = useState({ name: "", position: "", includedCategoryIds: [] as string[] });
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Fetch category includes
+  const { data: categoryIncludes } = useQuery({
+    queryKey: ["category-includes"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("category_includes").select("*");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Fetch hubsoft config categories for display
+  const { data: hubsoftConfigCategories } = useQuery({
+    queryKey: ["hubsoft-config-categories"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("hubsoft_config_categories").select("*");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: hubsoftConfigs } = useQuery({
+    queryKey: ["hubsoft-configs"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("hubsoft_config").select("*");
+      if (error) throw error;
+      return data;
+    },
+  });
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/admin/login");
