@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
@@ -7,8 +7,21 @@ export function useAuth() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const checkBlocked = useCallback(async (userId: string) => {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_blocked, is_active")
+      .eq("user_id", userId)
+      .single();
+
+    if (profile?.is_blocked || (profile && !profile.is_active)) {
+      await supabase.auth.signOut();
+      return true;
+    }
+    return false;
+  }, []);
+
   useEffect(() => {
-    // Check initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
@@ -33,7 +46,6 @@ export function useAuth() {
         setUser(currentUser);
 
         if (currentUser) {
-          // Use setTimeout to avoid potential deadlock with auth state change
           setTimeout(async () => {
             const { data } = await supabase.rpc("has_role", {
               _user_id: currentUser.id,
@@ -51,6 +63,17 @@ export function useAuth() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Periodic check every 30s to detect if user was blocked
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(() => {
+      checkBlocked(user.id);
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [user, checkBlocked]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
