@@ -74,6 +74,10 @@ const VideoPlayer = ({ streamUrl, autoPlay = true }: VideoPlayerProps) => {
       className="absolute inset-0 w-full h-full object-contain"
       playsInline
       muted={muted}
+      // @ts-ignore - AirPlay attributes
+      x-webkit-airplay="allow"
+      webkit-playsinline="true"
+      crossOrigin="anonymous"
     />
   );
 };
