@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, ShieldOff, ShieldCheck } from "lucide-react";
+import { Plus, Trash2, ShieldOff, ShieldCheck, Pencil } from "lucide-react";
 
 function useProfiles() {
   return useQuery({
@@ -22,25 +23,34 @@ function useProfiles() {
   });
 }
 
+type Profile = {
+  id: string;
+  user_id: string;
+  username: string | null;
+  display_name: string | null;
+  is_blocked: boolean;
+  is_active: boolean;
+  hubsoft_client_id: string | null;
+};
+
 const UserManagement = () => {
   const { data: profiles, isLoading } = useProfiles();
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ email: "", password: "", display_name: "" });
   const [saving, setSaving] = useState(false);
+  const [editingUser, setEditingUser] = useState<Profile | null>(null);
+  const [editForm, setEditForm] = useState({ password: "", display_name: "" });
+  const [updating, setUpdating] = useState(false);
 
   const handleCreate = async () => {
     if (!form.email || !form.password) {
       toast.error("Preencha email e senha");
       return;
     }
-
     setSaving(true);
-
-    // Create user via edge function
     const { data, error } = await supabase.functions.invoke("manage-users", {
       body: { action: "create", email: form.email, password: form.password, display_name: form.display_name || form.email },
     });
-
     setSaving(false);
     if (error || data?.error) {
       toast.error("Erro ao criar usuário: " + (data?.error || error?.message));
@@ -51,12 +61,38 @@ const UserManagement = () => {
     }
   };
 
+  const handleEdit = (profile: Profile) => {
+    setEditingUser(profile);
+    setEditForm({ password: "", display_name: profile.display_name || "" });
+  };
+
+  const handleUpdate = async () => {
+    if (!editingUser) return;
+    if (!editForm.password && !editForm.display_name) {
+      toast.error("Preencha ao menos um campo para atualizar");
+      return;
+    }
+    setUpdating(true);
+    const body: Record<string, string> = { action: "update", user_id: editingUser.user_id };
+    if (editForm.password) body.password = editForm.password;
+    if (editForm.display_name) body.display_name = editForm.display_name;
+
+    const { data, error } = await supabase.functions.invoke("manage-users", { body });
+    setUpdating(false);
+    if (error || data?.error) {
+      toast.error("Erro ao atualizar: " + (data?.error || error?.message));
+    } else {
+      toast.success("Usuário atualizado!");
+      setEditingUser(null);
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
+    }
+  };
+
   const handleToggleBlock = async (profileId: string, currentBlocked: boolean) => {
     const { error } = await supabase
       .from("profiles")
       .update({ is_blocked: !currentBlocked })
       .eq("id", profileId);
-
     if (error) {
       toast.error("Erro: " + error.message);
     } else {
@@ -69,7 +105,6 @@ const UserManagement = () => {
     const { data, error } = await supabase.functions.invoke("manage-users", {
       body: { action: "delete", user_id: userId },
     });
-
     if (error || data?.error) {
       toast.error("Erro: " + (data?.error || error?.message));
     } else {
@@ -129,6 +164,9 @@ const UserManagement = () => {
                     <span className={`text-xs px-2 py-0.5 rounded ${p.is_blocked ? "bg-destructive/20 text-destructive" : p.is_active ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
                       {p.is_blocked ? "Bloqueado" : p.is_active ? "Ativo" : "Inativo"}
                     </span>
+                    <Button variant="ghost" size="sm" onClick={() => handleEdit(p as Profile)} title="Editar">
+                      <Pencil className="h-4 w-4" />
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => handleToggleBlock(p.id, p.is_blocked)} title={p.is_blocked ? "Desbloquear" : "Bloquear"}>
                       {p.is_blocked ? <ShieldCheck className="h-4 w-4 text-primary" /> : <ShieldOff className="h-4 w-4 text-destructive" />}
                     </Button>
@@ -142,6 +180,28 @@ const UserManagement = () => {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Usuário</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">{editingUser?.username}</p>
+            <div className="space-y-2">
+              <Label>Nome</Label>
+              <Input value={editForm.display_name} onChange={(e) => setEditForm((f) => ({ ...f, display_name: e.target.value }))} placeholder="Nome de exibição" />
+            </div>
+            <div className="space-y-2">
+              <Label>Nova Senha</Label>
+              <Input type="password" value={editForm.password} onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))} placeholder="Deixe vazio para manter a atual" />
+            </div>
+            <Button onClick={handleUpdate} disabled={updating} className="w-full">
+              {updating ? "Salvando..." : "Salvar Alterações"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
