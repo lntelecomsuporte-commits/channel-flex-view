@@ -26,7 +26,14 @@ const VideoPlayer = ({ streamUrl, autoPlay = true }: VideoPlayerProps) => {
       hlsRef.current = null;
     }
 
-    if (Hls.isSupported()) {
+    // On iOS/Safari, prefer native HLS for better AirPlay support
+    const isAppleDevice = /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent) && 
+      video.canPlayType("application/vnd.apple.mpegurl");
+
+    if (isAppleDevice) {
+      video.src = playableStreamUrl;
+      if (autoPlay) video.play().catch(() => {});
+    } else if (Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
