@@ -9,32 +9,45 @@ export function useChannels() {
   return useQuery({
     queryKey: ["channels"],
     queryFn: async () => {
-      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
-      
-      let query = supabase
-        .from("channels")
-        .select("*")
-        .eq("is_active", true)
-        .order("channel_number", { ascending: true });
 
-      // If user is logged in, check category access
       if (user) {
+        // Check if user has category access records
         const { data: access } = await supabase
           .from("user_category_access")
           .select("category_id")
           .eq("user_id", user.id)
           .eq("is_active", true);
 
-        // If user has category restrictions, filter channels
         if (access && access.length > 0) {
-          const categoryIds = access.map((a) => a.category_id);
-          query = query.in("category_id", categoryIds);
+          const directCategoryIds = access.map((a) => a.category_id);
+
+          // Resolve included categories (category_includes)
+          const { data: includes } = await supabase
+            .from("category_includes")
+            .select("included_category_id")
+            .in("category_id", directCategoryIds);
+
+          const includedIds = includes?.map((i) => i.included_category_id) || [];
+          const allCategoryIds = [...new Set([...directCategoryIds, ...includedIds])];
+
+          const { data, error } = await supabase
+            .from("channels")
+            .select("*")
+            .eq("is_active", true)
+            .in("category_id", allCategoryIds)
+            .order("channel_number", { ascending: true });
+          if (error) throw error;
+          return data as Channel[];
         }
-        // If no access records exist, show all channels (backwards compatible for manually created users)
+        // No access records = manually created user, show all
       }
 
-      const { data, error } = await query;
+      const { data, error } = await supabase
+        .from("channels")
+        .select("*")
+        .eq("is_active", true)
+        .order("channel_number", { ascending: true });
       if (error) throw error;
       return data as Channel[];
     },

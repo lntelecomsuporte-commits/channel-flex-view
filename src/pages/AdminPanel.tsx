@@ -3,12 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useAllChannels, useCategories } from "@/hooks/useChannels";
 import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Plus, Trash2, LogOut, Tv, Layers, Users, Link } from "lucide-react";
@@ -26,10 +27,39 @@ const AdminPanel = () => {
   const [channelForm, setChannelForm] = useState({
     name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true,
   });
-  const [categoryForm, setCategoryForm] = useState({ name: "", position: "" });
+  const [categoryForm, setCategoryForm] = useState({ name: "", position: "", includedCategoryIds: [] as string[] });
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Fetch category includes
+  const { data: categoryIncludes } = useQuery({
+    queryKey: ["category-includes"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("category_includes").select("*");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Fetch hubsoft config categories for display
+  const { data: hubsoftConfigCategories } = useQuery({
+    queryKey: ["hubsoft-config-categories"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("hubsoft_config_categories").select("*");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: hubsoftConfigs } = useQuery({
+    queryKey: ["hubsoft-configs"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("hubsoft_config").select("*");
+      if (error) throw error;
+      return data;
+    },
+  });
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/admin/login");
@@ -99,31 +129,61 @@ const AdminPanel = () => {
     setChannelForm({ name: ch.name, channel_number: String(ch.channel_number), stream_url: ch.stream_url, logo_url: ch.logo_url ?? "", category_id: ch.category_id ?? "", is_active: ch.is_active });
   };
 
+  const resetCategoryForm = () => setCategoryForm({ name: "", position: "", includedCategoryIds: [] });
+
   const handleSaveCategory = async () => {
     if (!categoryForm.name) { toast.error("Informe o nome da categoria"); return; }
     setSaving(true);
+    let categoryId = editingCategoryId;
+
     if (editingCategoryId) {
       const { error } = await supabase.from("categories").update({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0 }).eq("id", editingCategoryId);
-      setSaving(false);
-      if (error) { toast.error("Erro: " + error.message); }
-      else { toast.success("Categoria atualizada!"); setCategoryForm({ name: "", position: "" }); setEditingCategoryId(null); queryClient.invalidateQueries({ queryKey: ["categories"] }); }
+      if (error) { toast.error("Erro: " + error.message); setSaving(false); return; }
     } else {
-      const { error } = await supabase.from("categories").insert({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0 });
-      setSaving(false);
-      if (error) { toast.error("Erro ao salvar categoria: " + error.message); }
-      else { toast.success("Categoria criada!"); setCategoryForm({ name: "", position: "" }); queryClient.invalidateQueries({ queryKey: ["categories"] }); }
+      const { data, error } = await supabase.from("categories").insert({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0 }).select("id").single();
+      if (error) { toast.error("Erro ao salvar categoria: " + error.message); setSaving(false); return; }
+      categoryId = data.id;
     }
+
+    // Sync category includes
+    if (categoryId) {
+      await supabase.from("category_includes").delete().eq("category_id", categoryId);
+      if (categoryForm.includedCategoryIds.length > 0) {
+        const rows = categoryForm.includedCategoryIds.map((incId) => ({
+          category_id: categoryId!,
+          included_category_id: incId,
+        }));
+        await supabase.from("category_includes").insert(rows);
+      }
+    }
+
+    setSaving(false);
+    toast.success(editingCategoryId ? "Categoria atualizada!" : "Categoria criada!");
+    resetCategoryForm();
+    setEditingCategoryId(null);
+    queryClient.invalidateQueries({ queryKey: ["categories"] });
+    queryClient.invalidateQueries({ queryKey: ["category-includes"] });
   };
 
   const handleEditCategory = (cat: NonNullable<typeof categories>[0]) => {
     setEditingCategoryId(cat.id);
-    setCategoryForm({ name: cat.name, position: String(cat.position) });
+    const includes = categoryIncludes?.filter((ci) => ci.category_id === cat.id).map((ci) => ci.included_category_id) || [];
+    setCategoryForm({ name: cat.name, position: String(cat.position), includedCategoryIds: includes });
   };
 
   const handleDeleteCategory = async (id: string) => {
     const { error } = await supabase.from("categories").delete().eq("id", id);
     if (error) { toast.error("Erro: " + error.message); }
-    else { toast.success("Categoria excluída"); queryClient.invalidateQueries({ queryKey: ["categories"] }); }
+    else { toast.success("Categoria excluída"); queryClient.invalidateQueries({ queryKey: ["categories"] }); queryClient.invalidateQueries({ queryKey: ["category-includes"] }); }
+  };
+
+  const toggleIncludedCategory = (catId: string) => {
+    setCategoryForm((f) => ({
+      ...f,
+      includedCategoryIds: f.includedCategoryIds.includes(catId)
+        ? f.includedCategoryIds.filter((id) => id !== catId)
+        : [...f.includedCategoryIds, catId],
+    }));
   };
 
   return (
@@ -248,12 +308,34 @@ const AdminPanel = () => {
                     <Input type="number" value={categoryForm.position} onChange={(e) => setCategoryForm((f) => ({ ...f, position: e.target.value }))} placeholder="0" />
                   </div>
                 </div>
+
+                {/* Included categories */}
+                {categories && categories.filter((c) => c.id !== editingCategoryId).length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Inclui canais de outras categorias</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Usuários desta categoria também poderão assistir canais das categorias marcadas abaixo.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                      {categories.filter((c) => c.id !== editingCategoryId).map((cat) => (
+                        <label key={cat.id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted">
+                          <Checkbox
+                            checked={categoryForm.includedCategoryIds.includes(cat.id)}
+                            onCheckedChange={() => toggleIncludedCategory(cat.id)}
+                          />
+                          <span className="text-sm text-foreground">{cat.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                   <Button onClick={handleSaveCategory} disabled={saving}>
                     <Plus className="h-4 w-4 mr-1" /> {saving ? "Salvando..." : editingCategoryId ? "Salvar" : "Adicionar"}
                   </Button>
                   {editingCategoryId && (
-                    <Button variant="outline" onClick={() => { setEditingCategoryId(null); setCategoryForm({ name: "", position: "" }); }}>
+                    <Button variant="outline" onClick={() => { setEditingCategoryId(null); resetCategoryForm(); }}>
                       Cancelar
                     </Button>
                   )}
@@ -270,20 +352,38 @@ const AdminPanel = () => {
                   <p className="text-muted-foreground">Nenhuma categoria</p>
                 ) : (
                   <div className="space-y-2">
-                    {categories.map((c) => (
-                      <div key={c.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
-                        <div>
-                          <p className="font-medium text-foreground">{c.name}</p>
-                          <p className="text-xs text-muted-foreground">Posição: {c.position}</p>
+                    {categories.map((c) => {
+                      const includes = categoryIncludes?.filter((ci) => ci.category_id === c.id) || [];
+                      const includeNames = includes.map((ci) => categories.find((cat) => cat.id === ci.included_category_id)?.name).filter(Boolean);
+                      const linkedConfigs = hubsoftConfigCategories?.filter((hcc) => hcc.category_id === c.id) || [];
+                      const configNames = linkedConfigs.map((lc) => hubsoftConfigs?.find((hc) => hc.id === lc.hubsoft_config_id)?.name).filter(Boolean);
+                      return (
+                        <div key={c.id} className="p-3 rounded-lg bg-secondary">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium text-foreground">{c.name}</p>
+                              <p className="text-xs text-muted-foreground">Posição: {c.position}</p>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => handleEditCategory(c)}>Editar</Button>
+                              <Button variant="ghost" size="sm" onClick={() => handleDeleteCategory(c.id)}>
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </div>
+                          {(includeNames.length > 0 || configNames.length > 0) && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {configNames.map((name) => (
+                                <span key={name} className="text-xs px-2 py-0.5 rounded bg-primary/20 text-primary">🔗 {name}</span>
+                              ))}
+                              {includeNames.map((name) => (
+                                <span key={name} className="text-xs px-2 py-0.5 rounded bg-accent text-accent-foreground">+ {name}</span>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => handleEditCategory(c)}>Editar</Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleDeleteCategory(c.id)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
