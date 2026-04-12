@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import type { Channel } from "@/hooks/useChannels";
+import { useMultiEPG } from "@/hooks/useMultiEPG";
+import type { EPGProgram } from "@/hooks/useEPG";
 
 interface ChannelListProps {
   channels: Channel[];
@@ -9,10 +11,183 @@ interface ChannelListProps {
   onClose: () => void;
 }
 
+// Timeline config
+const HOUR_WIDTH = 200; // px per hour
+const TIMELINE_HOURS = 6; // show 6 hours total
+const TIMELINE_PAST_HOURS = 1; // 1 hour in the past
+
+function formatTime(dateStr: string) {
+  const d = new Date(dateStr);
+  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function getTimelineStart(): Date {
+  const now = new Date();
+  now.setMinutes(0, 0, 0);
+  now.setHours(now.getHours() - TIMELINE_PAST_HOURS);
+  return now;
+}
+
+function getTimelineEnd(start: Date): Date {
+  return new Date(start.getTime() + TIMELINE_HOURS * 3600000);
+}
+
+function timeToPixels(time: Date, timelineStart: Date): number {
+  const diffMs = time.getTime() - timelineStart.getTime();
+  return (diffMs / 3600000) * HOUR_WIDTH;
+}
+
+// Timeline header with hour markers
+function TimelineHeader({ timelineStart, now }: { timelineStart: Date; now: Date }) {
+  const hours: Date[] = [];
+  for (let i = 0; i < TIMELINE_HOURS; i++) {
+    const h = new Date(timelineStart.getTime() + i * 3600000);
+    hours.push(h);
+  }
+  const nowX = timeToPixels(now, timelineStart);
+  const totalWidth = TIMELINE_HOURS * HOUR_WIDTH;
+
+  return (
+    <div className="relative h-8 border-b border-border" style={{ width: totalWidth }}>
+      {hours.map((h, i) => (
+        <div
+          key={i}
+          className="absolute top-0 h-full flex items-center border-l border-border/50 pl-2"
+          style={{ left: i * HOUR_WIDTH }}
+        >
+          <span className="text-xs text-muted-foreground font-medium">
+            {h.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+          </span>
+        </div>
+      ))}
+      {/* Now marker */}
+      <div
+        className="absolute top-0 h-full w-0.5 bg-primary z-10"
+        style={{ left: nowX }}
+      >
+        <div className="absolute -top-0 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[10px] px-1 rounded-b font-bold">
+          AGORA
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Program block in the timeline
+function ProgramBlock({
+  program,
+  nextStart,
+  timelineStart,
+  timelineEnd,
+  isCurrent,
+}: {
+  program: EPGProgram;
+  nextStart: Date | null;
+  timelineStart: Date;
+  timelineEnd: Date;
+  isCurrent: boolean;
+}) {
+  const start = new Date(program.start_date);
+  const end = nextStart || new Date(start.getTime() + 3600000);
+
+  const clampedStart = start < timelineStart ? timelineStart : start;
+  const clampedEnd = end > timelineEnd ? timelineEnd : end;
+
+  if (clampedStart >= clampedEnd) return null;
+
+  const left = timeToPixels(clampedStart, timelineStart);
+  const width = timeToPixels(clampedEnd, timelineStart) - left;
+
+  if (width < 2) return null;
+
+  return (
+    <div
+      className={`absolute top-1 bottom-1 rounded px-2 flex items-center overflow-hidden border transition-colors ${
+        isCurrent
+          ? "bg-primary/20 border-primary/40"
+          : "bg-secondary/60 border-border/30 hover:bg-secondary/80"
+      }`}
+      style={{ left, width: Math.max(width - 2, 20) }}
+      title={`${formatTime(program.start_date)} - ${program.title}`}
+    >
+      <span className="text-xs text-foreground truncate">
+        {width > 60 && (
+          <span className="text-muted-foreground mr-1">{formatTime(program.start_date)}</span>
+        )}
+        {program.title}
+      </span>
+    </div>
+  );
+}
+
+// EPG row for a single channel
+function ChannelEPGRow({
+  programs,
+  timelineStart,
+  timelineEnd,
+  now,
+}: {
+  programs: EPGProgram[];
+  timelineStart: Date;
+  timelineEnd: Date;
+  now: Date;
+}) {
+  const totalWidth = TIMELINE_HOURS * HOUR_WIDTH;
+
+  return (
+    <div className="relative h-10" style={{ width: totalWidth }}>
+      {programs.map((prog, i) => {
+        const start = new Date(prog.start_date);
+        const nextStart = i + 1 < programs.length ? new Date(programs[i + 1].start_date) : null;
+        const end = nextStart || new Date(start.getTime() + 3600000);
+        const isCurrent = start <= now && end > now;
+
+        // Skip programs entirely outside timeline
+        if (end <= timelineStart || start >= timelineEnd) return null;
+
+        return (
+          <ProgramBlock
+            key={i}
+            program={prog}
+            nextStart={nextStart}
+            timelineStart={timelineStart}
+            timelineEnd={timelineEnd}
+            isCurrent={isCurrent}
+          />
+        );
+      })}
+      {/* Now line through programs */}
+      <div
+        className="absolute top-0 h-full w-0.5 bg-primary/60 z-10 pointer-events-none"
+        style={{ left: timeToPixels(now, timelineStart) }}
+      />
+    </div>
+  );
+}
+
 const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose }: ChannelListProps) => {
   const [focusedIndex, setFocusedIndex] = useState(currentIndex);
   const listRef = useRef<HTMLDivElement>(null);
+  const timelineScrollRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  const now = useMemo(() => new Date(), [visible]);
+  const timelineStart = useMemo(() => getTimelineStart(), [visible]);
+  const timelineEnd = useMemo(() => getTimelineEnd(timelineStart), [timelineStart]);
+
+  const epgMap = useMultiEPG(
+    channels.map((ch) => ({ id: ch.id, epg_url: (ch as any).epg_url }))
+  );
+
+  const hasAnyEPG = epgMap.size > 0;
+
+  // Auto-scroll timeline to "now" position
+  useEffect(() => {
+    if (visible && timelineScrollRef.current) {
+      const nowX = timeToPixels(now, timelineStart);
+      timelineScrollRef.current.scrollLeft = Math.max(0, nowX - 100);
+    }
+  }, [visible, now, timelineStart]);
 
   useEffect(() => {
     if (visible) {
@@ -39,6 +214,20 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose }: Cha
           e.stopPropagation();
           setFocusedIndex((prev) => (prev < channels.length - 1 ? prev + 1 : 0));
           break;
+        case "ArrowLeft":
+          e.preventDefault();
+          e.stopPropagation();
+          if (timelineScrollRef.current) {
+            timelineScrollRef.current.scrollLeft -= 150;
+          }
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          e.stopPropagation();
+          if (timelineScrollRef.current) {
+            timelineScrollRef.current.scrollLeft += 150;
+          }
+          break;
         case "Enter":
           e.preventDefault();
           e.stopPropagation();
@@ -59,46 +248,105 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose }: Cha
 
   if (!visible) return null;
 
+  const totalWidth = TIMELINE_HOURS * HOUR_WIDTH;
+
   return (
-    <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 animate-fade-in">
-      <div className="glass-panel w-full max-w-md max-h-[80vh] flex flex-col mx-4">
-        <div className="p-4 border-b border-border">
-          <h2 className="text-lg font-bold text-foreground">Lista de Canais</h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            ↑↓ Navegar • OK Selecionar • ESC Fechar
-          </p>
+    <div className="absolute inset-0 z-30 flex flex-col bg-black/85 animate-fade-in">
+      {/* Header */}
+      <div className="p-3 border-b border-border flex-shrink-0">
+        <div className="flex justify-between items-center">
+          <h2 className="text-lg font-bold text-foreground">Guia de Programação</h2>
+          <span className="text-xs text-muted-foreground">
+            ↑↓ Navegar • ←→ Linha do tempo • OK Selecionar • ESC Fechar
+          </span>
         </div>
-        <div ref={listRef} className="overflow-y-auto flex-1 p-2">
-          {channels.map((channel, index) => (
-            <div
-              key={channel.id}
-              ref={(el) => { itemRefs.current[index] = el; }}
-              onClick={() => onSelect(index)}
-              className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
-                index === focusedIndex
-                  ? "bg-primary/20 ring-1 ring-primary"
-                  : index === currentIndex
-                  ? "bg-accent/30"
-                  : "hover:bg-accent/20"
-              }`}
-            >
-              <span className="channel-badge text-sm min-w-[3rem] text-center">
-                {channel.channel_number}
-              </span>
-              {channel.logo_url && (
-                <img
-                  src={channel.logo_url}
-                  alt={channel.name}
-                  className="h-8 w-8 rounded object-contain bg-secondary"
-                />
-              )}
-              <span className="font-medium text-foreground truncate">{channel.name}</span>
-              {index === currentIndex && (
-                <span className="ml-auto text-xs text-primary font-semibold">AO VIVO</span>
-              )}
+      </div>
+
+      {/* EPG Grid */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Fixed channel column */}
+        <div className="flex-shrink-0 w-40 md:w-48 border-r border-border flex flex-col">
+          {/* Spacer for timeline header */}
+          {hasAnyEPG && <div className="h-8 border-b border-border flex-shrink-0" />}
+          <div className="overflow-y-auto flex-1" ref={listRef}>
+            {channels.map((channel, index) => (
+              <div
+                key={channel.id}
+                ref={(el) => { itemRefs.current[index] = el; }}
+                onClick={() => onSelect(index)}
+                className={`flex items-center gap-2 px-2 cursor-pointer transition-colors ${
+                  hasAnyEPG ? "h-10" : "h-12"
+                } ${
+                  index === focusedIndex
+                    ? "bg-primary/20 ring-1 ring-primary"
+                    : index === currentIndex
+                    ? "bg-accent/30"
+                    : "hover:bg-accent/20"
+                }`}
+              >
+                <span className="channel-badge text-xs min-w-[2.2rem] text-center">
+                  {channel.channel_number}
+                </span>
+                {channel.logo_url && (
+                  <img
+                    src={channel.logo_url}
+                    alt={channel.name}
+                    className="h-6 w-6 rounded object-contain bg-secondary flex-shrink-0"
+                  />
+                )}
+                <span className="font-medium text-foreground text-sm truncate flex-1">
+                  {channel.name}
+                </span>
+                {index === currentIndex && (
+                  <span className="text-[10px] text-primary font-bold flex-shrink-0">●</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Scrollable timeline */}
+        {hasAnyEPG && (
+          <div
+            ref={timelineScrollRef}
+            className="flex-1 overflow-x-auto overflow-y-auto"
+            onScroll={(e) => {
+              // Sync vertical scroll with channel column
+              if (listRef.current) {
+                listRef.current.scrollTop = (e.target as HTMLDivElement).scrollTop;
+              }
+            }}
+          >
+            <div style={{ width: totalWidth }}>
+              {/* Timeline header */}
+              <TimelineHeader timelineStart={timelineStart} now={now} />
+              {/* Program rows */}
+              {channels.map((channel) => {
+                const programs = epgMap.get(channel.id) || [];
+                return (
+                  <ChannelEPGRow
+                    key={channel.id}
+                    programs={programs}
+                    timelineStart={timelineStart}
+                    timelineEnd={timelineEnd}
+                    now={now}
+                  />
+                );
+              })}
             </div>
-          ))}
-        </div>
+          </div>
+        )}
+
+        {/* If no EPG data at all, show simple list */}
+        {!hasAnyEPG && (
+          <div className="flex-1 flex items-center justify-center">
+            <p className="text-muted-foreground text-sm">
+              Nenhum canal com EPG configurado.
+              <br />
+              Adicione URLs de EPG no painel admin.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
