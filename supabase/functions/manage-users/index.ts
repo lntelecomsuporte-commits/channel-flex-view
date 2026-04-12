@@ -51,6 +51,29 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ success: true, user_id: data.user.id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    if (action === "update") {
+      if (!user_id) {
+        return new Response(JSON.stringify({ error: "user_id é obrigatório" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      const updates: Record<string, unknown> = {};
+      if (password) updates.password = password;
+      if (email) updates.email = email;
+      if (display_name !== undefined) updates.user_metadata = { display_name };
+
+      const { error } = await supabaseAdmin.auth.admin.updateUserById(user_id, updates);
+      if (error) {
+        return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      // Update display_name in profiles if provided
+      if (display_name !== undefined) {
+        await supabaseAdmin.from("profiles").update({ display_name }).eq("user_id", user_id);
+      }
+
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     if (action === "delete") {
       if (!user_id) {
         return new Response(JSON.stringify({ error: "user_id é obrigatório" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
