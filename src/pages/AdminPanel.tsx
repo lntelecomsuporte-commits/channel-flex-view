@@ -28,6 +28,7 @@ const AdminPanel = () => {
   });
   const [categoryForm, setCategoryForm] = useState({ name: "", position: "" });
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
