@@ -89,6 +89,7 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          name: string
           package_id: string
           password: string
           updated_at: string
@@ -100,6 +101,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          name?: string
           package_id?: string
           password?: string
           updated_at?: string
@@ -111,12 +113,49 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          name?: string
           package_id?: string
           password?: string
           updated_at?: string
           username?: string
         }
         Relationships: []
+      }
+      hubsoft_config_categories: {
+        Row: {
+          category_id: string
+          created_at: string
+          hubsoft_config_id: string
+          id: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          hubsoft_config_id: string
+          id?: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          hubsoft_config_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hubsoft_config_categories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hubsoft_config_categories_hubsoft_config_id_fkey"
+            columns: ["hubsoft_config_id"]
+            isOneToOne: false
+            referencedRelation: "hubsoft_config"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -153,6 +192,48 @@ export type Database = {
           username?: string | null
         }
         Relationships: []
+      }
+      user_category_access: {
+        Row: {
+          category_id: string
+          created_at: string
+          hubsoft_config_id: string | null
+          id: string
+          is_active: boolean
+          user_id: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          hubsoft_config_id?: string | null
+          id?: string
+          is_active?: boolean
+          user_id: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          hubsoft_config_id?: string | null
+          id?: string
+          is_active?: boolean
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_category_access_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_category_access_hubsoft_config_id_fkey"
+            columns: ["hubsoft_config_id"]
+            isOneToOne: false
+            referencedRelation: "hubsoft_config"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
