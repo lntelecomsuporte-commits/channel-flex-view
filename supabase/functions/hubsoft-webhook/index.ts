@@ -238,7 +238,7 @@ Deno.serve(async (req) => {
     }
 
     // Handle "habilitar" / "reativar" / "adimplente"
-    if (["habilitar", "reativar", "adimplente", "desbloquear", "enable", "unblock", "liberar"].includes(normalizedTipo)) {
+    if (["habilitar", "habilitacao", "reativar", "adimplente", "desbloquear", "enable", "unblock", "liberar"].includes(normalizedTipo)) {
       const identifier = idCliente;
       if (!identifier) {
         return new Response(JSON.stringify({ error: "client identifier is required" }), {
