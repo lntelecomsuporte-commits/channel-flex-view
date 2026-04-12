@@ -129,31 +129,61 @@ const AdminPanel = () => {
     setChannelForm({ name: ch.name, channel_number: String(ch.channel_number), stream_url: ch.stream_url, logo_url: ch.logo_url ?? "", category_id: ch.category_id ?? "", is_active: ch.is_active });
   };
 
+  const resetCategoryForm = () => setCategoryForm({ name: "", position: "", includedCategoryIds: [] });
+
   const handleSaveCategory = async () => {
     if (!categoryForm.name) { toast.error("Informe o nome da categoria"); return; }
     setSaving(true);
+    let categoryId = editingCategoryId;
+
     if (editingCategoryId) {
       const { error } = await supabase.from("categories").update({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0 }).eq("id", editingCategoryId);
-      setSaving(false);
-      if (error) { toast.error("Erro: " + error.message); }
-      else { toast.success("Categoria atualizada!"); setCategoryForm({ name: "", position: "" }); setEditingCategoryId(null); queryClient.invalidateQueries({ queryKey: ["categories"] }); }
+      if (error) { toast.error("Erro: " + error.message); setSaving(false); return; }
     } else {
-      const { error } = await supabase.from("categories").insert({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0 });
-      setSaving(false);
-      if (error) { toast.error("Erro ao salvar categoria: " + error.message); }
-      else { toast.success("Categoria criada!"); setCategoryForm({ name: "", position: "" }); queryClient.invalidateQueries({ queryKey: ["categories"] }); }
+      const { data, error } = await supabase.from("categories").insert({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0 }).select("id").single();
+      if (error) { toast.error("Erro ao salvar categoria: " + error.message); setSaving(false); return; }
+      categoryId = data.id;
     }
+
+    // Sync category includes
+    if (categoryId) {
+      await supabase.from("category_includes").delete().eq("category_id", categoryId);
+      if (categoryForm.includedCategoryIds.length > 0) {
+        const rows = categoryForm.includedCategoryIds.map((incId) => ({
+          category_id: categoryId!,
+          included_category_id: incId,
+        }));
+        await supabase.from("category_includes").insert(rows);
+      }
+    }
+
+    setSaving(false);
+    toast.success(editingCategoryId ? "Categoria atualizada!" : "Categoria criada!");
+    resetCategoryForm();
+    setEditingCategoryId(null);
+    queryClient.invalidateQueries({ queryKey: ["categories"] });
+    queryClient.invalidateQueries({ queryKey: ["category-includes"] });
   };
 
   const handleEditCategory = (cat: NonNullable<typeof categories>[0]) => {
     setEditingCategoryId(cat.id);
-    setCategoryForm({ name: cat.name, position: String(cat.position) });
+    const includes = categoryIncludes?.filter((ci) => ci.category_id === cat.id).map((ci) => ci.included_category_id) || [];
+    setCategoryForm({ name: cat.name, position: String(cat.position), includedCategoryIds: includes });
   };
 
   const handleDeleteCategory = async (id: string) => {
     const { error } = await supabase.from("categories").delete().eq("id", id);
     if (error) { toast.error("Erro: " + error.message); }
-    else { toast.success("Categoria excluída"); queryClient.invalidateQueries({ queryKey: ["categories"] }); }
+    else { toast.success("Categoria excluída"); queryClient.invalidateQueries({ queryKey: ["categories"] }); queryClient.invalidateQueries({ queryKey: ["category-includes"] }); }
+  };
+
+  const toggleIncludedCategory = (catId: string) => {
+    setCategoryForm((f) => ({
+      ...f,
+      includedCategoryIds: f.includedCategoryIds.includes(catId)
+        ? f.includedCategoryIds.filter((id) => id !== catId)
+        : [...f.includedCategoryIds, catId],
+    }));
   };
 
   return (
