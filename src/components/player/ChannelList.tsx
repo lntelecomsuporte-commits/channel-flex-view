@@ -316,14 +316,22 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose }: Cha
               {/* Program rows */}
               {channels.map((channel) => {
                 const programs = epgMap.get(channel.id) || [];
+                const altText = (channel as any).epg_alt_text as string | null;
                 return (
-                  <ChannelEPGRow
-                    key={channel.id}
-                    programs={programs}
-                    timelineStart={timelineStart}
-                    timelineEnd={timelineEnd}
-                    now={now}
-                  />
+                  <div key={channel.id} className="relative h-10" style={{ width: totalWidth }}>
+                    {programs.length > 0 ? (
+                      <ChannelEPGRow
+                        programs={programs}
+                        timelineStart={timelineStart}
+                        timelineEnd={timelineEnd}
+                        now={now}
+                      />
+                    ) : altText ? (
+                      <div className="absolute inset-0 flex items-center px-3">
+                        <span className="text-xs text-muted-foreground italic truncate">{altText}</span>
+                      </div>
+                    ) : null}
+                  </div>
                 );
               })}
             </div>

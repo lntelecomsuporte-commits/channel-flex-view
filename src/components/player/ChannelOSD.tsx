@@ -13,6 +13,7 @@ function formatTime(dateStr: string) {
 
 const ChannelOSD = ({ channel, visible }: ChannelOSDProps) => {
   const { data: epg } = useEPG((channel as any).epg_url);
+  const altText = (channel as any).epg_alt_text as string | null;
 
   if (!visible) return null;
 
@@ -31,7 +32,7 @@ const ChannelOSD = ({ channel, visible }: ChannelOSDProps) => {
         )}
         <div className="flex-1 min-w-0">
           <h2 className="text-xl font-bold text-foreground">{channel.name}</h2>
-          {epg?.current && (
+          {epg?.current ? (
             <div className="mt-1 space-y-0.5">
               <p className="text-sm text-foreground/90 truncate">
                 <span className="text-primary font-semibold">Agora</span>{" "}
@@ -46,7 +47,9 @@ const ChannelOSD = ({ channel, visible }: ChannelOSDProps) => {
                 </p>
               )}
             </div>
-          )}
+          ) : altText ? (
+            <p className="text-sm text-muted-foreground mt-1 truncate">{altText}</p>
+          ) : null}
         </div>
       </div>
     </div>
