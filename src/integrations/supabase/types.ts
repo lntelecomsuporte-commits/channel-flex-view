@@ -79,6 +79,7 @@ export type Database = {
           category_id: string | null
           channel_number: number
           created_at: string
+          epg_alt_text: string | null
           epg_url: string | null
           id: string
           is_active: boolean
@@ -91,6 +92,7 @@ export type Database = {
           category_id?: string | null
           channel_number: number
           created_at?: string
+          epg_alt_text?: string | null
           epg_url?: string | null
           id?: string
           is_active?: boolean
@@ -103,6 +105,7 @@ export type Database = {
           category_id?: string | null
           channel_number?: number
           created_at?: string
+          epg_alt_text?: string | null
           epg_url?: string | null
           id?: string
           is_active?: boolean
