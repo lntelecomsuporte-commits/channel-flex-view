@@ -1,6 +1,6 @@
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState } from "react";
 import Hls from "hls.js";
-import { getPlayableStreamUrl, getProxiedStreamUrl } from "@/lib/stream";
+import { getPlayableStreamUrl } from "@/lib/stream";
 
 interface VideoPlayerProps {
   streamUrl: string;
@@ -11,29 +11,11 @@ const VideoPlayer = ({ streamUrl, autoPlay = true }: VideoPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [muted, setMuted] = useState(true);
-  const [useProxy, setUseProxy] = useState(false);
-
-  const effectiveUrl = useProxy
-    ? getProxiedStreamUrl(streamUrl)
-    : getPlayableStreamUrl(streamUrl);
-
-  // Reset proxy flag when stream changes
-  useEffect(() => {
-    setUseProxy(false);
-  }, [streamUrl]);
-
-  const fallbackToProxy = useCallback(() => {
-    const proxied = getProxiedStreamUrl(streamUrl);
-    // Only fallback if proxy URL is different from current
-    if (proxied !== effectiveUrl && proxied !== streamUrl) {
-      console.log("[VideoPlayer] Direct failed, falling back to proxy");
-      setUseProxy(true);
-    }
-  }, [streamUrl, effectiveUrl]);
+  const playableStreamUrl = getPlayableStreamUrl(streamUrl);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !effectiveUrl) return;
+    if (!video || !playableStreamUrl) return;
 
     video.pause();
     video.removeAttribute("src");
@@ -49,10 +31,7 @@ const VideoPlayer = ({ streamUrl, autoPlay = true }: VideoPlayerProps) => {
       video.canPlayType("application/vnd.apple.mpegurl");
 
     if (isAppleDevice) {
-      video.src = effectiveUrl;
-      video.onerror = () => {
-        if (!useProxy) fallbackToProxy();
-      };
+      video.src = playableStreamUrl;
       if (autoPlay) video.play().catch(() => {});
     } else if (Hls.isSupported()) {
       const hls = new Hls({
@@ -60,26 +39,13 @@ const VideoPlayer = ({ streamUrl, autoPlay = true }: VideoPlayerProps) => {
         lowLatencyMode: true,
       });
       hlsRef.current = hls;
-      hls.loadSource(effectiveUrl);
+      hls.loadSource(playableStreamUrl);
       hls.attachMedia(video);
-
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         if (autoPlay) video.play().catch(() => {});
       });
-
-      // On network error (CORS, cert issues), fallback to proxy
-      hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (data.fatal && data.type === Hls.ErrorTypes.NETWORK_ERROR && !useProxy) {
-          hls.destroy();
-          hlsRef.current = null;
-          fallbackToProxy();
-        }
-      });
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = effectiveUrl;
-      video.onerror = () => {
-        if (!useProxy) fallbackToProxy();
-      };
+      video.src = playableStreamUrl;
       if (autoPlay) video.play().catch(() => {});
     }
 
@@ -88,9 +54,8 @@ const VideoPlayer = ({ streamUrl, autoPlay = true }: VideoPlayerProps) => {
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
-      if (video) video.onerror = null;
     };
-  }, [effectiveUrl, autoPlay, useProxy, fallbackToProxy]);
+  }, [playableStreamUrl, autoPlay]);
 
   // Unmute after first user interaction
   useEffect(() => {
@@ -119,6 +84,7 @@ const VideoPlayer = ({ streamUrl, autoPlay = true }: VideoPlayerProps) => {
       // @ts-ignore - AirPlay attributes
       x-webkit-airplay="allow"
       webkit-playsinline="true"
+      crossOrigin="anonymous"
     />
   );
 };

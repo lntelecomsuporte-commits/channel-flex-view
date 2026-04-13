@@ -152,31 +152,11 @@ Deno.serve(async (request) => {
     upstreamHeaders.set("accept", accept);
   }
 
-  // IP-based HTTPS origins often use self-signed certificates that Deno rejects.
-  // Downgrade to HTTP for IP-based origins since we're server-side (no mixed-content issue).
-  const fetchUrl = new URL(upstreamUrl.toString());
-  const isIpHost = /^(\d{1,3}\.){3}\d{1,3}$/.test(fetchUrl.hostname);
-  if (isIpHost && fetchUrl.protocol === "https:") {
-    fetchUrl.protocol = "http:";
-    // Adjust port if it was the default HTTPS port
-    if (upstreamUrl.port === "" || upstreamUrl.port === "443") {
-      // Keep the port as-is (HTTP default 80) unless original had a custom port
-    }
-  }
-
-  let upstreamResponse: Response;
-  try {
-    upstreamResponse = await fetch(fetchUrl, {
-      method: "GET",
-      headers: upstreamHeaders,
-      redirect: "follow",
-    });
-  } catch (err) {
-    return new Response(`Upstream fetch failed: ${err}`, {
-      status: 502,
-      headers: corsHeaders,
-    });
-  }
+  const upstreamResponse = await fetch(upstreamUrl, {
+    method: "GET",
+    headers: upstreamHeaders,
+    redirect: "follow",
+  });
 
   const contentType = upstreamResponse.headers.get("content-type")?.toLowerCase() ?? "";
   const proxyEndpoint = getProxyEndpoint();
