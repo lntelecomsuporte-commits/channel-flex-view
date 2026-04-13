@@ -25,7 +25,7 @@ const AdminPanel = () => {
   const navigate = useNavigate();
 
   const [channelForm, setChannelForm] = useState({
-    name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true, epg_url: "",
+    name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true, epg_url: "", epg_alt_text: "",
   });
   const [categoryForm, setCategoryForm] = useState({ name: "", position: "", includedCategoryIds: [] as string[] });
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
@@ -100,6 +100,7 @@ const AdminPanel = () => {
       stream_url: channelForm.stream_url, logo_url: channelForm.logo_url || null,
       category_id: channelForm.category_id || null, is_active: channelForm.is_active,
       epg_url: channelForm.epg_url || null,
+      epg_alt_text: channelForm.epg_alt_text || null,
     };
     let error;
     if (editingChannelId) {
@@ -112,7 +113,7 @@ const AdminPanel = () => {
       toast.error("Erro ao salvar canal: " + error.message);
     } else {
       toast.success(editingChannelId ? "Canal atualizado!" : "Canal adicionado!");
-      setChannelForm({ name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true, epg_url: "" });
+      setChannelForm({ name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true, epg_url: "", epg_alt_text: "" });
       setEditingChannelId(null);
       queryClient.invalidateQueries({ queryKey: ["channels-all"] });
       queryClient.invalidateQueries({ queryKey: ["channels"] });
@@ -127,7 +128,7 @@ const AdminPanel = () => {
 
   const handleEditChannel = (ch: NonNullable<typeof channels>[0]) => {
     setEditingChannelId(ch.id);
-    setChannelForm({ name: ch.name, channel_number: String(ch.channel_number), stream_url: ch.stream_url, logo_url: ch.logo_url ?? "", category_id: ch.category_id ?? "", is_active: ch.is_active, epg_url: (ch as any).epg_url ?? "" });
+    setChannelForm({ name: ch.name, channel_number: String(ch.channel_number), stream_url: ch.stream_url, logo_url: ch.logo_url ?? "", category_id: ch.category_id ?? "", is_active: ch.is_active, epg_url: (ch as any).epg_url ?? "", epg_alt_text: (ch as any).epg_alt_text ?? "" });
   };
 
   const resetCategoryForm = () => setCategoryForm({ name: "", position: "", includedCategoryIds: [] });
@@ -232,9 +233,13 @@ const AdminPanel = () => {
                     <Label>URL do Logo (opcional)</Label>
                     <Input value={channelForm.logo_url} onChange={(e) => setChannelForm((f) => ({ ...f, logo_url: e.target.value }))} placeholder="https://..." />
                   </div>
-                  <div className="space-y-2 md:col-span-2">
+                  <div className="space-y-2">
                     <Label>URL do EPG (opcional)</Label>
                     <Input value={channelForm.epg_url} onChange={(e) => setChannelForm((f) => ({ ...f, epg_url: e.target.value }))} placeholder="https://epg.pw/api/epg.json?channel_id=..." />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Texto alternativo EPG (opcional)</Label>
+                    <Input value={channelForm.epg_alt_text} onChange={(e) => setChannelForm((f) => ({ ...f, epg_alt_text: e.target.value }))} placeholder="Ex: Filmes e Séries 24h" />
                   </div>
                   <div className="space-y-2">
                     <Label>Categoria</Label>
@@ -255,7 +260,7 @@ const AdminPanel = () => {
                     <Plus className="h-4 w-4 mr-1" /> {saving ? "Salvando..." : editingChannelId ? "Salvar" : "Adicionar"}
                   </Button>
                   {editingChannelId && (
-                    <Button variant="outline" onClick={() => { setEditingChannelId(null); setChannelForm({ name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true, epg_url: "" }); }}>
+                    <Button variant="outline" onClick={() => { setEditingChannelId(null); setChannelForm({ name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true, epg_url: "", epg_alt_text: "" }); }}>
                       Cancelar
                     </Button>
                   )}
