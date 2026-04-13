@@ -8,6 +8,17 @@ const getProxyBaseUrl = () => {
   return `${backendUrl}/functions/v1/hls-proxy`;
 };
 
+export const getProxiedStreamUrl = (streamUrl: string) => {
+  if (!streamUrl) return streamUrl;
+
+  const proxyBaseUrl = getProxyBaseUrl();
+  if (!proxyBaseUrl) return streamUrl;
+
+  const proxyUrl = new URL(proxyBaseUrl);
+  proxyUrl.searchParams.set("url", streamUrl);
+  return proxyUrl.toString();
+};
+
 export const getPlayableStreamUrl = (streamUrl: string) => {
   if (!streamUrl) {
     return streamUrl;
@@ -22,16 +33,7 @@ export const getPlayableStreamUrl = (streamUrl: string) => {
       return streamUrl;
     }
 
-    const proxyBaseUrl = getProxyBaseUrl();
-
-    if (!proxyBaseUrl) {
-      return streamUrl;
-    }
-
-    const proxyUrl = new URL(proxyBaseUrl);
-    proxyUrl.searchParams.set("url", streamUrl);
-
-    return proxyUrl.toString();
+    return getProxiedStreamUrl(streamUrl);
   } catch {
     return streamUrl;
   }
