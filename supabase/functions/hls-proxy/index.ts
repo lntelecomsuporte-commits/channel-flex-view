@@ -152,40 +152,30 @@ Deno.serve(async (request) => {
     upstreamHeaders.set("accept", accept);
   }
 
-  // Some streaming servers use self-signed certificates (e.g. IP-based origins).
-  // We need to create a custom TLS client to accept those.
+  // IP-based HTTPS origins often use self-signed certificates that Deno rejects.
+  // Downgrade to HTTP for IP-based origins since we're server-side (no mixed-content issue).
+  const fetchUrl = new URL(upstreamUrl.toString());
+  const isIpHost = /^(\d{1,3}\.){3}\d{1,3}$/.test(fetchUrl.hostname);
+  if (isIpHost && fetchUrl.protocol === "https:") {
+    fetchUrl.protocol = "http:";
+    // Adjust port if it was the default HTTPS port
+    if (upstreamUrl.port === "" || upstreamUrl.port === "443") {
+      // Keep the port as-is (HTTP default 80) unless original had a custom port
+    }
+  }
+
   let upstreamResponse: Response;
   try {
-    upstreamResponse = await fetch(upstreamUrl, {
+    upstreamResponse = await fetch(fetchUrl, {
       method: "GET",
       headers: upstreamHeaders,
       redirect: "follow",
     });
   } catch (err) {
-    // If the fetch failed due to a certificate error, retry without TLS verification
-    const errMsg = String(err);
-    if (errMsg.includes("certificate") || errMsg.includes("tls") || errMsg.includes("ssl") || errMsg.includes("NotValidForName")) {
-      try {
-        const client = Deno.createHttpClient({ caCerts: [], proxy: undefined });
-        upstreamResponse = await fetch(upstreamUrl, {
-          method: "GET",
-          headers: upstreamHeaders,
-          redirect: "follow",
-          // @ts-ignore - Deno-specific option
-          client,
-        });
-      } catch (retryErr) {
-        return new Response(`Upstream fetch failed: ${retryErr}`, {
-          status: 502,
-          headers: corsHeaders,
-        });
-      }
-    } else {
-      return new Response(`Upstream fetch failed: ${err}`, {
-        status: 502,
-        headers: corsHeaders,
-      });
-    }
+    return new Response(`Upstream fetch failed: ${err}`, {
+      status: 502,
+      headers: corsHeaders,
+    });
   }
 
   const contentType = upstreamResponse.headers.get("content-type")?.toLowerCase() ?? "";
