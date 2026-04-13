@@ -265,7 +265,7 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose }: Cha
       {/* EPG Grid */}
       <div className="flex flex-1 overflow-hidden">
         {/* Fixed channel column */}
-        <div className="flex-shrink-0 w-40 md:w-48 border-r border-border flex flex-col">
+        <div className="flex-shrink-0 w-52 md:w-64 border-r border-border flex flex-col">
           {/* Spacer for timeline header */}
           {hasAnyEPG && <div className="h-8 border-b border-border flex-shrink-0" />}
           <div className="overflow-y-auto flex-1" ref={listRef}>
@@ -284,16 +284,9 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose }: Cha
                     : "hover:bg-accent/20"
                 }`}
               >
-                <span className="channel-badge text-xs min-w-[2.2rem] text-center">
+                <span className="channel-badge text-[10px] min-w-[1.8rem] text-center">
                   {channel.channel_number}
                 </span>
-                {channel.logo_url && (
-                  <img
-                    src={channel.logo_url}
-                    alt={channel.name}
-                    className="h-6 w-6 rounded object-contain bg-secondary flex-shrink-0"
-                  />
-                )}
                 <span className="font-medium text-foreground text-sm truncate flex-1">
                   {channel.name}
                 </span>
