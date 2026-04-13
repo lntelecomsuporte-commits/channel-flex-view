@@ -152,11 +152,41 @@ Deno.serve(async (request) => {
     upstreamHeaders.set("accept", accept);
   }
 
-  const upstreamResponse = await fetch(upstreamUrl, {
-    method: "GET",
-    headers: upstreamHeaders,
-    redirect: "follow",
-  });
+  // Some streaming servers use self-signed certificates (e.g. IP-based origins).
+  // We need to create a custom TLS client to accept those.
+  let upstreamResponse: Response;
+  try {
+    upstreamResponse = await fetch(upstreamUrl, {
+      method: "GET",
+      headers: upstreamHeaders,
+      redirect: "follow",
+    });
+  } catch (err) {
+    // If the fetch failed due to a certificate error, retry without TLS verification
+    const errMsg = String(err);
+    if (errMsg.includes("certificate") || errMsg.includes("tls") || errMsg.includes("ssl") || errMsg.includes("NotValidForName")) {
+      try {
+        const client = Deno.createHttpClient({ caCerts: [], proxy: undefined });
+        upstreamResponse = await fetch(upstreamUrl, {
+          method: "GET",
+          headers: upstreamHeaders,
+          redirect: "follow",
+          // @ts-ignore - Deno-specific option
+          client,
+        });
+      } catch (retryErr) {
+        return new Response(`Upstream fetch failed: ${retryErr}`, {
+          status: 502,
+          headers: corsHeaders,
+        });
+      }
+    } else {
+      return new Response(`Upstream fetch failed: ${err}`, {
+        status: 502,
+        headers: corsHeaders,
+      });
+    }
+  }
 
   const contentType = upstreamResponse.headers.get("content-type")?.toLowerCase() ?? "";
   const proxyEndpoint = getProxyEndpoint();
