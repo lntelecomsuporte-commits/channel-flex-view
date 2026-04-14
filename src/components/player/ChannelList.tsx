@@ -258,9 +258,20 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
       <div className="p-3 border-b border-border flex-shrink-0">
         <div className="flex justify-between items-center">
           <h2 className="text-lg font-bold text-foreground">Guia de Programação</h2>
-          <span className="text-xs text-muted-foreground">
-            ↑↓ Navegar • ←→ Linha do tempo • OK Selecionar • ESC Fechar
-          </span>
+          <div className="flex items-center gap-4">
+            <span className="text-xs text-muted-foreground">
+              ↑↓ Navegar • ←→ Linha do tempo • OK Selecionar • ESC Fechar
+            </span>
+            {onLogout && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onLogout(); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-destructive/20 hover:bg-destructive/40 text-destructive text-xs font-medium transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                Sair
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
