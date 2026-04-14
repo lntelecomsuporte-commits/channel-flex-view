@@ -10,6 +10,7 @@ import ChannelList from "@/components/player/ChannelList";
 import { List, ChevronUp, ChevronDown } from "lucide-react";
 
 const PlayerPage = () => {
+  const { signOut } = useAuth();
   const isMobile = useIsMobile();
 
   useEffect(() => {
