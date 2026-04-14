@@ -80,6 +80,10 @@ export type Database = {
           channel_number: number
           created_at: string
           epg_alt_text: string | null
+          epg_channel_id: string | null
+          epg_grab_logo: boolean
+          epg_show_synopsis: boolean
+          epg_type: string | null
           epg_url: string | null
           id: string
           is_active: boolean
@@ -93,6 +97,10 @@ export type Database = {
           channel_number: number
           created_at?: string
           epg_alt_text?: string | null
+          epg_channel_id?: string | null
+          epg_grab_logo?: boolean
+          epg_show_synopsis?: boolean
+          epg_type?: string | null
           epg_url?: string | null
           id?: string
           is_active?: boolean
@@ -106,6 +114,10 @@ export type Database = {
           channel_number?: number
           created_at?: string
           epg_alt_text?: string | null
+          epg_channel_id?: string | null
+          epg_grab_logo?: boolean
+          epg_show_synopsis?: boolean
+          epg_type?: string | null
           epg_url?: string | null
           id?: string
           is_active?: boolean
