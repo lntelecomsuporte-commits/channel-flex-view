@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import type { Channel } from "@/hooks/useChannels";
 import { useMultiEPG } from "@/hooks/useMultiEPG";
 import type { EPGProgram } from "@/hooks/useEPG";
+import { LogOut } from "lucide-react";
 
 interface ChannelListProps {
   channels: Channel[];
@@ -9,6 +10,7 @@ interface ChannelListProps {
   visible: boolean;
   onSelect: (index: number) => void;
   onClose: () => void;
+  onLogout?: () => void;
 }
 
 // Timeline config
@@ -165,7 +167,7 @@ function ChannelEPGRow({
   );
 }
 
-const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose }: ChannelListProps) => {
+const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLogout }: ChannelListProps) => {
   const [focusedIndex, setFocusedIndex] = useState(currentIndex);
   const listRef = useRef<HTMLDivElement>(null);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
@@ -256,9 +258,20 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose }: Cha
       <div className="p-3 border-b border-border flex-shrink-0">
         <div className="flex justify-between items-center">
           <h2 className="text-lg font-bold text-foreground">Guia de Programação</h2>
-          <span className="text-xs text-muted-foreground">
-            ↑↓ Navegar • ←→ Linha do tempo • OK Selecionar • ESC Fechar
-          </span>
+          <div className="flex items-center gap-4">
+            <span className="text-xs text-muted-foreground">
+              ↑↓ Navegar • ←→ Linha do tempo • OK Selecionar • ESC Fechar
+            </span>
+            {onLogout && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onLogout(); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-destructive/20 hover:bg-destructive/40 text-destructive text-xs font-medium transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                Sair
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -268,7 +281,15 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose }: Cha
         <div className="flex-shrink-0 w-52 md:w-64 border-r border-border flex flex-col">
           {/* Spacer for timeline header */}
           {hasAnyEPG && <div className="h-8 border-b border-border flex-shrink-0" />}
-          <div className="overflow-y-auto flex-1" ref={listRef}>
+          <div
+            className="overflow-y-auto flex-1"
+            ref={listRef}
+            onScroll={(e) => {
+              if (timelineScrollRef.current) {
+                timelineScrollRef.current.scrollTop = (e.target as HTMLDivElement).scrollTop;
+              }
+            }}
+          >
             {channels.map((channel, index) => (
               <div
                 key={channel.id}
