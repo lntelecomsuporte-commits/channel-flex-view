@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useChannels, type Channel } from "@/hooks/useChannels";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTouchControls } from "@/hooks/useTouchControls";
+import { useAuth } from "@/hooks/useAuth";
 import VideoPlayer from "@/components/player/VideoPlayer";
 import ChannelOSD from "@/components/player/ChannelOSD";
 import ChannelPreview from "@/components/player/ChannelPreview";
