@@ -12,8 +12,14 @@ function formatTime(dateStr: string) {
 }
 
 const ChannelOSD = ({ channel, visible }: ChannelOSDProps) => {
-  const { data: epg } = useEPG((channel as any).epg_url);
-  const altText = (channel as any).epg_alt_text as string | null;
+  const ch = channel as any;
+  const { data: epg } = useEPG({
+    epg_type: ch.epg_type,
+    epg_url: ch.epg_url,
+    epg_channel_id: ch.epg_channel_id,
+  });
+  const altText = ch.epg_alt_text as string | null;
+  const epgType = ch.epg_type as string | null;
 
   if (!visible) return null;
 
@@ -47,7 +53,7 @@ const ChannelOSD = ({ channel, visible }: ChannelOSDProps) => {
                 </p>
               )}
             </div>
-          ) : altText ? (
+          ) : epgType === "alt_text" && altText ? (
             <p className="text-sm text-muted-foreground mt-1 truncate">{altText}</p>
           ) : null}
         </div>

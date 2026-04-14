@@ -1,13 +1,47 @@
 import { useQueries } from "@tanstack/react-query";
 import type { EPGProgram } from "./useEPG";
 
-export interface ChannelEPG {
-  channelId: string;
-  programs: EPGProgram[];
+interface ChannelEPGInput {
+  id: string;
+  epg_type?: string | null;
+  epg_url?: string | null;
+  epg_channel_id?: string | null;
 }
 
-async function fetchEPG(epgUrl: string): Promise<EPGProgram[]> {
-  let url = epgUrl;
+function parseXmltvDate(str: string): Date | null {
+  const match = str.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s*([+-]\d{4})?/);
+  if (!match) return null;
+  const [, y, mo, d, h, mi, s, tz] = match;
+  const isoStr = `${y}-${mo}-${d}T${h}:${mi}:${s}${tz ? tz.replace(/(\d{2})(\d{2})/, "$1:$2") : "+00:00"}`;
+  return new Date(isoStr);
+}
+
+async function fetchEPG(ch: ChannelEPGInput): Promise<EPGProgram[]> {
+  if (!ch.epg_url) return [];
+
+  if (ch.epg_type === "iptv_epg_org" && ch.epg_channel_id) {
+    const res = await fetch(ch.epg_url);
+    if (!res.ok) return [];
+    const text = await res.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, "text/xml");
+    const programmes = doc.querySelectorAll(`programme[channel="${ch.epg_channel_id}"]`);
+    const programs: EPGProgram[] = [];
+    programmes.forEach((prog) => {
+      const startAttr = prog.getAttribute("start") || "";
+      const title = prog.querySelector("title")?.textContent || "";
+      const desc = prog.querySelector("desc")?.textContent || null;
+      const startDate = parseXmltvDate(startAttr);
+      if (startDate) {
+        programs.push({ title, start_date: startDate.toISOString(), desc });
+      }
+    });
+    programs.sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime());
+    return programs;
+  }
+
+  // EPG.PW
+  let url = ch.epg_url;
   if (!url.includes("epg.json")) {
     url = url.replace("epg.xml", "epg.json");
   }
@@ -17,14 +51,14 @@ async function fetchEPG(epgUrl: string): Promise<EPGProgram[]> {
   return (json.epg_list || []) as EPGProgram[];
 }
 
-export function useMultiEPG(channels: { id: string; epg_url?: string | null }[]) {
+export function useMultiEPG(channels: ChannelEPGInput[]) {
   const queries = useQueries({
     queries: channels.map((ch) => ({
-      queryKey: ["epg", ch.epg_url],
-      enabled: !!ch.epg_url,
+      queryKey: ["epg-multi", ch.epg_type, ch.epg_url, ch.epg_channel_id],
+      enabled: !!ch.epg_type && ch.epg_type !== "none" && ch.epg_type !== "alt_text" && !!ch.epg_url,
       staleTime: 60000,
       refetchInterval: 120000,
-      queryFn: () => fetchEPG(ch.epg_url!),
+      queryFn: () => fetchEPG(ch),
     })),
   });
 
