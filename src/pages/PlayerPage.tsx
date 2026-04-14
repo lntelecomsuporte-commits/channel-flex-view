@@ -261,6 +261,7 @@ const PlayerPage = () => {
               showOSDTemporarily();
             }}
             onClose={() => setShowChannelList(false)}
+            onLogout={signOut}
           />
         </>
       )}
