@@ -167,7 +167,7 @@ function ChannelEPGRow({
   );
 }
 
-const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose }: ChannelListProps) => {
+const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLogout }: ChannelListProps) => {
   const [focusedIndex, setFocusedIndex] = useState(currentIndex);
   const listRef = useRef<HTMLDivElement>(null);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
