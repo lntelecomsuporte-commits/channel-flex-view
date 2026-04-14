@@ -97,7 +97,7 @@ const AdminPanel = () => {
       return;
     }
     setSaving(true);
-    const payload: Record<string, any> = {
+    const payload = {
       name: channelForm.name, channel_number: parseInt(channelForm.channel_number),
       stream_url: channelForm.stream_url, logo_url: channelForm.logo_url || null,
       category_id: channelForm.category_id || null, is_active: channelForm.is_active,
