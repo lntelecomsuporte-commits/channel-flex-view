@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import type { Channel } from "@/hooks/useChannels";
 import { useMultiEPG } from "@/hooks/useMultiEPG";
 import type { EPGProgram } from "@/hooks/useEPG";
+import { LogOut } from "lucide-react";
 
 interface ChannelListProps {
   channels: Channel[];
@@ -9,6 +10,7 @@ interface ChannelListProps {
   visible: boolean;
   onSelect: (index: number) => void;
   onClose: () => void;
+  onLogout?: () => void;
 }
 
 // Timeline config
