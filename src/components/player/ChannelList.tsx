@@ -281,7 +281,15 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
         <div className="flex-shrink-0 w-52 md:w-64 border-r border-border flex flex-col">
           {/* Spacer for timeline header */}
           {hasAnyEPG && <div className="h-8 border-b border-border flex-shrink-0" />}
-          <div className="overflow-y-auto flex-1" ref={listRef}>
+          <div
+            className="overflow-y-auto flex-1"
+            ref={listRef}
+            onScroll={(e) => {
+              if (timelineScrollRef.current) {
+                timelineScrollRef.current.scrollTop = (e.target as HTMLDivElement).scrollTop;
+              }
+            }}
+          >
             {channels.map((channel, index) => (
               <div
                 key={channel.id}
