@@ -11,35 +11,97 @@ export interface EPGData {
   next: EPGProgram | null;
 }
 
-export function useEPG(epgUrl: string | null | undefined) {
+// Parse XMLTV format from iptv-epg.org for a specific channel ID with timezone offset
+async function fetchIptvEpgOrg(xmlUrl: string, channelId: string): Promise<EPGProgram[]> {
+  const res = await fetch(xmlUrl);
+  if (!res.ok) return [];
+  const text = await res.text();
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(text, "text/xml");
+
+  const programmes = doc.querySelectorAll(`programme[channel="${channelId}"]`);
+  const programs: EPGProgram[] = [];
+
+  programmes.forEach((prog) => {
+    const startAttr = prog.getAttribute("start") || "";
+    const title = prog.querySelector("title")?.textContent || "";
+    const desc = prog.querySelector("desc")?.textContent || null;
+
+    // Parse XMLTV date format: 20260414120000 +0000
+    const startDate = parseXmltvDate(startAttr);
+    if (startDate) {
+      programs.push({ title, start_date: startDate.toISOString(), desc });
+    }
+  });
+
+  programs.sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime());
+  return programs;
+}
+
+function parseXmltvDate(str: string): Date | null {
+  // Format: 20260414120000 +0000 or 20260414120000
+  const match = str.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s*([+-]\d{4})?/);
+  if (!match) return null;
+  const [, y, mo, d, h, mi, s, tz] = match;
+  const isoStr = `${y}-${mo}-${d}T${h}:${mi}:${s}${tz ? tz.replace(/(\d{2})(\d{2})/, "$1:$2") : "+00:00"}`;
+  return new Date(isoStr);
+}
+
+// Get logo URL from iptv-epg.org XML
+export async function fetchIptvEpgLogo(xmlUrl: string, channelId: string): Promise<string | null> {
+  try {
+    const res = await fetch(xmlUrl);
+    if (!res.ok) return null;
+    const text = await res.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, "text/xml");
+    const channel = doc.querySelector(`channel[id="${channelId}"]`);
+    if (!channel) return null;
+    const icon = channel.querySelector("icon");
+    return icon?.getAttribute("src") || null;
+  } catch {
+    return null;
+  }
+}
+
+export function useEPG(channel: {
+  epg_type?: string | null;
+  epg_url?: string | null;
+  epg_channel_id?: string | null;
+}) {
+  const { epg_type, epg_url, epg_channel_id } = channel;
+
   return useQuery<EPGData>({
-    queryKey: ["epg", epgUrl],
-    enabled: !!epgUrl,
-    refetchInterval: 60000, // refresh every minute
+    queryKey: ["epg", epg_type, epg_url, epg_channel_id],
+    enabled: !!epg_type && epg_type !== "none" && epg_type !== "alt_text" && !!epg_url,
+    refetchInterval: 60000,
     staleTime: 30000,
     queryFn: async () => {
-      if (!epgUrl) return { current: null, next: null };
+      if (!epg_url) return { current: null, next: null };
 
-      // Ensure we use the JSON endpoint
-      let url = epgUrl;
-      if (!url.includes("epg.json")) {
-        url = url.replace("epg.xml", "epg.json");
+      let programs: EPGProgram[] = [];
+
+      if (epg_type === "iptv_epg_org" && epg_channel_id) {
+        programs = await fetchIptvEpgOrg(epg_url, epg_channel_id);
+      } else {
+        // EPG.PW format
+        let url = epg_url;
+        if (!url.includes("epg.json")) {
+          url = url.replace("epg.xml", "epg.json");
+        }
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Failed to fetch EPG");
+        const json = await res.json();
+        programs = json.epg_list || [];
       }
 
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Failed to fetch EPG");
-      const json = await res.json();
-
-      const programs: EPGProgram[] = json.epg_list || [];
       const now = new Date();
-
       let current: EPGProgram | null = null;
       let next: EPGProgram | null = null;
 
       for (let i = 0; i < programs.length; i++) {
         const start = new Date(programs[i].start_date);
         const endTime = i + 1 < programs.length ? new Date(programs[i + 1].start_date) : null;
-
         if (start <= now && (!endTime || endTime > now)) {
           current = programs[i];
           next = programs[i + 1] || null;
@@ -47,7 +109,6 @@ export function useEPG(epgUrl: string | null | undefined) {
         }
       }
 
-      // If no current found, the last program before now
       if (!current && programs.length > 0) {
         for (let i = programs.length - 1; i >= 0; i--) {
           if (new Date(programs[i].start_date) <= now) {

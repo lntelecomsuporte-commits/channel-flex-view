@@ -17,6 +17,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import UserManagement from "@/components/admin/UserManagement";
 import HubsoftIntegration from "@/components/admin/HubsoftIntegration";
 
+const emptyChannelForm = {
+  name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true,
+  epg_type: "", epg_url: "", epg_alt_text: "", epg_channel_id: "", epg_grab_logo: false, epg_show_synopsis: false,
+};
+
 const AdminPanel = () => {
   const { user, isAdmin, loading: authLoading, signOut } = useAuth();
   const { data: channels, isLoading: channelsLoading } = useAllChannels();
@@ -24,9 +29,7 @@ const AdminPanel = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const [channelForm, setChannelForm] = useState({
-    name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true, epg_url: "", epg_alt_text: "",
-  });
+  const [channelForm, setChannelForm] = useState({ ...emptyChannelForm });
   const [categoryForm, setCategoryForm] = useState({ name: "", position: "", includedCategoryIds: [] as string[] });
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
@@ -42,7 +45,6 @@ const AdminPanel = () => {
     },
   });
 
-  // Fetch hubsoft config categories for display
   const { data: hubsoftConfigCategories } = useQuery({
     queryKey: ["hubsoft-config-categories"],
     queryFn: async () => {
@@ -99,8 +101,12 @@ const AdminPanel = () => {
       name: channelForm.name, channel_number: parseInt(channelForm.channel_number),
       stream_url: channelForm.stream_url, logo_url: channelForm.logo_url || null,
       category_id: channelForm.category_id || null, is_active: channelForm.is_active,
-      epg_url: channelForm.epg_url || null,
-      epg_alt_text: channelForm.epg_alt_text || null,
+      epg_type: channelForm.epg_type || null,
+      epg_url: channelForm.epg_type === "epg_pw" ? (channelForm.epg_url || null) : (channelForm.epg_type === "iptv_epg_org" ? (channelForm.epg_url || null) : null),
+      epg_alt_text: channelForm.epg_type === "alt_text" ? (channelForm.epg_alt_text || null) : null,
+      epg_channel_id: channelForm.epg_type === "iptv_epg_org" ? (channelForm.epg_channel_id || null) : null,
+      epg_grab_logo: channelForm.epg_type === "iptv_epg_org" ? channelForm.epg_grab_logo : false,
+      epg_show_synopsis: channelForm.epg_show_synopsis,
     };
     let error;
     if (editingChannelId) {
@@ -113,7 +119,7 @@ const AdminPanel = () => {
       toast.error("Erro ao salvar canal: " + error.message);
     } else {
       toast.success(editingChannelId ? "Canal atualizado!" : "Canal adicionado!");
-      setChannelForm({ name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true, epg_url: "", epg_alt_text: "" });
+      setChannelForm({ ...emptyChannelForm });
       setEditingChannelId(null);
       queryClient.invalidateQueries({ queryKey: ["channels-all"] });
       queryClient.invalidateQueries({ queryKey: ["channels"] });
@@ -128,7 +134,16 @@ const AdminPanel = () => {
 
   const handleEditChannel = (ch: NonNullable<typeof channels>[0]) => {
     setEditingChannelId(ch.id);
-    setChannelForm({ name: ch.name, channel_number: String(ch.channel_number), stream_url: ch.stream_url, logo_url: ch.logo_url ?? "", category_id: ch.category_id ?? "", is_active: ch.is_active, epg_url: (ch as any).epg_url ?? "", epg_alt_text: (ch as any).epg_alt_text ?? "" });
+    setChannelForm({
+      name: ch.name, channel_number: String(ch.channel_number), stream_url: ch.stream_url,
+      logo_url: ch.logo_url ?? "", category_id: ch.category_id ?? "", is_active: ch.is_active,
+      epg_type: (ch as any).epg_type ?? "",
+      epg_url: (ch as any).epg_url ?? "",
+      epg_alt_text: (ch as any).epg_alt_text ?? "",
+      epg_channel_id: (ch as any).epg_channel_id ?? "",
+      epg_grab_logo: (ch as any).epg_grab_logo ?? false,
+      epg_show_synopsis: (ch as any).epg_show_synopsis ?? false,
+    });
   };
 
   const resetCategoryForm = () => setCategoryForm({ name: "", position: "", includedCategoryIds: [] });
@@ -147,7 +162,6 @@ const AdminPanel = () => {
       categoryId = data.id;
     }
 
-    // Sync category includes
     if (categoryId) {
       await supabase.from("category_includes").delete().eq("category_id", categoryId);
       if (categoryForm.includedCategoryIds.length > 0) {
@@ -212,7 +226,6 @@ const AdminPanel = () => {
           </TabsList>
 
           <TabsContent value="channels">
-            {/* Channel form */}
             <Card className="mb-6">
               <CardHeader><CardTitle>{editingChannelId ? "Editar Canal" : "Novo Canal"}</CardTitle></CardHeader>
               <CardContent className="space-y-4">
@@ -234,14 +247,6 @@ const AdminPanel = () => {
                     <Input value={channelForm.logo_url} onChange={(e) => setChannelForm((f) => ({ ...f, logo_url: e.target.value }))} placeholder="https://..." />
                   </div>
                   <div className="space-y-2">
-                    <Label>URL do EPG (opcional)</Label>
-                    <Input value={channelForm.epg_url} onChange={(e) => setChannelForm((f) => ({ ...f, epg_url: e.target.value }))} placeholder="https://epg.pw/api/epg.json?channel_id=..." />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Texto alternativo EPG (opcional)</Label>
-                    <Input value={channelForm.epg_alt_text} onChange={(e) => setChannelForm((f) => ({ ...f, epg_alt_text: e.target.value }))} placeholder="Ex: Filmes e Séries 24h" />
-                  </div>
-                  <div className="space-y-2">
                     <Label>Categoria</Label>
                     <Select value={channelForm.category_id} onValueChange={(v) => setChannelForm((f) => ({ ...f, category_id: v }))}>
                       <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
@@ -251,6 +256,64 @@ const AdminPanel = () => {
                     </Select>
                   </div>
                 </div>
+
+                {/* EPG Section */}
+                <div className="space-y-4 border-t border-border pt-4">
+                  <Label className="text-base font-semibold">Configuração de EPG</Label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Tipo de EPG</Label>
+                      <Select value={channelForm.epg_type} onValueChange={(v) => setChannelForm((f) => ({ ...f, epg_type: v }))}>
+                        <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Nenhum</SelectItem>
+                          <SelectItem value="epg_pw">EPG.PW</SelectItem>
+                          <SelectItem value="alt_text">Texto Alternativo</SelectItem>
+                          <SelectItem value="iptv_epg_org">IPTV-EPG.org</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {channelForm.epg_type === "epg_pw" && (
+                    <div className="space-y-2">
+                      <Label>URL do EPG.PW</Label>
+                      <Input value={channelForm.epg_url} onChange={(e) => setChannelForm((f) => ({ ...f, epg_url: e.target.value }))} placeholder="https://epg.pw/api/epg.json?channel_id=..." />
+                    </div>
+                  )}
+
+                  {channelForm.epg_type === "alt_text" && (
+                    <div className="space-y-2">
+                      <Label>Texto Alternativo</Label>
+                      <Input value={channelForm.epg_alt_text} onChange={(e) => setChannelForm((f) => ({ ...f, epg_alt_text: e.target.value }))} placeholder="Ex: Filmes e Séries 24h" />
+                    </div>
+                  )}
+
+                  {channelForm.epg_type === "iptv_epg_org" && (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>URL do XML</Label>
+                        <Input value={channelForm.epg_url || "https://iptv-epg.org/files/epg-br.xml"} onChange={(e) => setChannelForm((f) => ({ ...f, epg_url: e.target.value }))} placeholder="https://iptv-epg.org/files/epg-br.xml" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>ID do Canal (no XML)</Label>
+                        <Input value={channelForm.epg_channel_id} onChange={(e) => setChannelForm((f) => ({ ...f, epg_channel_id: e.target.value }))} placeholder="Ex: GloboHD.br" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox checked={channelForm.epg_grab_logo} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, epg_grab_logo: !!v }))} />
+                        <Label>Usar logo do canal do EPG (substitui URL do logo)</Label>
+                      </div>
+                    </div>
+                  )}
+
+                  {(channelForm.epg_type === "epg_pw" || channelForm.epg_type === "iptv_epg_org") && (
+                    <div className="flex items-center gap-2">
+                      <Checkbox checked={channelForm.epg_show_synopsis} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, epg_show_synopsis: !!v }))} />
+                      <Label>Exibir sinopse (permite clicar em um programa para ver a descrição)</Label>
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex items-center gap-2">
                   <Switch checked={channelForm.is_active} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, is_active: v }))} />
                   <Label>Ativo</Label>
@@ -260,7 +323,7 @@ const AdminPanel = () => {
                     <Plus className="h-4 w-4 mr-1" /> {saving ? "Salvando..." : editingChannelId ? "Salvar" : "Adicionar"}
                   </Button>
                   {editingChannelId && (
-                    <Button variant="outline" onClick={() => { setEditingChannelId(null); setChannelForm({ name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true, epg_url: "", epg_alt_text: "" }); }}>
+                    <Button variant="outline" onClick={() => { setEditingChannelId(null); setChannelForm({ ...emptyChannelForm }); }}>
                       Cancelar
                     </Button>
                   )}
@@ -319,7 +382,6 @@ const AdminPanel = () => {
                   </div>
                 </div>
 
-                {/* Included categories */}
                 {categories && categories.filter((c) => c.id !== editingCategoryId).length > 0 && (
                   <div className="space-y-2">
                     <Label>Inclui canais de outras categorias</Label>
@@ -362,35 +424,29 @@ const AdminPanel = () => {
                   <p className="text-muted-foreground">Nenhuma categoria</p>
                 ) : (
                   <div className="space-y-2">
-                    {categories.map((c) => {
-                      const includes = categoryIncludes?.filter((ci) => ci.category_id === c.id) || [];
-                      const includeNames = includes.map((ci) => categories.find((cat) => cat.id === ci.included_category_id)?.name).filter(Boolean);
-                      const linkedConfigs = hubsoftConfigCategories?.filter((hcc) => hcc.category_id === c.id) || [];
-                      const configNames = linkedConfigs.map((lc) => hubsoftConfigs?.find((hc) => hc.id === lc.hubsoft_config_id)?.name).filter(Boolean);
+                    {categories.map((cat) => {
+                      const includes = categoryIncludes?.filter((ci) => ci.category_id === cat.id) || [];
+                      const hubsoftCats = hubsoftConfigCategories?.filter((hcc) => hcc.category_id === cat.id) || [];
+                      const linkedHubsoft = hubsoftCats.map((hc) => hubsoftConfigs?.find((h) => h.id === hc.hubsoft_config_id)?.name).filter(Boolean);
                       return (
-                        <div key={c.id} className="p-3 rounded-lg bg-secondary">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="font-medium text-foreground">{c.name}</p>
-                              <p className="text-xs text-muted-foreground">Posição: {c.position}</p>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Button variant="ghost" size="sm" onClick={() => handleEditCategory(c)}>Editar</Button>
-                              <Button variant="ghost" size="sm" onClick={() => handleDeleteCategory(c.id)}>
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </div>
+                        <div key={cat.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
+                          <div>
+                            <p className="font-medium text-foreground">{cat.name} <span className="text-xs text-muted-foreground">(pos: {cat.position})</span></p>
+                            {includes.length > 0 && (
+                              <p className="text-xs text-muted-foreground">
+                                Inclui: {includes.map((inc) => categories.find((c) => c.id === inc.included_category_id)?.name).filter(Boolean).join(", ")}
+                              </p>
+                            )}
+                            {linkedHubsoft.length > 0 && (
+                              <p className="text-xs text-primary">Hubsoft: {linkedHubsoft.join(", ")}</p>
+                            )}
                           </div>
-                          {(includeNames.length > 0 || configNames.length > 0) && (
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {configNames.map((name) => (
-                                <span key={name} className="text-xs px-2 py-0.5 rounded bg-primary/20 text-primary">🔗 {name}</span>
-                              ))}
-                              {includeNames.map((name) => (
-                                <span key={name} className="text-xs px-2 py-0.5 rounded bg-accent text-accent-foreground">+ {name}</span>
-                              ))}
-                            </div>
-                          )}
+                          <div className="flex gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => handleEditCategory(cat)}>Editar</Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteCategory(cat.id)}>
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
                         </div>
                       );
                     })}
