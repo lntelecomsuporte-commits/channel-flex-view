@@ -1,15 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ChevronsUpDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 interface XmlChannel {
   id: string;
   name: string;
-  icon?: string;
 }
 
 interface EpgChannelPickerProps {
@@ -30,7 +30,9 @@ export default function EpgChannelPicker({ value, onChange, xmlUrl }: EpgChannel
     if (loaded && lastUrl === xmlUrl) return;
     setLoading(true);
     try {
-      const res = await fetch(xmlUrl);
+      // Use edge function proxy to avoid CORS
+      const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/epg-proxy?url=${encodeURIComponent(xmlUrl)}`;
+      const res = await fetch(proxyUrl);
       if (!res.ok) throw new Error("Falha ao carregar XML");
       const text = await res.text();
       const parser = new DOMParser();
@@ -40,21 +42,19 @@ export default function EpgChannelPicker({ value, onChange, xmlUrl }: EpgChannel
       channelNodes.forEach((node) => {
         const id = node.getAttribute("id") || "";
         const name = node.querySelector("display-name")?.textContent || id;
-        const icon = node.querySelector("icon")?.getAttribute("src") || undefined;
-        if (id) list.push({ id, name, icon });
+        if (id) list.push({ id, name });
       });
       list.sort((a, b) => a.name.localeCompare(b.name));
       setChannels(list);
       setLoaded(true);
       setLastUrl(xmlUrl);
-    } catch {
+    } catch (e) {
+      console.error("Erro ao buscar canais do XML:", e);
       setChannels([]);
     } finally {
       setLoading(false);
     }
   };
-
-  const selectedChannel = channels.find((c) => c.id === value);
 
   return (
     <div className="flex gap-2">
@@ -66,19 +66,19 @@ export default function EpgChannelPicker({ value, onChange, xmlUrl }: EpgChannel
       />
       <Popover open={open} onOpenChange={(o) => { setOpen(o); if (o) fetchChannels(); }}>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="shrink-0">
+          <Button type="button" variant="outline" size="sm" className="shrink-0">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronsUpDown className="h-4 w-4" />}
-            <span className="ml-1 hidden sm:inline">Buscar</span>
+            <span className="ml-1">Buscar</span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[350px] p-0" align="end">
+        <PopoverContent className="w-[400px] p-0" align="end">
           <Command>
-            <CommandInput placeholder="Buscar canal..." />
+            <CommandInput placeholder="Buscar canal por nome ou ID..." />
             <CommandList className="max-h-[300px]">
               <CommandEmpty>
-                {loading ? "Carregando canais..." : "Nenhum canal encontrado"}
+                {loading ? "Carregando canais do XML..." : "Nenhum canal encontrado"}
               </CommandEmpty>
-              <CommandGroup>
+              <CommandGroup heading={`${channels.length} canais encontrados`}>
                 {channels.map((ch) => (
                   <CommandItem
                     key={ch.id}
@@ -87,11 +87,11 @@ export default function EpgChannelPicker({ value, onChange, xmlUrl }: EpgChannel
                       onChange(ch.id);
                       setOpen(false);
                     }}
-                    className={cn(value === ch.id && "bg-accent")}
+                    className={cn("cursor-pointer", value === ch.id && "bg-accent")}
                   >
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">{ch.name}</span>
-                      <span className="text-xs text-muted-foreground">{ch.id}</span>
+                    <div className="flex justify-between w-full gap-2">
+                      <span className="text-sm font-medium truncate">{ch.name}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">{ch.id}</span>
                     </div>
                   </CommandItem>
                 ))}
