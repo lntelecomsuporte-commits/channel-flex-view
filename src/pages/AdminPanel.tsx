@@ -101,9 +101,10 @@ const AdminPanel = () => {
 
     // If epg_grab_logo is checked, fetch logo from EPG XML
     let logoUrl = channelForm.logo_url || null;
-    if (channelForm.epg_type === "iptv_epg_org" && channelForm.epg_grab_logo && channelForm.epg_channel_id) {
+    if ((channelForm.epg_type === "iptv_epg_org" || channelForm.epg_type === "open_epg") && channelForm.epg_grab_logo && channelForm.epg_channel_id) {
       try {
-        const epgUrl = channelForm.epg_url || "https://iptv-epg.org/files/epg-br.xml";
+        const defaultUrl = channelForm.epg_type === "open_epg" ? "https://www.open-epg.com/files/brazil1.xml" : "https://iptv-epg.org/files/epg-br.xml";
+        const epgUrl = channelForm.epg_url || defaultUrl;
         const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/epg-proxy?url=${encodeURIComponent(epgUrl)}`;
         const res = await fetch(proxyUrl);
         if (res.ok) {
@@ -128,10 +129,10 @@ const AdminPanel = () => {
       stream_url: channelForm.stream_url, logo_url: logoUrl,
       category_id: channelForm.category_id || null, is_active: channelForm.is_active,
       epg_type: channelForm.epg_type || null,
-      epg_url: channelForm.epg_type === "epg_pw" ? (channelForm.epg_url || null) : (channelForm.epg_type === "iptv_epg_org" ? (channelForm.epg_url || "https://iptv-epg.org/files/epg-br.xml") : null),
+      epg_url: channelForm.epg_type === "epg_pw" ? (channelForm.epg_url || null) : (channelForm.epg_type === "iptv_epg_org" ? (channelForm.epg_url || "https://iptv-epg.org/files/epg-br.xml") : (channelForm.epg_type === "open_epg" ? (channelForm.epg_url || "https://www.open-epg.com/files/brazil1.xml") : null)),
       epg_alt_text: channelForm.epg_type === "alt_text" ? (channelForm.epg_alt_text || null) : null,
-      epg_channel_id: channelForm.epg_type === "iptv_epg_org" ? (channelForm.epg_channel_id || null) : null,
-      epg_grab_logo: channelForm.epg_type === "iptv_epg_org" ? channelForm.epg_grab_logo : false,
+      epg_channel_id: (channelForm.epg_type === "iptv_epg_org" || channelForm.epg_type === "open_epg") ? (channelForm.epg_channel_id || null) : null,
+      epg_grab_logo: (channelForm.epg_type === "iptv_epg_org" || channelForm.epg_type === "open_epg") ? channelForm.epg_grab_logo : false,
       epg_show_synopsis: channelForm.epg_show_synopsis,
     };
     let error;
