@@ -101,9 +101,10 @@ const AdminPanel = () => {
 
     // If epg_grab_logo is checked, fetch logo from EPG XML
     let logoUrl = channelForm.logo_url || null;
-    if (channelForm.epg_type === "iptv_epg_org" && channelForm.epg_grab_logo && channelForm.epg_channel_id) {
+    if ((channelForm.epg_type === "iptv_epg_org" || channelForm.epg_type === "open_epg") && channelForm.epg_grab_logo && channelForm.epg_channel_id) {
       try {
-        const epgUrl = channelForm.epg_url || "https://iptv-epg.org/files/epg-br.xml";
+        const defaultUrl = channelForm.epg_type === "open_epg" ? "https://www.open-epg.com/files/brazil1.xml" : "https://iptv-epg.org/files/epg-br.xml";
+        const epgUrl = channelForm.epg_url || defaultUrl;
         const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/epg-proxy?url=${encodeURIComponent(epgUrl)}`;
         const res = await fetch(proxyUrl);
         if (res.ok) {
@@ -128,10 +129,10 @@ const AdminPanel = () => {
       stream_url: channelForm.stream_url, logo_url: logoUrl,
       category_id: channelForm.category_id || null, is_active: channelForm.is_active,
       epg_type: channelForm.epg_type || null,
-      epg_url: channelForm.epg_type === "epg_pw" ? (channelForm.epg_url || null) : (channelForm.epg_type === "iptv_epg_org" ? (channelForm.epg_url || "https://iptv-epg.org/files/epg-br.xml") : null),
+      epg_url: channelForm.epg_type === "epg_pw" ? (channelForm.epg_url || null) : (channelForm.epg_type === "iptv_epg_org" ? (channelForm.epg_url || "https://iptv-epg.org/files/epg-br.xml") : (channelForm.epg_type === "open_epg" ? (channelForm.epg_url || "https://www.open-epg.com/files/brazil1.xml") : null)),
       epg_alt_text: channelForm.epg_type === "alt_text" ? (channelForm.epg_alt_text || null) : null,
-      epg_channel_id: channelForm.epg_type === "iptv_epg_org" ? (channelForm.epg_channel_id || null) : null,
-      epg_grab_logo: channelForm.epg_type === "iptv_epg_org" ? channelForm.epg_grab_logo : false,
+      epg_channel_id: (channelForm.epg_type === "iptv_epg_org" || channelForm.epg_type === "open_epg") ? (channelForm.epg_channel_id || null) : null,
+      epg_grab_logo: (channelForm.epg_type === "iptv_epg_org" || channelForm.epg_type === "open_epg") ? channelForm.epg_grab_logo : false,
       epg_show_synopsis: channelForm.epg_show_synopsis,
     };
     let error;
@@ -296,6 +297,7 @@ const AdminPanel = () => {
                           <SelectItem value="epg_pw">EPG.PW</SelectItem>
                           <SelectItem value="alt_text">Texto Alternativo</SelectItem>
                           <SelectItem value="iptv_epg_org">IPTV-EPG.org</SelectItem>
+                          <SelectItem value="open_epg">Open-EPG.com</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -315,18 +317,22 @@ const AdminPanel = () => {
                     </div>
                   )}
 
-                  {channelForm.epg_type === "iptv_epg_org" && (
+                  {(channelForm.epg_type === "iptv_epg_org" || channelForm.epg_type === "open_epg") && (
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <Label>URL do XML</Label>
-                        <Input value={channelForm.epg_url || "https://iptv-epg.org/files/epg-br.xml"} onChange={(e) => setChannelForm((f) => ({ ...f, epg_url: e.target.value }))} placeholder="https://iptv-epg.org/files/epg-br.xml" />
+                        <Input
+                          value={channelForm.epg_url || (channelForm.epg_type === "open_epg" ? "https://www.open-epg.com/files/brazil1.xml" : "https://iptv-epg.org/files/epg-br.xml")}
+                          onChange={(e) => setChannelForm((f) => ({ ...f, epg_url: e.target.value }))}
+                          placeholder={channelForm.epg_type === "open_epg" ? "https://www.open-epg.com/files/brazil1.xml" : "https://iptv-epg.org/files/epg-br.xml"}
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label>ID do Canal (no XML)</Label>
                         <EpgChannelPicker
                           value={channelForm.epg_channel_id}
                           onChange={(v) => setChannelForm((f) => ({ ...f, epg_channel_id: v }))}
-                          xmlUrl={channelForm.epg_url || "https://iptv-epg.org/files/epg-br.xml"}
+                          xmlUrl={channelForm.epg_url || (channelForm.epg_type === "open_epg" ? "https://www.open-epg.com/files/brazil1.xml" : "https://iptv-epg.org/files/epg-br.xml")}
                         />
                       </div>
                       <div className="flex items-center gap-2">
@@ -336,7 +342,7 @@ const AdminPanel = () => {
                     </div>
                   )}
 
-                  {(channelForm.epg_type === "epg_pw" || channelForm.epg_type === "iptv_epg_org") && (
+                  {(channelForm.epg_type === "epg_pw" || channelForm.epg_type === "iptv_epg_org" || channelForm.epg_type === "open_epg") && (
                     <div className="flex items-center gap-2">
                       <Checkbox checked={channelForm.epg_show_synopsis} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, epg_show_synopsis: !!v }))} />
                       <Label>Exibir sinopse (permite clicar em um programa para ver a descrição)</Label>

@@ -85,7 +85,7 @@ export function useEPG(channel: {
 
       let programs: EPGProgram[] = [];
 
-      if (effectiveType === "iptv_epg_org" && epg_channel_id) {
+      if ((effectiveType === "iptv_epg_org" || effectiveType === "open_epg") && epg_channel_id) {
         programs = await fetchIptvEpgOrg(epg_url, epg_channel_id);
       } else {
         // EPG.PW format
