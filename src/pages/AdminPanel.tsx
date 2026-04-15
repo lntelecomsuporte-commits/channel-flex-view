@@ -16,6 +16,7 @@ import { Plus, Trash2, LogOut, Tv, Layers, Users, Link } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import UserManagement from "@/components/admin/UserManagement";
 import HubsoftIntegration from "@/components/admin/HubsoftIntegration";
+import EpgChannelPicker from "@/components/admin/EpgChannelPicker";
 
 const emptyChannelForm = {
   name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true,
