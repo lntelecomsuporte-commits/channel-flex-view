@@ -53,13 +53,16 @@ async function fetchEPG(ch: ChannelEPGInput): Promise<EPGProgram[]> {
 
 export function useMultiEPG(channels: ChannelEPGInput[]) {
   const queries = useQueries({
-    queries: channels.map((ch) => ({
-      queryKey: ["epg-multi", ch.epg_type, ch.epg_url, ch.epg_channel_id],
-      enabled: !!ch.epg_type && ch.epg_type !== "none" && ch.epg_type !== "alt_text" && !!ch.epg_url,
-      staleTime: 60000,
-      refetchInterval: 120000,
-      queryFn: () => fetchEPG(ch),
-    })),
+    queries: channels.map((ch) => {
+      const effectiveType = ch.epg_type || (ch.epg_url ? "epg_pw" : null);
+      return {
+        queryKey: ["epg-multi", effectiveType, ch.epg_url, ch.epg_channel_id],
+        enabled: !!effectiveType && effectiveType !== "none" && effectiveType !== "alt_text" && !!ch.epg_url,
+        staleTime: 60000,
+        refetchInterval: 120000,
+        queryFn: () => fetchEPG({ ...ch, epg_type: effectiveType }),
+      };
+    }),
   });
 
   const epgMap = new Map<string, EPGProgram[]>();

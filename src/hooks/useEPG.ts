@@ -71,9 +71,12 @@ export function useEPG(channel: {
 }) {
   const { epg_type, epg_url, epg_channel_id } = channel;
 
+  // Backward compat: if no epg_type but has epg_url, treat as epg_pw
+  const effectiveType = epg_type || (epg_url ? "epg_pw" : null);
+
   return useQuery<EPGData>({
-    queryKey: ["epg", epg_type, epg_url, epg_channel_id],
-    enabled: !!epg_type && epg_type !== "none" && epg_type !== "alt_text" && !!epg_url,
+    queryKey: ["epg", effectiveType, epg_url, epg_channel_id],
+    enabled: !!effectiveType && effectiveType !== "none" && effectiveType !== "alt_text" && !!epg_url,
     refetchInterval: 60000,
     staleTime: 30000,
     queryFn: async () => {
@@ -81,7 +84,7 @@ export function useEPG(channel: {
 
       let programs: EPGProgram[] = [];
 
-      if (epg_type === "iptv_epg_org" && epg_channel_id) {
+      if (effectiveType === "iptv_epg_org" && epg_channel_id) {
         programs = await fetchIptvEpgOrg(epg_url, epg_channel_id);
       } else {
         // EPG.PW format
