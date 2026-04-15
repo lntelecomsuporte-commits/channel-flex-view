@@ -44,7 +44,7 @@ export default function EpgChannelPicker({ value, onChange, xmlUrl }: EpgChannel
         const name = node.querySelector("display-name")?.textContent || id;
         if (id) list.push({ id, name });
       });
-      list.sort((a, b) => a.name.localeCompare(b.name));
+      list.sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }));
       setChannels(list);
       setLoaded(true);
       setLastUrl(xmlUrl);
