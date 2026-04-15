@@ -98,9 +98,34 @@ const AdminPanel = () => {
       return;
     }
     setSaving(true);
+
+    // If epg_grab_logo is checked, fetch logo from EPG XML
+    let logoUrl = channelForm.logo_url || null;
+    if (channelForm.epg_type === "iptv_epg_org" && channelForm.epg_grab_logo && channelForm.epg_channel_id) {
+      try {
+        const epgUrl = channelForm.epg_url || "https://iptv-epg.org/files/epg-br.xml";
+        const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/epg-proxy?url=${encodeURIComponent(epgUrl)}`;
+        const res = await fetch(proxyUrl);
+        if (res.ok) {
+          const text = await res.text();
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(text, "text/xml");
+          const channel = doc.querySelector(`channel[id="${channelForm.epg_channel_id}"]`);
+          const icon = channel?.querySelector("icon");
+          const grabLogo = icon?.getAttribute("src") || null;
+          if (grabLogo) {
+            logoUrl = grabLogo;
+            toast.info("Logo do EPG obtido com sucesso!");
+          }
+        }
+      } catch (e) {
+        console.warn("Falha ao buscar logo do EPG:", e);
+      }
+    }
+
     const payload = {
       name: channelForm.name, channel_number: parseInt(channelForm.channel_number),
-      stream_url: channelForm.stream_url, logo_url: channelForm.logo_url || null,
+      stream_url: channelForm.stream_url, logo_url: logoUrl,
       category_id: channelForm.category_id || null, is_active: channelForm.is_active,
       epg_type: channelForm.epg_type || null,
       epg_url: channelForm.epg_type === "epg_pw" ? (channelForm.epg_url || null) : (channelForm.epg_type === "iptv_epg_org" ? (channelForm.epg_url || "https://iptv-epg.org/files/epg-br.xml") : null),
