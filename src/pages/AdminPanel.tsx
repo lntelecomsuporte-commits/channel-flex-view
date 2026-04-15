@@ -16,6 +16,7 @@ import { Plus, Trash2, LogOut, Tv, Layers, Users, Link } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import UserManagement from "@/components/admin/UserManagement";
 import HubsoftIntegration from "@/components/admin/HubsoftIntegration";
+import EpgChannelPicker from "@/components/admin/EpgChannelPicker";
 
 const emptyChannelForm = {
   name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true,
@@ -297,7 +298,11 @@ const AdminPanel = () => {
                       </div>
                       <div className="space-y-2">
                         <Label>ID do Canal (no XML)</Label>
-                        <Input value={channelForm.epg_channel_id} onChange={(e) => setChannelForm((f) => ({ ...f, epg_channel_id: e.target.value }))} placeholder="Ex: GloboHD.br" />
+                        <EpgChannelPicker
+                          value={channelForm.epg_channel_id}
+                          onChange={(v) => setChannelForm((f) => ({ ...f, epg_channel_id: v }))}
+                          xmlUrl={channelForm.epg_url || "https://iptv-epg.org/files/epg-br.xml"}
+                        />
                       </div>
                       <div className="flex items-center gap-2">
                         <Checkbox checked={channelForm.epg_grab_logo} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, epg_grab_logo: !!v }))} />
