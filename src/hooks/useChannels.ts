@@ -40,16 +40,9 @@ export function useChannels() {
           if (error) throw error;
           return data as Channel[];
         }
-        // No access records = manually created user, show all
+        // No access records = no channels
+        return [] as Channel[];
       }
-
-      const { data, error } = await supabase
-        .from("channels")
-        .select("*")
-        .eq("is_active", true)
-        .order("channel_number", { ascending: true });
-      if (error) throw error;
-      return data as Channel[];
     },
   });
 }
