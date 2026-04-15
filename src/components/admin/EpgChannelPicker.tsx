@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ChevronsUpDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
 
 interface XmlChannel {
   id: string;
@@ -24,13 +23,13 @@ export default function EpgChannelPicker({ value, onChange, xmlUrl }: EpgChannel
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [lastUrl, setLastUrl] = useState("");
+  const [search, setSearch] = useState("");
 
   const fetchChannels = async () => {
     if (!xmlUrl) return;
     if (loaded && lastUrl === xmlUrl) return;
     setLoading(true);
     try {
-      // Use edge function proxy to avoid CORS
       const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/epg-proxy?url=${encodeURIComponent(xmlUrl)}`;
       const res = await fetch(proxyUrl);
       if (!res.ok) throw new Error("Falha ao carregar XML");
@@ -56,6 +55,14 @@ export default function EpgChannelPicker({ value, onChange, xmlUrl }: EpgChannel
     }
   };
 
+  const filtered = useMemo(() => {
+    if (!search.trim()) return channels;
+    const q = search.toLowerCase();
+    return channels.filter(
+      (ch) => ch.name.toLowerCase().includes(q) || ch.id.toLowerCase().includes(q)
+    );
+  }, [channels, search]);
+
   return (
     <div className="flex gap-2">
       <Input
@@ -72,17 +79,21 @@ export default function EpgChannelPicker({ value, onChange, xmlUrl }: EpgChannel
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[400px] p-0" align="end">
-          <Command>
-            <CommandInput placeholder="Buscar canal por nome ou ID..." />
+          <Command shouldFilter={false}>
+            <CommandInput
+              placeholder="Buscar canal por nome ou ID..."
+              value={search}
+              onValueChange={setSearch}
+            />
             <CommandList className="max-h-[300px]">
               <CommandEmpty>
                 {loading ? "Carregando canais do XML..." : "Nenhum canal encontrado"}
               </CommandEmpty>
-              <CommandGroup heading={`${channels.length} canais encontrados`}>
-                {channels.map((ch) => (
+              <CommandGroup heading={`${filtered.length} canais encontrados`}>
+                {filtered.map((ch) => (
                   <CommandItem
                     key={ch.id}
-                    value={`${ch.name} ${ch.id}`}
+                    value={ch.id}
                     onSelect={() => {
                       onChange(ch.id);
                       setOpen(false);
