@@ -103,7 +103,7 @@ const AdminPanel = () => {
       stream_url: channelForm.stream_url, logo_url: channelForm.logo_url || null,
       category_id: channelForm.category_id || null, is_active: channelForm.is_active,
       epg_type: channelForm.epg_type || null,
-      epg_url: channelForm.epg_type === "epg_pw" ? (channelForm.epg_url || null) : (channelForm.epg_type === "iptv_epg_org" ? (channelForm.epg_url || null) : null),
+      epg_url: channelForm.epg_type === "epg_pw" ? (channelForm.epg_url || null) : (channelForm.epg_type === "iptv_epg_org" ? (channelForm.epg_url || "https://iptv-epg.org/files/epg-br.xml") : null),
       epg_alt_text: channelForm.epg_type === "alt_text" ? (channelForm.epg_alt_text || null) : null,
       epg_channel_id: channelForm.epg_type === "iptv_epg_org" ? (channelForm.epg_channel_id || null) : null,
       epg_grab_logo: channelForm.epg_type === "iptv_epg_org" ? channelForm.epg_grab_logo : false,
