@@ -298,7 +298,11 @@ const AdminPanel = () => {
                       </div>
                       <div className="space-y-2">
                         <Label>ID do Canal (no XML)</Label>
-                        <Input value={channelForm.epg_channel_id} onChange={(e) => setChannelForm((f) => ({ ...f, epg_channel_id: e.target.value }))} placeholder="Ex: GloboHD.br" />
+                        <EpgChannelPicker
+                          value={channelForm.epg_channel_id}
+                          onChange={(v) => setChannelForm((f) => ({ ...f, epg_channel_id: v }))}
+                          xmlUrl={channelForm.epg_url || "https://iptv-epg.org/files/epg-br.xml"}
+                        />
                       </div>
                       <div className="flex items-center gap-2">
                         <Checkbox checked={channelForm.epg_grab_logo} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, epg_grab_logo: !!v }))} />
