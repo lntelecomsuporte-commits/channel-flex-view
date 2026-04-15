@@ -20,7 +20,8 @@ async function fetchEPG(ch: ChannelEPGInput): Promise<EPGProgram[]> {
   if (!ch.epg_url) return [];
 
   if (ch.epg_type === "iptv_epg_org" && ch.epg_channel_id) {
-    const res = await fetch(ch.epg_url);
+    const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/epg-proxy?url=${encodeURIComponent(ch.epg_url)}`;
+    const res = await fetch(proxyUrl);
     if (!res.ok) return [];
     const text = await res.text();
     const parser = new DOMParser();

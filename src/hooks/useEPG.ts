@@ -13,7 +13,8 @@ export interface EPGData {
 
 // Parse XMLTV format from iptv-epg.org for a specific channel ID with timezone offset
 async function fetchIptvEpgOrg(xmlUrl: string, channelId: string): Promise<EPGProgram[]> {
-  const res = await fetch(xmlUrl);
+  const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/epg-proxy?url=${encodeURIComponent(xmlUrl)}`;
+  const res = await fetch(proxyUrl);
   if (!res.ok) return [];
   const text = await res.text();
   const parser = new DOMParser();
