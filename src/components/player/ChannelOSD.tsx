@@ -53,7 +53,7 @@ const ChannelOSD = ({ channel, visible }: ChannelOSDProps) => {
                 </p>
               )}
             </div>
-          ) : epgType === "alt_text" && altText ? (
+          ) : altText ? (
             <p className="text-sm text-muted-foreground mt-1 truncate">{altText}</p>
           ) : null}
         </div>
