@@ -53,32 +53,31 @@ function ProgramProgress({ startDate, endDate }: { startDate: string; endDate: s
   );
 }
 
-function findCurrentNext(programs: EPGProgram[]): { current: EPGProgram | null; next: EPGProgram | null } {
+function findCurrentAndUpcoming(programs: EPGProgram[]): EPGProgram[] {
   const now = new Date();
-  let current: EPGProgram | null = null;
-  let next: EPGProgram | null = null;
+  let startIdx = -1;
 
   for (let i = 0; i < programs.length; i++) {
     const start = new Date(programs[i].start_date);
     const end = i + 1 < programs.length ? new Date(programs[i + 1].start_date) : null;
     if (start <= now && (!end || end > now)) {
-      current = programs[i];
-      next = programs[i + 1] || null;
+      startIdx = i;
       break;
     }
   }
 
-  if (!current && programs.length > 0) {
+  if (startIdx === -1 && programs.length > 0) {
     for (let i = programs.length - 1; i >= 0; i--) {
       if (new Date(programs[i].start_date) <= now) {
-        current = programs[i];
-        next = programs[i + 1] || null;
+        startIdx = i;
         break;
       }
     }
   }
 
-  return { current, next };
+  if (startIdx === -1) return [];
+  // Return current + up to 3 upcoming
+  return programs.slice(startIdx, startIdx + 4);
 }
 
 function ChannelEPGInfo({
