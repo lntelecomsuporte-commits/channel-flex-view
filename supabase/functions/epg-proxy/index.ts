@@ -20,26 +20,39 @@ serve(async (req) => {
     });
   }
 
+  const emptyXml = '<?xml version="1.0" encoding="UTF-8"?><tv></tv>';
+
   try {
-    const res = await fetch(xmlUrl);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
+
+    const res = await fetch(xmlUrl, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; LNTV-EPG/1.0)",
+        Accept: "application/xml, text/xml, */*",
+      },
+      redirect: "follow",
+    });
+    clearTimeout(timeout);
+
     if (!res.ok) {
-      return new Response(JSON.stringify({ error: "Failed to fetch XML" }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      console.error(`EPG fetch failed: ${res.status} ${res.statusText} for ${xmlUrl}`);
+      return new Response(emptyXml, {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/xml", "X-EPG-Error": String(res.status) },
       });
     }
 
     const text = await res.text();
     return new Response(text, {
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "application/xml",
-      },
+      headers: { ...corsHeaders, "Content-Type": "application/xml" },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    console.error("EPG proxy error:", e);
+    return new Response(emptyXml, {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/xml", "X-EPG-Error": "fetch_failed" },
     });
   }
 });
