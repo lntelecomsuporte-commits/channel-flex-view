@@ -67,7 +67,10 @@ const ChannelOSD = ({ channel, visible }: ChannelOSDProps) => {
 
           {epg?.current ? (
             <div className="mt-1.5 sm:mt-2">
-              <div className="flex items-baseline gap-2">
+              <div className="flex items-center gap-2">
+                {epg.current.rating && (
+                  <RatingBadge rating={epg.current.rating} />
+                )}
                 <p className="text-sm sm:text-base lg:text-lg text-foreground/90 truncate">
                   {epg.current.title}
                 </p>
