@@ -4,6 +4,7 @@ export interface EPGProgram {
   title: string;
   start_date: string;
   desc: string | null;
+  rating: string | null;
 }
 
 export interface EPGData {
@@ -27,11 +28,13 @@ async function fetchIptvEpgOrg(xmlUrl: string, channelId: string): Promise<EPGPr
     const startAttr = prog.getAttribute("start") || "";
     const title = prog.querySelector("title")?.textContent || "";
     const desc = prog.querySelector("desc")?.textContent || null;
+    const ratingEl = prog.querySelector("rating value");
+    const rating = ratingEl?.textContent || null;
 
     // Parse XMLTV date format: 20260414120000 +0000
     const startDate = parseXmltvDate(startAttr);
     if (startDate) {
-      programs.push({ title, start_date: startDate.toISOString(), desc });
+      programs.push({ title, start_date: startDate.toISOString(), desc, rating });
     }
   });
 

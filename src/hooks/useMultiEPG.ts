@@ -32,9 +32,11 @@ async function fetchEPG(ch: ChannelEPGInput): Promise<EPGProgram[]> {
       const startAttr = prog.getAttribute("start") || "";
       const title = prog.querySelector("title")?.textContent || "";
       const desc = prog.querySelector("desc")?.textContent || null;
+      const ratingEl = prog.querySelector("rating value");
+      const rating = ratingEl?.textContent || null;
       const startDate = parseXmltvDate(startAttr);
       if (startDate) {
-        programs.push({ title, start_date: startDate.toISOString(), desc });
+        programs.push({ title, start_date: startDate.toISOString(), desc, rating });
       }
     });
     programs.sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime());
