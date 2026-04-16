@@ -1,6 +1,23 @@
 import type { Channel } from "@/hooks/useChannels";
 import { useEPG } from "@/hooks/useEPG";
 
+function RatingBadge({ rating }: { rating: string | null }) {
+  if (!rating) return null;
+  const r = rating.trim().toUpperCase();
+  let bg = "bg-green-600";
+  if (r === "18" || r === "18 ANOS") bg = "bg-black";
+  else if (r === "16" || r === "16 ANOS") bg = "bg-red-600";
+  else if (r === "14" || r === "14 ANOS") bg = "bg-orange-500";
+  else if (r === "12" || r === "12 ANOS") bg = "bg-yellow-500";
+  else if (r === "10" || r === "10 ANOS") bg = "bg-blue-500";
+  else if (r === "L" || r === "LIVRE") bg = "bg-green-600";
+  return (
+    <span className={`${bg} text-white text-xs sm:text-sm font-bold px-2 py-0.5 rounded flex-shrink-0 leading-none`}>
+      {r.replace(" ANOS", "")}
+    </span>
+  );
+}
+
 interface ChannelOSDProps {
   channel: Channel;
   visible: boolean;
