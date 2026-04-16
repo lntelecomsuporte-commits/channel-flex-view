@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import type { Channel } from "@/hooks/useChannels";
 import { useMultiEPG } from "@/hooks/useMultiEPG";
 import type { EPGProgram } from "@/hooks/useEPG";
-import { LogOut, X, Search } from "lucide-react";
+import { LogOut, X, Search, Info } from "lucide-react";
 
 interface ChannelListProps {
   channels: Channel[];
@@ -16,6 +16,24 @@ interface ChannelListProps {
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
   return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function RatingBadge({ rating }: { rating: string | null }) {
+  if (!rating) return null;
+  const r = rating.trim().toUpperCase();
+  let bg = "bg-green-600";
+  if (r === "18" || r === "18 ANOS") bg = "bg-black";
+  else if (r === "16" || r === "16 ANOS") bg = "bg-red-600";
+  else if (r === "14" || r === "14 ANOS") bg = "bg-orange-500";
+  else if (r === "12" || r === "12 ANOS") bg = "bg-yellow-500";
+  else if (r === "10" || r === "10 ANOS") bg = "bg-blue-500";
+  else if (r === "L" || r === "LIVRE") bg = "bg-green-600";
+
+  return (
+    <span className={`${bg} text-white text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 leading-none`}>
+      {r.replace(" ANOS", "")}
+    </span>
+  );
 }
 
 function ProgramProgress({ startDate, endDate }: { startDate: string; endDate: string | null }) {
@@ -35,22 +53,7 @@ function ProgramProgress({ startDate, endDate }: { startDate: string; endDate: s
   );
 }
 
-function ChannelEPGInfo({
-  programs,
-  altText,
-  epgType,
-}: {
-  programs: EPGProgram[];
-  altText: string | null;
-  epgType: string | null;
-}) {
-  if (programs.length === 0) {
-    if (epgType === "alt_text" && altText) {
-      return <span className="text-xs text-muted-foreground italic truncate">{altText}</span>;
-    }
-    return <span className="text-xs text-muted-foreground">Programação não disponível</span>;
-  }
-
+function findCurrentNext(programs: EPGProgram[]): { current: EPGProgram | null; next: EPGProgram | null } {
   const now = new Date();
   let current: EPGProgram | null = null;
   let next: EPGProgram | null = null;
@@ -75,13 +78,48 @@ function ChannelEPGInfo({
     }
   }
 
+  return { current, next };
+}
+
+function ChannelEPGInfo({
+  programs,
+  altText,
+  epgType,
+  onClickSynopsis,
+}: {
+  programs: EPGProgram[];
+  altText: string | null;
+  epgType: string | null;
+  onClickSynopsis: (program: EPGProgram) => void;
+}) {
+  if (programs.length === 0) {
+    if (epgType === "alt_text" && altText) {
+      return <span className="text-xs text-muted-foreground italic truncate">{altText}</span>;
+    }
+    return <span className="text-xs text-muted-foreground">Programação não disponível</span>;
+  }
+
+  const { current, next } = findCurrentNext(programs);
+
   if (!current) {
     return <span className="text-xs text-muted-foreground">Programação não disponível</span>;
   }
 
   return (
     <div className="flex-1 min-w-0 space-y-0.5">
-      <p className="text-sm text-foreground truncate font-medium">{current.title}</p>
+      <div className="flex items-center gap-2">
+        <RatingBadge rating={current.rating} />
+        <p className="text-sm text-foreground truncate font-medium">{current.title}</p>
+        {current.desc && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onClickSynopsis(current); }}
+            className="flex-shrink-0 text-primary hover:text-primary/80 transition-colors"
+            title="Ver sinopse"
+          >
+            <Info className="w-4 h-4" />
+          </button>
+        )}
+      </div>
       <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
         <span>{formatTime(current.start_date)}</span>
         <div className="flex-1 max-w-[120px]">
@@ -93,15 +131,17 @@ function ChannelEPGInfo({
   );
 }
 
-// Synopsis modal
 function SynopsisModal({ program, onClose }: { program: EPGProgram; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={onClose}>
       <div className="bg-background rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-start mb-3">
-          <div>
-            <h3 className="text-lg font-bold text-foreground">{program.title}</h3>
-            <p className="text-sm text-muted-foreground">{formatTime(program.start_date)}</p>
+          <div className="flex items-center gap-2">
+            <RatingBadge rating={program.rating} />
+            <div>
+              <h3 className="text-lg font-bold text-foreground">{program.title}</h3>
+              <p className="text-sm text-muted-foreground">{formatTime(program.start_date)}</p>
+            </div>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1">
             <X className="w-5 h-5" />
@@ -120,8 +160,6 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
   const listRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
-
-  const now = useMemo(() => new Date(), [visible]);
 
   const epgMap = useMultiEPG(
     channels.map((ch) => ({
@@ -160,9 +198,8 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
         if (e.key === "Escape") { e.preventDefault(); setSynopsisProgram(null); }
         return;
       }
-      // Don't intercept when search is focused (except navigation keys)
       const isSearchFocused = document.activeElement === searchRef.current;
-      
+
       switch (e.key) {
         case "ArrowUp":
           e.preventDefault(); e.stopPropagation();
@@ -181,7 +218,7 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
           break;
         case "Escape":
         case "Backspace":
-          if (!isSearchFocused || (e.key === "Escape")) {
+          if (!isSearchFocused || e.key === "Escape") {
             e.preventDefault(); e.stopPropagation();
             onClose();
           }
@@ -200,8 +237,7 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
       <div className="p-3 sm:p-4 border-b border-border/50 flex-shrink-0">
         <div className="flex justify-between items-center gap-3">
           <h2 className="text-lg sm:text-xl font-bold text-foreground flex-shrink-0">Canais</h2>
-          
-          {/* Search */}
+
           <div className="flex-1 max-w-xs relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
@@ -265,7 +301,12 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
 
               {/* EPG info */}
               <div className="flex-1 min-w-0 flex items-center">
-                <ChannelEPGInfo programs={programs} altText={altText} epgType={epgType} />
+                <ChannelEPGInfo
+                  programs={programs}
+                  altText={altText}
+                  epgType={epgType}
+                  onClickSynopsis={(prog) => setSynopsisProgram(prog)}
+                />
               </div>
 
               {/* Active indicator */}
