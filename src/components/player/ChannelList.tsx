@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import type { Channel } from "@/hooks/useChannels";
 import { useMultiEPG } from "@/hooks/useMultiEPG";
 import type { EPGProgram } from "@/hooks/useEPG";
-import { LogOut, X } from "lucide-react";
+import { LogOut, X, Search } from "lucide-react";
 
 interface ChannelListProps {
   channels: Channel[];
@@ -13,154 +13,82 @@ interface ChannelListProps {
   onLogout?: () => void;
 }
 
-const HOUR_WIDTH = 200;
-const TIMELINE_HOURS = 6;
-const TIMELINE_PAST_HOURS = 1;
-
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
   return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
-function getTimelineStart(): Date {
-  const now = new Date();
-  now.setMinutes(0, 0, 0);
-  now.setHours(now.getHours() - TIMELINE_PAST_HOURS);
-  return now;
-}
-
-function getTimelineEnd(start: Date): Date {
-  return new Date(start.getTime() + TIMELINE_HOURS * 3600000);
-}
-
-function timeToPixels(time: Date, timelineStart: Date): number {
-  const diffMs = time.getTime() - timelineStart.getTime();
-  return (diffMs / 3600000) * HOUR_WIDTH;
-}
-
-function TimelineHeader({ timelineStart, now }: { timelineStart: Date; now: Date }) {
-  const hours: Date[] = [];
-  for (let i = 0; i < TIMELINE_HOURS; i++) {
-    const h = new Date(timelineStart.getTime() + i * 3600000);
-    hours.push(h);
-  }
-  const nowX = timeToPixels(now, timelineStart);
-  const totalWidth = TIMELINE_HOURS * HOUR_WIDTH;
+function ProgramProgress({ startDate, endDate }: { startDate: string; endDate: string | null }) {
+  if (!endDate) return null;
+  const now = Date.now();
+  const start = new Date(startDate).getTime();
+  const end = new Date(endDate).getTime();
+  const total = end - start;
+  if (total <= 0) return null;
+  const elapsed = Math.max(0, Math.min(now - start, total));
+  const pct = (elapsed / total) * 100;
 
   return (
-    <div className="relative h-8 border-b border-border" style={{ width: totalWidth }}>
-      {hours.map((h, i) => (
-        <div key={i} className="absolute top-0 h-full flex items-center border-l border-border/50 pl-2" style={{ left: i * HOUR_WIDTH }}>
-          <span className="text-xs text-muted-foreground font-medium">
-            {h.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-          </span>
-        </div>
-      ))}
-      <div className="absolute top-0 h-full w-0.5 bg-primary z-10" style={{ left: nowX }}>
-        <div className="absolute -top-0 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[10px] px-1 rounded-b font-bold">
-          AGORA
-        </div>
-      </div>
+    <div className="w-full h-1 bg-muted/30 rounded-full overflow-hidden">
+      <div className="h-full bg-primary rounded-full" style={{ width: `${pct}%` }} />
     </div>
   );
 }
 
-function ProgramBlock({
-  program,
-  nextStart,
-  timelineStart,
-  timelineEnd,
-  isCurrent,
-  showSynopsis,
-  onClickSynopsis,
-}: {
-  program: EPGProgram;
-  nextStart: Date | null;
-  timelineStart: Date;
-  timelineEnd: Date;
-  isCurrent: boolean;
-  showSynopsis: boolean;
-  onClickSynopsis?: (program: EPGProgram) => void;
-}) {
-  const start = new Date(program.start_date);
-  const end = nextStart || new Date(start.getTime() + 3600000);
-
-  const clampedStart = start < timelineStart ? timelineStart : start;
-  const clampedEnd = end > timelineEnd ? timelineEnd : end;
-
-  if (clampedStart >= clampedEnd) return null;
-
-  const left = timeToPixels(clampedStart, timelineStart);
-  const width = timeToPixels(clampedEnd, timelineStart) - left;
-
-  if (width < 2) return null;
-
-  return (
-    <div
-      className={`absolute top-1 bottom-1 rounded px-2 flex items-center overflow-hidden border transition-colors ${
-        isCurrent
-          ? "bg-primary/20 border-primary/40"
-          : "bg-secondary/60 border-border/30 hover:bg-secondary/80"
-      } ${showSynopsis && program.desc ? "cursor-pointer" : ""}`}
-      style={{ left, width: Math.max(width - 2, 20) }}
-      title={`${formatTime(program.start_date)} - ${program.title}`}
-      onClick={showSynopsis && program.desc && onClickSynopsis ? (e) => { e.stopPropagation(); onClickSynopsis(program); } : undefined}
-    >
-      <span className="text-xs text-foreground truncate">
-        {width > 60 && (
-          <span className="text-muted-foreground mr-1">{formatTime(program.start_date)}</span>
-        )}
-        {program.title}
-        {showSynopsis && program.desc && <span className="ml-1 text-primary">ℹ</span>}
-      </span>
-    </div>
-  );
-}
-
-function ChannelEPGRow({
+function ChannelEPGInfo({
   programs,
-  timelineStart,
-  timelineEnd,
-  now,
-  showSynopsis,
-  onClickSynopsis,
+  altText,
+  epgType,
 }: {
   programs: EPGProgram[];
-  timelineStart: Date;
-  timelineEnd: Date;
-  now: Date;
-  showSynopsis: boolean;
-  onClickSynopsis?: (program: EPGProgram) => void;
+  altText: string | null;
+  epgType: string | null;
 }) {
-  const totalWidth = TIMELINE_HOURS * HOUR_WIDTH;
+  if (programs.length === 0) {
+    if (epgType === "alt_text" && altText) {
+      return <span className="text-xs text-muted-foreground italic truncate">{altText}</span>;
+    }
+    return <span className="text-xs text-muted-foreground">Programação não disponível</span>;
+  }
+
+  const now = new Date();
+  let current: EPGProgram | null = null;
+  let next: EPGProgram | null = null;
+
+  for (let i = 0; i < programs.length; i++) {
+    const start = new Date(programs[i].start_date);
+    const end = i + 1 < programs.length ? new Date(programs[i + 1].start_date) : null;
+    if (start <= now && (!end || end > now)) {
+      current = programs[i];
+      next = programs[i + 1] || null;
+      break;
+    }
+  }
+
+  if (!current && programs.length > 0) {
+    for (let i = programs.length - 1; i >= 0; i--) {
+      if (new Date(programs[i].start_date) <= now) {
+        current = programs[i];
+        next = programs[i + 1] || null;
+        break;
+      }
+    }
+  }
+
+  if (!current) {
+    return <span className="text-xs text-muted-foreground">Programação não disponível</span>;
+  }
 
   return (
-    <div className="relative h-10" style={{ width: totalWidth }}>
-      {programs.map((prog, i) => {
-        const start = new Date(prog.start_date);
-        const nextStart = i + 1 < programs.length ? new Date(programs[i + 1].start_date) : null;
-        const end = nextStart || new Date(start.getTime() + 3600000);
-        const isCurrent = start <= now && end > now;
-
-        if (end <= timelineStart || start >= timelineEnd) return null;
-
-        return (
-          <ProgramBlock
-            key={i}
-            program={prog}
-            nextStart={nextStart}
-            timelineStart={timelineStart}
-            timelineEnd={timelineEnd}
-            isCurrent={isCurrent}
-            showSynopsis={showSynopsis}
-            onClickSynopsis={onClickSynopsis}
-          />
-        );
-      })}
-      <div
-        className="absolute top-0 h-full w-0.5 bg-primary/60 z-10 pointer-events-none"
-        style={{ left: timeToPixels(now, timelineStart) }}
-      />
+    <div className="flex-1 min-w-0 space-y-0.5">
+      <p className="text-sm text-foreground truncate font-medium">{current.title}</p>
+      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+        <span>{formatTime(current.start_date)}</span>
+        <div className="flex-1 max-w-[120px]">
+          <ProgramProgress startDate={current.start_date} endDate={next?.start_date ?? null} />
+        </div>
+        {next && <span>{formatTime(next.start_date)}</span>}
+      </div>
     </div>
   );
 }
@@ -188,13 +116,12 @@ function SynopsisModal({ program, onClose }: { program: EPGProgram; onClose: () 
 const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLogout }: ChannelListProps) => {
   const [focusedIndex, setFocusedIndex] = useState(currentIndex);
   const [synopsisProgram, setSynopsisProgram] = useState<EPGProgram | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
-  const timelineScrollRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const now = useMemo(() => new Date(), [visible]);
-  const timelineStart = useMemo(() => getTimelineStart(), [visible]);
-  const timelineEnd = useMemo(() => getTimelineEnd(timelineStart), [timelineStart]);
 
   const epgMap = useMultiEPG(
     channels.map((ch) => ({
@@ -205,18 +132,22 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
     }))
   );
 
-  const hasAnyEPG = epgMap.size > 0 || channels.some((ch) => (ch as any).epg_type === "alt_text" && (ch as any).epg_alt_text);
+  const filteredChannels = useMemo(() => {
+    if (!searchQuery.trim()) return channels;
+    const q = searchQuery.toLowerCase();
+    return channels.filter(
+      (ch) =>
+        ch.name.toLowerCase().includes(q) ||
+        String(ch.channel_number).includes(q)
+    );
+  }, [channels, searchQuery]);
 
   useEffect(() => {
-    if (visible && timelineScrollRef.current) {
-      const nowX = timeToPixels(now, timelineStart);
-      timelineScrollRef.current.scrollLeft = Math.max(0, nowX - 100);
+    if (visible) {
+      setFocusedIndex(0);
+      setSearchQuery("");
     }
-  }, [visible, now, timelineStart]);
-
-  useEffect(() => {
-    if (visible) setFocusedIndex(currentIndex);
-  }, [visible, currentIndex]);
+  }, [visible]);
 
   useEffect(() => {
     itemRefs.current[focusedIndex]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -229,30 +160,62 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
         if (e.key === "Escape") { e.preventDefault(); setSynopsisProgram(null); }
         return;
       }
+      // Don't intercept when search is focused (except navigation keys)
+      const isSearchFocused = document.activeElement === searchRef.current;
+      
       switch (e.key) {
-        case "ArrowUp": e.preventDefault(); e.stopPropagation(); setFocusedIndex((prev) => (prev > 0 ? prev - 1 : channels.length - 1)); break;
-        case "ArrowDown": e.preventDefault(); e.stopPropagation(); setFocusedIndex((prev) => (prev < channels.length - 1 ? prev + 1 : 0)); break;
-        case "ArrowLeft": e.preventDefault(); e.stopPropagation(); if (timelineScrollRef.current) timelineScrollRef.current.scrollLeft -= 150; break;
-        case "ArrowRight": e.preventDefault(); e.stopPropagation(); if (timelineScrollRef.current) timelineScrollRef.current.scrollLeft += 150; break;
-        case "Enter": e.preventDefault(); e.stopPropagation(); onSelect(focusedIndex); break;
-        case "Escape": case "Backspace": e.preventDefault(); e.stopPropagation(); onClose(); break;
+        case "ArrowUp":
+          e.preventDefault(); e.stopPropagation();
+          setFocusedIndex((prev) => (prev > 0 ? prev - 1 : filteredChannels.length - 1));
+          break;
+        case "ArrowDown":
+          e.preventDefault(); e.stopPropagation();
+          setFocusedIndex((prev) => (prev < filteredChannels.length - 1 ? prev + 1 : 0));
+          break;
+        case "Enter":
+          e.preventDefault(); e.stopPropagation();
+          if (filteredChannels[focusedIndex]) {
+            const realIndex = channels.indexOf(filteredChannels[focusedIndex]);
+            if (realIndex >= 0) onSelect(realIndex);
+          }
+          break;
+        case "Escape":
+        case "Backspace":
+          if (!isSearchFocused || (e.key === "Escape")) {
+            e.preventDefault(); e.stopPropagation();
+            onClose();
+          }
+          break;
       }
     };
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [visible, focusedIndex, channels.length, onSelect, onClose, synopsisProgram]);
+  }, [visible, focusedIndex, filteredChannels, channels, onSelect, onClose, synopsisProgram]);
 
   if (!visible) return null;
 
-  const totalWidth = TIMELINE_HOURS * HOUR_WIDTH;
-
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-black/85 animate-fade-in">
-      <div className="p-3 border-b border-border flex-shrink-0">
-        <div className="flex justify-between items-center">
-          <h2 className="text-lg font-bold text-foreground">Guia de Programação</h2>
-          <div className="flex items-center gap-4">
-            <span className="text-xs text-muted-foreground">↑↓ Navegar • ←→ Linha do tempo • OK Selecionar • ESC Fechar</span>
+    <div className="absolute inset-0 z-30 flex flex-col bg-black/90 animate-fade-in">
+      {/* Header */}
+      <div className="p-3 sm:p-4 border-b border-border/50 flex-shrink-0">
+        <div className="flex justify-between items-center gap-3">
+          <h2 className="text-lg sm:text-xl font-bold text-foreground flex-shrink-0">Canais</h2>
+          
+          {/* Search */}
+          <div className="flex-1 max-w-xs relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              ref={searchRef}
+              type="text"
+              placeholder="Buscar canal..."
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setFocusedIndex(0); }}
+              className="w-full pl-8 pr-3 py-1.5 text-sm bg-secondary/50 border border-border/50 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <span className="text-xs text-muted-foreground hidden sm:inline">↑↓ Navegar • OK Selecionar • ESC Fechar</span>
             {onLogout && (
               <button onClick={(e) => { e.stopPropagation(); onLogout(); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-destructive/20 hover:bg-destructive/40 text-destructive text-xs font-medium transition-colors">
                 <LogOut className="w-3.5 h-3.5" /> Sair
@@ -262,78 +225,60 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        <div className="flex-shrink-0 w-52 md:w-64 border-r border-border flex flex-col">
-          {hasAnyEPG && <div className="h-8 border-b border-border flex-shrink-0" />}
-          <div
-            className="overflow-y-auto flex-1"
-            ref={listRef}
-            onScroll={(e) => {
-              if (timelineScrollRef.current) timelineScrollRef.current.scrollTop = (e.target as HTMLDivElement).scrollTop;
-            }}
-          >
-            {channels.map((channel, index) => (
-              <div
-                key={channel.id}
-                ref={(el) => { itemRefs.current[index] = el; }}
-                onClick={() => onSelect(index)}
-                className={`flex items-center gap-2 px-2 cursor-pointer transition-colors ${hasAnyEPG ? "h-10" : "h-12"} ${
-                  index === focusedIndex ? "bg-primary/20 ring-1 ring-primary" : index === currentIndex ? "bg-accent/30" : "hover:bg-accent/20"
-                }`}
-              >
-                <span className="channel-badge text-[10px] min-w-[1.8rem] text-center">{channel.channel_number}</span>
-                <span className="font-medium text-foreground text-sm truncate flex-1">{channel.name}</span>
-                {index === currentIndex && <span className="text-[10px] text-primary font-bold flex-shrink-0">●</span>}
+      {/* Channel list */}
+      <div className="flex-1 overflow-y-auto" ref={listRef}>
+        {filteredChannels.map((channel, index) => {
+          const ch = channel as any;
+          const programs = epgMap.get(channel.id) || [];
+          const altText = ch.epg_alt_text as string | null;
+          const epgType = ch.epg_type as string | null;
+          const realIndex = channels.indexOf(channel);
+          const isActive = realIndex === currentIndex;
+
+          return (
+            <div
+              key={channel.id}
+              ref={(el) => { itemRefs.current[index] = el; }}
+              onClick={() => onSelect(realIndex)}
+              className={`flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 cursor-pointer transition-colors border-b border-border/20 ${
+                index === focusedIndex
+                  ? "bg-primary/15 ring-1 ring-inset ring-primary/40"
+                  : isActive
+                  ? "bg-accent/20"
+                  : "hover:bg-accent/10"
+              }`}
+            >
+              {/* Logo */}
+              <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-md overflow-hidden bg-white/10 flex items-center justify-center">
+                {channel.logo_url ? (
+                  <img src={channel.logo_url} alt={channel.name} className="w-full h-full object-contain p-0.5" />
+                ) : (
+                  <span className="text-xs text-muted-foreground font-bold">{channel.name.substring(0, 2)}</span>
+                )}
               </div>
-            ))}
-          </div>
-        </div>
 
-        {hasAnyEPG && (
-          <div
-            ref={timelineScrollRef}
-            className="flex-1 overflow-x-auto overflow-y-auto"
-            onScroll={(e) => {
-              if (listRef.current) listRef.current.scrollTop = (e.target as HTMLDivElement).scrollTop;
-            }}
-          >
-            <div style={{ width: totalWidth }}>
-              <TimelineHeader timelineStart={timelineStart} now={now} />
-              {channels.map((channel) => {
-                const ch = channel as any;
-                const programs = epgMap.get(channel.id) || [];
-                const altText = ch.epg_alt_text as string | null;
-                const epgType = ch.epg_type as string | null;
-                const showSynopsis = !!ch.epg_show_synopsis;
+              {/* Number + Name */}
+              <div className="flex-shrink-0 w-20 sm:w-24">
+                <span className="text-lg sm:text-xl font-bold text-foreground">{String(channel.channel_number).padStart(3, "0")}</span>
+                <p className="text-xs sm:text-sm text-muted-foreground truncate leading-tight">{channel.name}</p>
+              </div>
 
-                return (
-                  <div key={channel.id} className="relative h-10" style={{ width: totalWidth }}>
-                    {programs.length > 0 ? (
-                      <ChannelEPGRow
-                        programs={programs}
-                        timelineStart={timelineStart}
-                        timelineEnd={timelineEnd}
-                        now={now}
-                        showSynopsis={showSynopsis}
-                        onClickSynopsis={(prog) => setSynopsisProgram(prog)}
-                      />
-                    ) : epgType === "alt_text" && altText ? (
-                      <div className="absolute inset-0 flex items-center px-3">
-                        <span className="text-xs text-muted-foreground italic truncate">{altText}</span>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
+              {/* EPG info */}
+              <div className="flex-1 min-w-0 flex items-center">
+                <ChannelEPGInfo programs={programs} altText={altText} epgType={epgType} />
+              </div>
+
+              {/* Active indicator */}
+              {isActive && (
+                <span className="text-xs text-primary font-bold flex-shrink-0">● ATUAL</span>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })}
 
-        {!hasAnyEPG && (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-muted-foreground text-sm">
-              Nenhum canal com EPG configurado.<br />Adicione EPG no painel admin.
-            </p>
+        {filteredChannels.length === 0 && (
+          <div className="flex items-center justify-center py-12">
+            <p className="text-muted-foreground text-sm">Nenhum canal encontrado.</p>
           </div>
         )}
       </div>

@@ -11,6 +11,23 @@ function formatTime(dateStr: string) {
   return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
+function ProgramProgress({ startDate, endDate }: { startDate: string; endDate: string | null }) {
+  if (!endDate) return null;
+  const now = Date.now();
+  const start = new Date(startDate).getTime();
+  const end = new Date(endDate).getTime();
+  const total = end - start;
+  if (total <= 0) return null;
+  const elapsed = Math.max(0, Math.min(now - start, total));
+  const pct = (elapsed / total) * 100;
+
+  return (
+    <div className="w-full h-1.5 bg-muted/40 rounded-full mt-1.5 overflow-hidden">
+      <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
 const ChannelOSD = ({ channel, visible }: ChannelOSDProps) => {
   const ch = channel as any;
   const { data: epg } = useEPG({
@@ -19,45 +36,81 @@ const ChannelOSD = ({ channel, visible }: ChannelOSDProps) => {
     epg_channel_id: ch.epg_channel_id,
   });
   const altText = ch.epg_alt_text as string | null;
-  const epgType = ch.epg_type as string | null;
 
   if (!visible) return null;
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 osd-gradient p-6 animate-slide-up z-10">
-      <div className="flex items-center gap-4">
-        <span className="channel-badge text-2xl min-w-[4rem] text-center">
-          {channel.channel_number}
-        </span>
+    <div className="absolute bottom-0 left-0 right-0 osd-gradient p-4 sm:p-6 lg:p-8 animate-slide-up z-10">
+      {/* Main row */}
+      <div className="flex items-center gap-4 sm:gap-5 lg:gap-6">
+        {/* Logo */}
         {channel.logo_url && (
-          <img
-            src={channel.logo_url}
-            alt={channel.name}
-            className="h-10 w-10 rounded-md object-contain bg-secondary"
-          />
+          <div className="flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 rounded-lg overflow-hidden bg-white/10 flex items-center justify-center">
+            <img
+              src={channel.logo_url}
+              alt={channel.name}
+              className="w-full h-full object-contain p-1"
+            />
+          </div>
         )}
+
+        {/* Channel number */}
+        <span className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground tracking-tight flex-shrink-0">
+          {String(channel.channel_number).padStart(3, "0")}
+        </span>
+
+        {/* Info block */}
         <div className="flex-1 min-w-0">
-          <h2 className="text-xl font-bold text-foreground">{channel.name}</h2>
+          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-foreground leading-tight">
+            {channel.name}
+          </h2>
+
           {epg?.current ? (
-            <div className="mt-1 space-y-0.5">
-              <p className="text-sm text-foreground/90 truncate">
-                <span className="text-primary font-semibold">Agora</span>{" "}
-                <span className="text-muted-foreground">{formatTime(epg.current.start_date)}</span>{" "}
-                {epg.current.title}
-              </p>
-              {epg.next && (
-                <p className="text-xs text-muted-foreground truncate">
-                  <span className="font-semibold">A seguir</span>{" "}
-                  <span>{formatTime(epg.next.start_date)}</span>{" "}
-                  {epg.next.title}
+            <div className="mt-1.5 sm:mt-2">
+              <div className="flex items-baseline gap-2">
+                <p className="text-sm sm:text-base lg:text-lg text-foreground/90 truncate">
+                  {epg.current.title}
                 </p>
-              )}
+              </div>
+              <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground mt-0.5">
+                <span>{formatTime(epg.current.start_date)}</span>
+                {epg.next && (
+                  <>
+                    <span>—</span>
+                    <span>{formatTime(epg.next.start_date)}</span>
+                  </>
+                )}
+              </div>
+              <ProgramProgress
+                startDate={epg.current.start_date}
+                endDate={epg.next?.start_date ?? null}
+              />
             </div>
           ) : altText ? (
-            <p className="text-sm text-muted-foreground mt-1 truncate">{altText}</p>
+            <p className="text-sm sm:text-base text-muted-foreground mt-1 truncate">{altText}</p>
           ) : null}
         </div>
+
+        {/* Next program (right side, desktop) */}
+        {epg?.next && (
+          <div className="hidden md:flex flex-col items-end flex-shrink-0 max-w-[280px] min-w-0 border-l border-border/30 pl-5">
+            <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">A seguir</span>
+            <p className="text-sm lg:text-base text-foreground/80 truncate w-full text-right">
+              {epg.next.title}
+            </p>
+            <span className="text-xs text-muted-foreground">{formatTime(epg.next.start_date)}</span>
+          </div>
+        )}
       </div>
+
+      {/* Next on mobile */}
+      {epg?.next && (
+        <div className="md:hidden mt-2 pt-2 border-t border-border/20">
+          <p className="text-xs text-muted-foreground truncate">
+            <span className="font-semibold">A seguir:</span> {formatTime(epg.next.start_date)} — {epg.next.title}
+          </p>
+        </div>
+      )}
     </div>
   );
 };
