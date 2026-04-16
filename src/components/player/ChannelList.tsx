@@ -231,6 +231,14 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
       }
       const isSearchFocused = document.activeElement === searchRef.current;
 
+      const openSynopsisForFocused = () => {
+        const ch = filteredChannels[focusedIndex];
+        if (!ch) return;
+        const programs = epgMap.get(ch.id) || [];
+        const upcoming = findCurrentAndUpcoming(programs);
+        if (upcoming[0]) setSynopsisProgram(upcoming[0]);
+      };
+
       switch (e.key) {
         case "ArrowUp":
           e.preventDefault(); e.stopPropagation();
@@ -242,9 +250,32 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
           break;
         case "Enter":
           e.preventDefault(); e.stopPropagation();
-          if (filteredChannels[focusedIndex]) {
-            const realIndex = channels.indexOf(filteredChannels[focusedIndex]);
-            if (realIndex >= 0) onSelect(realIndex);
+          if (e.repeat) {
+            // Long-press: open synopsis once
+            if (enterHoldTimerRef.current === null) {
+              enterHoldTimerRef.current = window.setTimeout(() => {}, 0);
+              openSynopsisForFocused();
+            }
+            break;
+          }
+          // Detect double-press within 400ms on same item
+          const now = Date.now();
+          const last = lastEnterRef.current;
+          if (last.index === focusedIndex && now - last.time < 400) {
+            lastEnterRef.current = { index: -1, time: 0 };
+            openSynopsisForFocused();
+          } else {
+            lastEnterRef.current = { index: focusedIndex, time: now };
+            // Delay select to allow double-press detection
+            window.setTimeout(() => {
+              if (lastEnterRef.current.index === focusedIndex && lastEnterRef.current.time === now) {
+                lastEnterRef.current = { index: -1, time: 0 };
+                if (filteredChannels[focusedIndex]) {
+                  const realIndex = channels.indexOf(filteredChannels[focusedIndex]);
+                  if (realIndex >= 0) onSelect(realIndex);
+                }
+              }
+            }, 400);
           }
           break;
         case "Escape":
@@ -256,9 +287,16 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
           break;
       }
     };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Enter") enterHoldTimerRef.current = null;
+    };
     window.addEventListener("keydown", handleKeyDown, true);
-    return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [visible, focusedIndex, filteredChannels, channels, onSelect, onClose, synopsisProgram]);
+    window.addEventListener("keyup", handleKeyUp, true);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true);
+      window.removeEventListener("keyup", handleKeyUp, true);
+    };
+  }, [visible, focusedIndex, filteredChannels, channels, onSelect, onClose, synopsisProgram, epgMap]);
 
   if (!visible) return null;
 
