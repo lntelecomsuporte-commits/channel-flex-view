@@ -98,33 +98,67 @@ function ChannelEPGInfo({
     return <span className="text-xs text-muted-foreground">Programação não disponível</span>;
   }
 
-  const { current, next } = findCurrentNext(programs);
+  const upcoming = findCurrentAndUpcoming(programs);
 
-  if (!current) {
+  if (upcoming.length === 0) {
     return <span className="text-xs text-muted-foreground">Programação não disponível</span>;
   }
 
+  const current = upcoming[0];
+  const next = upcoming[1] || null;
+
   return (
-    <div className="flex-1 min-w-0 space-y-0.5">
-      <div className="flex items-center gap-2">
-        <RatingBadge rating={current.rating} />
-        <p className="text-sm text-foreground truncate font-medium">{current.title}</p>
-        {current.desc && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onClickSynopsis(current); }}
-            className="flex-shrink-0 text-primary hover:text-primary/80 transition-colors"
-            title="Ver sinopse"
-          >
-            <Info className="w-4 h-4" />
-          </button>
-        )}
-      </div>
-      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-        <span>{formatTime(current.start_date)}</span>
-        <div className="flex-1 max-w-[120px]">
-          <ProgramProgress startDate={current.start_date} endDate={next?.start_date ?? null} />
+    <div className="flex-1 min-w-0 overflow-x-auto">
+      <div className="flex items-stretch gap-1">
+        {/* Current program - highlighted */}
+        <div className="flex-shrink-0 min-w-[160px] max-w-[220px] space-y-0.5">
+          <div className="flex items-center gap-1.5">
+            <RatingBadge rating={current.rating} />
+            <p className="text-sm text-foreground truncate font-semibold">{current.title}</p>
+            {current.desc && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onClickSynopsis(current); }}
+                className="flex-shrink-0 text-primary hover:text-primary/80 transition-colors"
+                title="Ver sinopse"
+              >
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+            <span>{formatTime(current.start_date)}</span>
+            <div className="flex-1">
+              <ProgramProgress startDate={current.start_date} endDate={next?.start_date ?? null} />
+            </div>
+            {next && <span>{formatTime(next.start_date)}</span>}
+          </div>
         </div>
-        {next && <span>{formatTime(next.start_date)}</span>}
+
+        {/* Upcoming programs */}
+        {upcoming.slice(1).map((prog, i) => {
+          const nextProg = upcoming[i + 2] || null;
+          return (
+            <div
+              key={i}
+              className="flex-shrink-0 min-w-[140px] max-w-[180px] border-l border-border/30 pl-2 space-y-0.5 opacity-70"
+            >
+              <div className="flex items-center gap-1">
+                <RatingBadge rating={prog.rating} />
+                <p className="text-xs text-foreground/80 truncate">{prog.title}</p>
+                {prog.desc && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onClickSynopsis(prog); }}
+                    className="flex-shrink-0 text-primary/60 hover:text-primary transition-colors"
+                    title="Ver sinopse"
+                  >
+                    <Info className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+              <span className="text-[10px] text-muted-foreground">{formatTime(prog.start_date)}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
