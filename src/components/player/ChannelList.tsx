@@ -189,6 +189,9 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  const lastEnterRef = useRef<{ index: number; time: number }>({ index: -1, time: 0 });
+  const enterHoldTimerRef = useRef<number | null>(null);
+
   const epgMap = useMultiEPG(
     channels.map((ch) => ({
       id: ch.id,
