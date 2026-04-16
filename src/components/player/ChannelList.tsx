@@ -115,15 +115,13 @@ function ChannelEPGInfo({
           <div className="flex items-center gap-1.5">
             <RatingBadge rating={current.rating} />
             <p className="text-sm text-foreground truncate font-semibold">{current.title}</p>
-            {current.desc && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onClickSynopsis(current); }}
-                className="flex-shrink-0 text-primary hover:text-primary/80 transition-colors"
-                title="Ver sinopse"
-              >
-                <Info className="w-3.5 h-3.5" />
-              </button>
-            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); onClickSynopsis(current); }}
+              className="flex-shrink-0 text-primary hover:text-primary/80 transition-colors"
+              title="Ver sinopse"
+            >
+              <Info className="w-3.5 h-3.5" />
+            </button>
           </div>
           <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
             <span>{formatTime(current.start_date)}</span>
@@ -136,7 +134,6 @@ function ChannelEPGInfo({
 
         {/* Upcoming programs */}
         {upcoming.slice(1).map((prog, i) => {
-          const nextProg = upcoming[i + 2] || null;
           return (
             <div
               key={i}
@@ -145,15 +142,13 @@ function ChannelEPGInfo({
               <div className="flex items-center gap-1">
                 <RatingBadge rating={prog.rating} />
                 <p className="text-xs text-foreground/80 truncate">{prog.title}</p>
-                {prog.desc && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onClickSynopsis(prog); }}
-                    className="flex-shrink-0 text-primary/60 hover:text-primary transition-colors"
-                    title="Ver sinopse"
-                  >
-                    <Info className="w-3 h-3" />
-                  </button>
-                )}
+                <button
+                  onClick={(e) => { e.stopPropagation(); onClickSynopsis(prog); }}
+                  className="flex-shrink-0 text-primary/60 hover:text-primary transition-colors"
+                  title="Ver sinopse"
+                >
+                  <Info className="w-3 h-3" />
+                </button>
               </div>
               <span className="text-[10px] text-muted-foreground">{formatTime(prog.start_date)}</span>
             </div>
