@@ -4,6 +4,7 @@ export interface EPGProgram {
   title: string;
   start_date: string;
   desc: string | null;
+  rating: string | null;
 }
 
 export interface EPGData {
