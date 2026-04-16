@@ -1,4 +1,5 @@
 import type { Channel } from "@/hooks/useChannels";
+import { useEPG } from "@/hooks/useEPG";
 
 interface ChannelPreviewProps {
   channel: Channel | null;
@@ -6,26 +7,103 @@ interface ChannelPreviewProps {
   direction: "next" | "prev";
 }
 
+function formatTime(dateStr: string) {
+  const d = new Date(dateStr);
+  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function ProgramProgress({ startDate, endDate }: { startDate: string; endDate: string | null }) {
+  if (!endDate) return null;
+  const now = Date.now();
+  const start = new Date(startDate).getTime();
+  const end = new Date(endDate).getTime();
+  const total = end - start;
+  if (total <= 0) return null;
+  const elapsed = Math.max(0, Math.min(now - start, total));
+  const pct = (elapsed / total) * 100;
+
+  return (
+    <div className="w-full h-1.5 bg-muted/40 rounded-full mt-1.5 overflow-hidden">
+      <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
 const ChannelPreview = ({ channel, visible, direction }: ChannelPreviewProps) => {
+  const ch = channel as any;
+  const { data: epg } = useEPG({
+    epg_type: ch?.epg_type,
+    epg_url: ch?.epg_url,
+    epg_channel_id: ch?.epg_channel_id,
+  });
+  const altText = ch?.epg_alt_text as string | null;
+
   if (!visible || !channel) return null;
 
   return (
-    <div className="absolute right-4 top-1/2 -translate-y-1/2 z-20 animate-slide-right">
-      <div className="glass-panel p-4 w-64">
-        <div className="text-xs text-muted-foreground mb-1 uppercase tracking-wider">
-          {direction === "next" ? "Próximo" : "Anterior"}
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="channel-badge text-lg">
-            {channel.channel_number}
-          </span>
-          <div>
-            <p className="font-semibold text-foreground">{channel.name}</p>
+    <div className="absolute bottom-0 left-0 right-0 osd-gradient p-4 sm:p-6 lg:p-8 animate-slide-up z-20">
+      <div className="flex items-center gap-4 sm:gap-5 lg:gap-6">
+        {/* Logo */}
+        {channel.logo_url && (
+          <div className="flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 rounded-lg overflow-hidden bg-white/10 flex items-center justify-center">
+            <img
+              src={channel.logo_url}
+              alt={channel.name}
+              className="w-full h-full object-contain p-1"
+            />
           </div>
+        )}
+
+        {/* Channel number */}
+        <span className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground tracking-tight flex-shrink-0">
+          {String(channel.channel_number).padStart(3, "0")}
+        </span>
+
+        {/* Info block */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-foreground leading-tight">
+              {channel.name}
+            </h2>
+            <span className="text-xs text-primary font-semibold uppercase tracking-wide bg-primary/15 px-2 py-0.5 rounded">
+              {direction === "next" ? "Próximo" : "Anterior"}
+            </span>
+          </div>
+
+          {epg?.current ? (
+            <div className="mt-1.5 sm:mt-2">
+              <p className="text-sm sm:text-base lg:text-lg text-foreground/90 truncate">
+                {epg.current.title}
+              </p>
+              <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground mt-0.5">
+                <span>{formatTime(epg.current.start_date)}</span>
+                {epg.next && (
+                  <>
+                    <span>—</span>
+                    <span>{formatTime(epg.next.start_date)}</span>
+                  </>
+                )}
+              </div>
+              <ProgramProgress
+                startDate={epg.current.start_date}
+                endDate={epg.next?.start_date ?? null}
+              />
+            </div>
+          ) : altText ? (
+            <p className="text-sm sm:text-base text-muted-foreground mt-1 truncate">{altText}</p>
+          ) : null}
         </div>
-        <p className="text-xs text-muted-foreground mt-2">
-          Pressione OK para trocar
-        </p>
+
+        {/* Next program (right side, desktop) */}
+        {epg?.next && (
+          <div className="hidden md:flex flex-col items-end flex-shrink-0 max-w-[280px] min-w-0 border-l border-border/30 pl-5">
+            <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">A seguir</span>
+            <p className="text-sm lg:text-base text-foreground/80 truncate w-full text-right">
+              {epg.next.title}
+            </p>
+            <span className="text-xs text-muted-foreground">{formatTime(epg.next.start_date)}</span>
+          </div>
+        )}
       </div>
     </div>
   );
