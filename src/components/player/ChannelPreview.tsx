@@ -61,14 +61,9 @@ const ChannelPreview = ({ channel, visible, direction }: ChannelPreviewProps) =>
 
         {/* Info block */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-foreground leading-tight">
-              {channel.name}
-            </h2>
-            <span className="text-xs text-primary font-semibold uppercase tracking-wide bg-primary/15 px-2 py-0.5 rounded">
-              {direction === "next" ? "Próximo" : "Anterior"}
-            </span>
-          </div>
+          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-foreground leading-tight">
+            {channel.name}
+          </h2>
 
           {epg?.current ? (
             <div className="mt-1.5 sm:mt-2">
