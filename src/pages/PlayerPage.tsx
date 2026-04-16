@@ -204,12 +204,15 @@ const PlayerPage = () => {
       {currentChannel && (
         <>
           <VideoPlayer streamUrl={currentChannel.stream_url} />
-          <ChannelOSD channel={currentChannel} visible={showOSD} />
-          <ChannelPreview
-            channel={previewChannel}
-            visible={showPreview}
-            direction={previewIndex !== null && previewIndex > currentIndex ? "next" : "prev"}
-          />
+          {showPreview && previewChannel ? (
+            <ChannelPreview
+              channel={previewChannel}
+              visible={true}
+              direction={previewIndex !== null && previewIndex > currentIndex ? "next" : "prev"}
+            />
+          ) : (
+            <ChannelOSD channel={currentChannel} visible={showOSD} />
+          )}
 
           {/* Top info bar */}
           {showOSD && (
