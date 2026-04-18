@@ -72,11 +72,28 @@
 
 @layer utilities {
   .osd-gradient {
-    background: linear-gradient(to top, hsl(var(--channel-osd-bg) / 0.95), transparent);
+    background: linear-gradient(
+      to top,
+      hsl(var(--channel-osd-bg) / 0.98) 0%,
+      hsl(var(--channel-osd-bg) / 0.92) 40%,
+      hsl(var(--channel-osd-bg) / 0.7) 70%,
+      hsl(var(--channel-osd-bg) / 0.3) 90%,
+      transparent 100%
+    );
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
   }
 
   .osd-top-gradient {
-    background: linear-gradient(to bottom, hsl(var(--channel-osd-bg) / 0.85), transparent);
+    background: linear-gradient(
+      to bottom,
+      hsl(var(--channel-osd-bg) / 0.92) 0%,
+      hsl(var(--channel-osd-bg) / 0.7) 50%,
+      hsl(var(--channel-osd-bg) / 0.3) 80%,
+      transparent 100%
+    );
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
   }
 
   .channel-badge {
