@@ -144,6 +144,13 @@ const PlayerPage = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (showChannelList) return;
+      if (synopsisProgram) {
+        if (e.key === "Escape" || e.key === "Enter" || e.key === "Backspace") {
+          e.preventDefault();
+          setSynopsisProgram(null);
+        }
+        return;
+      }
       switch (e.key) {
         case "ArrowUp":
           e.preventDefault();
@@ -161,20 +168,49 @@ const PlayerPage = () => {
           e.preventDefault();
           showNextPreview("prev");
           break;
-        case "Enter":
+        case "Enter": {
           e.preventDefault();
-          if (showPreview) {
-            confirmPreview();
+          if (e.repeat) {
+            if (!enterHandledRef.current) {
+              enterHandledRef.current = true;
+              openSynopsisForFocused();
+            }
+            break;
+          }
+          const id = focusedChannel?.id ?? "";
+          const now = Date.now();
+          const last = lastEnterRef.current;
+          if (id && last.id === id && now - last.time < 400) {
+            lastEnterRef.current = { id: "", time: 0 };
+            openSynopsisForFocused();
           } else {
-            setShowChannelList(true);
+            lastEnterRef.current = { id, time: now };
+            window.setTimeout(() => {
+              if (lastEnterRef.current.id === id && lastEnterRef.current.time === now) {
+                lastEnterRef.current = { id: "", time: 0 };
+                if (showPreview) {
+                  confirmPreview();
+                } else {
+                  setShowChannelList(true);
+                }
+              }
+            }, 400);
           }
           break;
+        }
       }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Enter") enterHandledRef.current = false;
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList]);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused]);
 
   // Auto-hide OSD after initial show
   useEffect(() => {
