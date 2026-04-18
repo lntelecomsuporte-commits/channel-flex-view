@@ -1,12 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useChannels, type Channel } from "@/hooks/useChannels";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTouchControls } from "@/hooks/useTouchControls";
 import { useAuth } from "@/hooks/useAuth";
+import { useEPG, type EPGProgram } from "@/hooks/useEPG";
 import VideoPlayer from "@/components/player/VideoPlayer";
 import ChannelOSD from "@/components/player/ChannelOSD";
 import ChannelPreview from "@/components/player/ChannelPreview";
 import ChannelList from "@/components/player/ChannelList";
+import SynopsisModal from "@/components/player/SynopsisModal";
 import { List, ChevronUp, ChevronDown } from "lucide-react";
 
 const PlayerPage = () => {
@@ -29,6 +31,24 @@ const PlayerPage = () => {
 
   const currentChannel: Channel | null = channels?.[currentIndex] ?? null;
   const previewChannel: Channel | null = previewIndex !== null ? channels?.[previewIndex] ?? null : null;
+  const focusedChannel: Channel | null = previewChannel ?? currentChannel;
+
+  const [synopsisProgram, setSynopsisProgram] = useState<EPGProgram | null>(null);
+  const lastEnterRef = useRef<{ id: string; time: number }>({ id: "", time: 0 });
+  const enterHandledRef = useRef(false);
+
+  const fc: any = focusedChannel;
+  const { data: focusedEpg } = useEPG({
+    epg_type: fc?.epg_type,
+    epg_url: fc?.epg_url,
+    epg_channel_id: fc?.epg_channel_id,
+  });
+
+  const openSynopsisForFocused = useCallback(() => {
+    if (focusedEpg?.current && focusedChannel) {
+      setSynopsisProgram(focusedEpg.current);
+    }
+  }, [focusedEpg, focusedChannel]);
 
   const showOSDTemporarily = useCallback(() => {
     setShowOSD(true);
@@ -124,6 +144,13 @@ const PlayerPage = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (showChannelList) return;
+      if (synopsisProgram) {
+        if (e.key === "Escape" || e.key === "Enter" || e.key === "Backspace") {
+          e.preventDefault();
+          setSynopsisProgram(null);
+        }
+        return;
+      }
       switch (e.key) {
         case "ArrowUp":
           e.preventDefault();
@@ -141,20 +168,49 @@ const PlayerPage = () => {
           e.preventDefault();
           showNextPreview("prev");
           break;
-        case "Enter":
+        case "Enter": {
           e.preventDefault();
-          if (showPreview) {
-            confirmPreview();
+          if (e.repeat) {
+            if (!enterHandledRef.current) {
+              enterHandledRef.current = true;
+              openSynopsisForFocused();
+            }
+            break;
+          }
+          const id = focusedChannel?.id ?? "";
+          const now = Date.now();
+          const last = lastEnterRef.current;
+          if (id && last.id === id && now - last.time < 400) {
+            lastEnterRef.current = { id: "", time: 0 };
+            openSynopsisForFocused();
           } else {
-            setShowChannelList(true);
+            lastEnterRef.current = { id, time: now };
+            window.setTimeout(() => {
+              if (lastEnterRef.current.id === id && lastEnterRef.current.time === now) {
+                lastEnterRef.current = { id: "", time: 0 };
+                if (showPreview) {
+                  confirmPreview();
+                } else {
+                  setShowChannelList(true);
+                }
+              }
+            }, 400);
           }
           break;
+        }
       }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Enter") enterHandledRef.current = false;
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList]);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused]);
 
   // Auto-hide OSD after initial show
   useEffect(() => {
@@ -266,6 +322,14 @@ const PlayerPage = () => {
             onClose={() => setShowChannelList(false)}
             onLogout={signOut}
           />
+
+          {synopsisProgram && (
+            <SynopsisModal
+              program={synopsisProgram}
+              channelName={focusedChannel?.name}
+              onClose={() => setSynopsisProgram(null)}
+            />
+          )}
         </>
       )}
     </div>
