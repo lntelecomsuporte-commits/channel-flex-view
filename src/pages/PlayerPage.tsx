@@ -322,6 +322,14 @@ const PlayerPage = () => {
             onClose={() => setShowChannelList(false)}
             onLogout={signOut}
           />
+
+          {synopsisProgram && (
+            <SynopsisModal
+              program={synopsisProgram}
+              channelName={focusedChannel?.name}
+              onClose={() => setSynopsisProgram(null)}
+            />
+          )}
         </>
       )}
     </div>
