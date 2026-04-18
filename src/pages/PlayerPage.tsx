@@ -1,12 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useChannels, type Channel } from "@/hooks/useChannels";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTouchControls } from "@/hooks/useTouchControls";
 import { useAuth } from "@/hooks/useAuth";
+import { useEPG, type EPGProgram } from "@/hooks/useEPG";
 import VideoPlayer from "@/components/player/VideoPlayer";
 import ChannelOSD from "@/components/player/ChannelOSD";
 import ChannelPreview from "@/components/player/ChannelPreview";
 import ChannelList from "@/components/player/ChannelList";
+import SynopsisModal from "@/components/player/SynopsisModal";
 import { List, ChevronUp, ChevronDown } from "lucide-react";
 
 const PlayerPage = () => {
@@ -29,6 +31,24 @@ const PlayerPage = () => {
 
   const currentChannel: Channel | null = channels?.[currentIndex] ?? null;
   const previewChannel: Channel | null = previewIndex !== null ? channels?.[previewIndex] ?? null : null;
+  const focusedChannel: Channel | null = previewChannel ?? currentChannel;
+
+  const [synopsisProgram, setSynopsisProgram] = useState<EPGProgram | null>(null);
+  const lastEnterRef = useRef<{ id: string; time: number }>({ id: "", time: 0 });
+  const enterHandledRef = useRef(false);
+
+  const fc: any = focusedChannel;
+  const { data: focusedEpg } = useEPG({
+    epg_type: fc?.epg_type,
+    epg_url: fc?.epg_url,
+    epg_channel_id: fc?.epg_channel_id,
+  });
+
+  const openSynopsisForFocused = useCallback(() => {
+    if (focusedEpg?.current && focusedChannel) {
+      setSynopsisProgram(focusedEpg.current);
+    }
+  }, [focusedEpg, focusedChannel]);
 
   const showOSDTemporarily = useCallback(() => {
     setShowOSD(true);
