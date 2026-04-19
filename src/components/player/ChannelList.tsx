@@ -278,8 +278,35 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
   }, [visible]);
 
   useEffect(() => {
-    itemRefs.current[focusedIndex]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    listRef.current?.scrollToItem(focusedIndex, "smart");
   }, [focusedIndex]);
+
+  // Measure container for FixedSizeList
+  useEffect(() => {
+    if (!visible) return;
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => setListSize({ width: el.clientWidth, height: el.clientHeight });
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [visible]);
+
+  const setItemRef = (index: number, el: HTMLDivElement | null) => {
+    itemRefs.current[index] = el;
+  };
+
+  const rowData = useMemo<RowData>(() => ({
+    filteredChannels,
+    channels,
+    currentIndex,
+    focusedIndex,
+    epgMap,
+    onSelect,
+    onSynopsis: (p: EPGProgram) => setSynopsisProgram(p),
+    setItemRef,
+  }), [filteredChannels, channels, currentIndex, focusedIndex, epgMap, onSelect]);
 
   useEffect(() => {
     if (!visible) return;
