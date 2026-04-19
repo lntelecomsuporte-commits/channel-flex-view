@@ -101,10 +101,6 @@ const AdminPanel = () => {
 
     // If epg_grab_logo is checked, fetch logo from EPG XML
     let logoUrl = channelForm.logo_url || null;
-    const normalizeGithub = (u: string) => {
-      const m = u?.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/);
-      return m ? `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}` : u;
-    };
     if ((channelForm.epg_type === "iptv_epg_org" || channelForm.epg_type === "open_epg" || channelForm.epg_type === "github_xml") && channelForm.epg_grab_logo && channelForm.epg_channel_id) {
       try {
         const defaultUrl = channelForm.epg_type === "open_epg" ? "https://www.open-epg.com/files/brazil1.xml" : (channelForm.epg_type === "github_xml" ? "" : "https://iptv-epg.org/files/epg-br.xml");
