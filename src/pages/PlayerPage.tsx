@@ -139,6 +139,7 @@ const PlayerPage = () => {
           showOSDTemporarily();
         }
       }
+    },
   });
 
   // Hardware/remote Back button (Android TV) — close overlays instead of exiting
