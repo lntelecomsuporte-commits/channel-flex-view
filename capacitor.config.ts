@@ -8,8 +8,8 @@ const config: CapacitorConfig = {
     allowMixedContent: true,
   },
   server: {
-    url: 'https://dce7d339-2c3f-4716-a54b-6eb723a76e37.lovableproject.com?forceHideBadge=true',
-    cleartext: true,
+    url: 'https://tv.lntelecom.net',
+    cleartext: false,
   },
 };
 
