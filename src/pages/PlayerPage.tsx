@@ -4,6 +4,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useTouchControls } from "@/hooks/useTouchControls";
 import { useAuth } from "@/hooks/useAuth";
 import { useEPG, type EPGProgram } from "@/hooks/useEPG";
+import { useNativeBackButton } from "@/hooks/useNativeBackButton";
 import VideoPlayer from "@/components/player/VideoPlayer";
 import ChannelOSD from "@/components/player/ChannelOSD";
 import ChannelPreview from "@/components/player/ChannelPreview";
