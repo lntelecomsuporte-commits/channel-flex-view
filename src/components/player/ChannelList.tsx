@@ -182,11 +182,69 @@ function SynopsisModal({ program, onClose }: { program: EPGProgram; onClose: () 
   );
 }
 
+interface RowData {
+  filteredChannels: Channel[];
+  channels: Channel[];
+  currentIndex: number;
+  focusedIndex: number;
+  epgMap: Map<string, EPGProgram[]>;
+  onSelect: (index: number) => void;
+  onSynopsis: (p: EPGProgram) => void;
+  setItemRef: (index: number, el: HTMLDivElement | null) => void;
+}
+
+const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
+  const { filteredChannels, channels, currentIndex, focusedIndex, epgMap, onSelect, onSynopsis, setItemRef } = data;
+  const channel = filteredChannels[index];
+  const ch = channel as any;
+  const programs = epgMap.get(channel.id) || [];
+  const altText = ch.epg_alt_text as string | null;
+  const epgType = ch.epg_type as string | null;
+  const realIndex = channels.indexOf(channel);
+  const isActive = realIndex === currentIndex;
+  const isFocused = index === focusedIndex;
+
+  return (
+    <div style={style}>
+      <div
+        ref={(el) => setItemRef(index, el)}
+        onClick={() => onSelect(realIndex)}
+        className={`flex items-center gap-3 px-3 sm:px-4 h-full cursor-pointer transition-colors border-b border-border/20 ${
+          isFocused
+            ? "bg-primary/15 ring-1 ring-inset ring-primary/40"
+            : isActive
+            ? "bg-accent/20"
+            : "hover:bg-accent/10"
+        }`}
+      >
+        <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-md overflow-hidden bg-white/10 flex items-center justify-center">
+          {channel.logo_url ? (
+            <img src={channel.logo_url} alt={channel.name} className="w-full h-full object-contain p-0.5" loading="lazy" />
+          ) : (
+            <span className="text-xs text-muted-foreground font-bold">{channel.name.substring(0, 2)}</span>
+          )}
+        </div>
+        <div className="flex-shrink-0 w-20 sm:w-24">
+          <span className="text-lg sm:text-xl font-bold text-foreground">{String(channel.channel_number).padStart(3, "0")}</span>
+          <p className="text-xs sm:text-sm text-muted-foreground truncate leading-tight">{channel.name}</p>
+        </div>
+        <div className="flex-1 min-w-0 flex items-center">
+          <ChannelEPGInfo programs={programs} altText={altText} epgType={epgType} onClickSynopsis={onSynopsis} />
+        </div>
+        {isActive && <span className="text-xs text-primary font-bold flex-shrink-0">● ATUAL</span>}
+      </div>
+    </div>
+  );
+});
+Row.displayName = "ChannelRow";
+
 const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLogout }: ChannelListProps) => {
   const [focusedIndex, setFocusedIndex] = useState(currentIndex);
   const [synopsisProgram, setSynopsisProgram] = useState<EPGProgram | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const listRef = useRef<HTMLDivElement>(null);
+  const [listSize, setListSize] = useState({ width: 0, height: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<FixedSizeList>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
 
