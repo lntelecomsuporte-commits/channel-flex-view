@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+
 const getProxyBaseUrl = () => {
   const backendUrl = import.meta.env.VITE_SUPABASE_URL;
 
@@ -10,6 +12,12 @@ const getProxyBaseUrl = () => {
 
 export const getPlayableStreamUrl = (streamUrl: string) => {
   if (!streamUrl) {
+    return streamUrl;
+  }
+
+  // Em apps nativos (APK Android/iOS) NUNCA proxiar — vai direto na origem,
+  // o que é especialmente importante para streams de rede local (latência mínima).
+  if (Capacitor.isNativePlatform()) {
     return streamUrl;
   }
 
