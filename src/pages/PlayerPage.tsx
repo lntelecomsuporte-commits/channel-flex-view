@@ -139,7 +139,19 @@ const PlayerPage = () => {
           showOSDTemporarily();
         }
       }
-    },
+  });
+
+  // Hardware/remote Back button (Android TV) — close overlays instead of exiting
+  useNativeBackButton(() => {
+    if (synopsisProgram) { setSynopsisProgram(null); return true; }
+    if (showChannelList) { setShowChannelList(false); return true; }
+    if (showPreview) {
+      setShowPreview(false);
+      setPreviewIndex(null);
+      if (previewTimeout) clearTimeout(previewTimeout);
+      return true;
+    }
+    return false; // let app exit
   });
 
   useEffect(() => {
