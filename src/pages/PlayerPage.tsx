@@ -4,6 +4,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useTouchControls } from "@/hooks/useTouchControls";
 import { useAuth } from "@/hooks/useAuth";
 import { useEPG, type EPGProgram } from "@/hooks/useEPG";
+import { useNativeBackButton } from "@/hooks/useNativeBackButton";
 import VideoPlayer from "@/components/player/VideoPlayer";
 import ChannelOSD from "@/components/player/ChannelOSD";
 import ChannelPreview from "@/components/player/ChannelPreview";
@@ -139,6 +140,19 @@ const PlayerPage = () => {
         }
       }
     },
+  });
+
+  // Hardware/remote Back button (Android TV) — close overlays instead of exiting
+  useNativeBackButton(() => {
+    if (synopsisProgram) { setSynopsisProgram(null); return true; }
+    if (showChannelList) { setShowChannelList(false); return true; }
+    if (showPreview) {
+      setShowPreview(false);
+      setPreviewIndex(null);
+      if (previewTimeout) clearTimeout(previewTimeout);
+      return true;
+    }
+    return false; // let app exit
   });
 
   useEffect(() => {
