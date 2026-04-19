@@ -417,66 +417,24 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
       </div>
 
       {/* Channel list */}
-      <div className="flex-1 overflow-y-auto" ref={listRef}>
-        {filteredChannels.map((channel, index) => {
-          const ch = channel as any;
-          const programs = epgMap.get(channel.id) || [];
-          const altText = ch.epg_alt_text as string | null;
-          const epgType = ch.epg_type as string | null;
-          const realIndex = channels.indexOf(channel);
-          const isActive = realIndex === currentIndex;
-
-          return (
-            <div
-              key={channel.id}
-              ref={(el) => { itemRefs.current[index] = el; }}
-              onClick={() => onSelect(realIndex)}
-              className={`flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 cursor-pointer transition-colors border-b border-border/20 ${
-                index === focusedIndex
-                  ? "bg-primary/15 ring-1 ring-inset ring-primary/40"
-                  : isActive
-                  ? "bg-accent/20"
-                  : "hover:bg-accent/10"
-              }`}
-            >
-              {/* Logo */}
-              <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-md overflow-hidden bg-white/10 flex items-center justify-center">
-                {channel.logo_url ? (
-                  <img src={channel.logo_url} alt={channel.name} className="w-full h-full object-contain p-0.5" />
-                ) : (
-                  <span className="text-xs text-muted-foreground font-bold">{channel.name.substring(0, 2)}</span>
-                )}
-              </div>
-
-              {/* Number + Name */}
-              <div className="flex-shrink-0 w-20 sm:w-24">
-                <span className="text-lg sm:text-xl font-bold text-foreground">{String(channel.channel_number).padStart(3, "0")}</span>
-                <p className="text-xs sm:text-sm text-muted-foreground truncate leading-tight">{channel.name}</p>
-              </div>
-
-              {/* EPG info */}
-              <div className="flex-1 min-w-0 flex items-center">
-                <ChannelEPGInfo
-                  programs={programs}
-                  altText={altText}
-                  epgType={epgType}
-                  onClickSynopsis={(prog) => setSynopsisProgram(prog)}
-                />
-              </div>
-
-              {/* Active indicator */}
-              {isActive && (
-                <span className="text-xs text-primary font-bold flex-shrink-0">● ATUAL</span>
-              )}
-            </div>
-          );
-        })}
-
-        {filteredChannels.length === 0 && (
+      <div className="flex-1 min-h-0" ref={containerRef}>
+        {filteredChannels.length === 0 ? (
           <div className="flex items-center justify-center py-12">
             <p className="text-muted-foreground text-sm">Nenhum canal encontrado.</p>
           </div>
-        )}
+        ) : listSize.height > 0 ? (
+          <FixedSizeList
+            ref={listRef}
+            height={listSize.height}
+            width={listSize.width}
+            itemCount={filteredChannels.length}
+            itemSize={72}
+            itemData={rowData}
+            overscanCount={4}
+          >
+            {Row}
+          </FixedSizeList>
+        ) : null}
       </div>
 
       {synopsisProgram && <SynopsisModal program={synopsisProgram} onClose={() => setSynopsisProgram(null)} />}
