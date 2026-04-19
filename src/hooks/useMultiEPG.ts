@@ -12,8 +12,7 @@ function parseXmltvDate(str: string): Date | null {
   const match = str.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s*([+-]\d{4})?/);
   if (!match) return null;
   const [, y, mo, d, h, mi, s, tz] = match;
-  const tzPart = tz ? tz.replace(/(\d{2})(\d{2})/, "$1:$2") : "-03:00";
-  const isoStr = `${y}-${mo}-${d}T${h}:${mi}:${s}${tzPart}`;
+  const isoStr = `${y}-${mo}-${d}T${h}:${mi}:${s}${tz ? tz.replace(/(\d{2})(\d{2})/, "$1:$2") : "+00:00"}`;
   return new Date(isoStr);
 }
 
