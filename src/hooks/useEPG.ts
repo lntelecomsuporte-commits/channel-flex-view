@@ -42,6 +42,14 @@ async function fetchIptvEpgOrg(xmlUrl: string, channelId: string): Promise<EPGPr
   return programs;
 }
 
+// Convert github.com blob URLs to raw.githubusercontent.com
+export function normalizeGithubUrl(url: string): string {
+  if (!url) return url;
+  const m = url.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/);
+  if (m) return `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}`;
+  return url;
+}
+
 function parseXmltvDate(str: string): Date | null {
   // Format: 20260414120000 +0000 or 20260414120000
   const match = str.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s*([+-]\d{4})?/);
@@ -88,8 +96,8 @@ export function useEPG(channel: {
 
       let programs: EPGProgram[] = [];
 
-      if ((effectiveType === "iptv_epg_org" || effectiveType === "open_epg") && epg_channel_id) {
-        programs = await fetchIptvEpgOrg(epg_url, epg_channel_id);
+      if ((effectiveType === "iptv_epg_org" || effectiveType === "open_epg" || effectiveType === "github_xml") && epg_channel_id) {
+        programs = await fetchIptvEpgOrg(normalizeGithubUrl(epg_url), epg_channel_id);
       } else {
         // EPG.PW format
         let url = epg_url;

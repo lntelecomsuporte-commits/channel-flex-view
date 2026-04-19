@@ -1,5 +1,5 @@
 import { useQueries } from "@tanstack/react-query";
-import type { EPGProgram } from "./useEPG";
+import { normalizeGithubUrl, type EPGProgram } from "./useEPG";
 
 interface ChannelEPGInput {
   id: string;
@@ -19,8 +19,8 @@ function parseXmltvDate(str: string): Date | null {
 async function fetchEPG(ch: ChannelEPGInput): Promise<EPGProgram[]> {
   if (!ch.epg_url) return [];
 
-  if ((ch.epg_type === "iptv_epg_org" || ch.epg_type === "open_epg") && ch.epg_channel_id) {
-    const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/epg-proxy?url=${encodeURIComponent(ch.epg_url)}`;
+  if ((ch.epg_type === "iptv_epg_org" || ch.epg_type === "open_epg" || ch.epg_type === "github_xml") && ch.epg_channel_id) {
+    const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/epg-proxy?url=${encodeURIComponent(normalizeGithubUrl(ch.epg_url))}`;
     const res = await fetch(proxyUrl);
     if (!res.ok) return [];
     const text = await res.text();
