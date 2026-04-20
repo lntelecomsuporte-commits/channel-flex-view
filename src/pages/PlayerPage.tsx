@@ -369,7 +369,22 @@ const PlayerPage = () => {
               direction={previewIndex !== null && previewIndex > currentIndex ? "next" : "prev"}
             />
           ) : (
-            <ChannelOSD channel={currentChannel} visible={showOSD} />
+            <>
+              <FavoritesBar
+                channels={channels}
+                favoriteIds={favorites.map((f) => f.channel_id)}
+                currentChannelId={currentChannel.id}
+                visible={showFavoritesBar}
+                onSelect={(ch) => {
+                  const idx = channels.findIndex((c) => c.id === ch.id);
+                  if (idx >= 0) {
+                    setCurrentIndex(idx);
+                    showOSDTemporarily();
+                  }
+                }}
+              />
+              <ChannelOSD channel={currentChannel} visible={showOSD} isFavorite={isFavorite(currentChannel.id)} />
+            </>
           )}
 
           {/* Top info bar */}
