@@ -449,7 +449,7 @@ const PlayerPage = () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, toggleFavorite, showOSDTemporarily, favFocusIndex, favorites, channels, currentChannel, showOSD, showFavoritesBar, handleBackPress]);
+  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, toggleFavorite, showOSDTemporarily, favFocusIndex, favorites, channels, currentChannel, showOSD, showFavoritesBar, handleBackPress, pushDigit, numBuffer, jumpToChannelNumber]);
 
   // Clear favorites focus when OSD hides
   useEffect(() => {
