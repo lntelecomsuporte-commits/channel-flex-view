@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">LN TV</string>
+    <string name="title_activity_main">LN TV</string>
+    <string name="package_name">app.lovable.dce7d3392c3f4716a54b6eb723a76e37</string>
+    <string name="custom_url_scheme">app.lovable.dce7d3392c3f4716a54b6eb723a76e37</string>
+</resources>
