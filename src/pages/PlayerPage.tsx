@@ -60,6 +60,7 @@ const PlayerPage = () => {
   const focusedChannel: Channel | null = previewChannel ?? currentChannel;
 
   const [synopsisProgram, setSynopsisProgram] = useState<EPGProgram | null>(null);
+  const [favFocusIndex, setFavFocusIndex] = useState<number | null>(null);
   const lastEnterRef = useRef<{ id: string; time: number }>({ id: "", time: 0 });
   const enterHandledRef = useRef(false);
   const enterLongPressFiredRef = useRef(false);
@@ -223,10 +224,67 @@ const PlayerPage = () => {
         }
         return;
       }
+      // Build ordered favorite channels (matches FavoritesBar ordering)
+      const favChannels = favorites
+        .map((f) => channels?.find((c) => c.id === f.channel_id))
+        .filter((c): c is Channel => !!c);
+
+      // ---- Favorites focus mode (only active when OSD+favorites bar is visible) ----
+      if (favFocusIndex !== null) {
+        switch (e.key) {
+          case "ArrowLeft":
+            e.preventDefault();
+            setFavFocusIndex((i) => {
+              if (i === null || favChannels.length === 0) return i;
+              return i > 0 ? i - 1 : favChannels.length - 1;
+            });
+            showOSDTemporarily(true);
+            return;
+          case "ArrowRight":
+            e.preventDefault();
+            setFavFocusIndex((i) => {
+              if (i === null || favChannels.length === 0) return i;
+              return i < favChannels.length - 1 ? i + 1 : 0;
+            });
+            showOSDTemporarily(true);
+            return;
+          case "ArrowDown":
+          case "Escape":
+          case "Backspace":
+            e.preventDefault();
+            setFavFocusIndex(null);
+            return;
+          case "ArrowUp":
+            // stay in favorites focus
+            e.preventDefault();
+            return;
+          case "Enter":
+            e.preventDefault();
+            if (e.repeat) return;
+            if (favChannels.length > 0 && favFocusIndex < favChannels.length) {
+              const target = favChannels[favFocusIndex];
+              const idx = channels?.findIndex((c) => c.id === target.id) ?? -1;
+              if (idx >= 0) {
+                setCurrentIndex(idx);
+                setFavFocusIndex(null);
+                showOSDTemporarily(false);
+              }
+            }
+            return;
+        }
+      }
+
       switch (e.key) {
         case "ArrowUp":
           e.preventDefault();
           comboRef.current = [];
+          // If OSD+favorites bar is showing and we have favorites, enter favorites focus
+          if (showOSD && showFavoritesBar && favChannels.length > 0) {
+            const activeIdx = favChannels.findIndex((c) => c.id === currentChannel?.id);
+            setFavFocusIndex(activeIdx >= 0 ? activeIdx : 0);
+            showOSDTemporarily(true);
+            break;
+          }
           changeChannel("up");
           break;
         case "ArrowDown":
@@ -305,7 +363,12 @@ const PlayerPage = () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, toggleFavorite, showOSDTemporarily]);
+  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, toggleFavorite, showOSDTemporarily, favFocusIndex, favorites, channels, currentChannel, showOSD, showFavoritesBar]);
+
+  // Clear favorites focus when OSD hides
+  useEffect(() => {
+    if (!showFavoritesBar || !showOSD) setFavFocusIndex(null);
+  }, [showFavoritesBar, showOSD]);
 
   // Auto-hide OSD after initial show
   useEffect(() => {
@@ -375,6 +438,7 @@ const PlayerPage = () => {
                 favoriteIds={favorites.map((f) => f.channel_id)}
                 currentChannelId={currentChannel.id}
                 visible={showFavoritesBar}
+                focusedIndex={favFocusIndex}
                 onSelect={(ch) => {
                   const idx = channels.findIndex((c) => c.id === ch.id);
                   if (idx >= 0) {

@@ -8,11 +8,14 @@ interface FavoritesBarProps {
   currentChannelId: string | null;
   visible: boolean;
   onSelect: (channel: Channel) => void;
+  /** Index of the favorite currently focused via remote (null = no focus, OSD only) */
+  focusedIndex?: number | null;
 }
 
-const FavoritesBar = ({ channels, favoriteIds, currentChannelId, visible, onSelect }: FavoritesBarProps) => {
+const FavoritesBar = ({ channels, favoriteIds, currentChannelId, visible, onSelect, focusedIndex }: FavoritesBarProps) => {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLButtonElement>(null);
+  const focusedRef = useRef<HTMLButtonElement>(null);
 
   // ordered favorites
   const favs = favoriteIds
@@ -20,10 +23,10 @@ const FavoritesBar = ({ channels, favoriteIds, currentChannelId, visible, onSele
     .filter((c): c is Channel => !!c);
 
   useEffect(() => {
-    if (visible && activeRef.current) {
-      activeRef.current.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-    }
-  }, [visible, currentChannelId]);
+    if (!visible) return;
+    const target = focusedRef.current ?? activeRef.current;
+    target?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }, [visible, currentChannelId, focusedIndex]);
 
   if (!visible) return null;
 
@@ -45,7 +48,7 @@ const FavoritesBar = ({ channels, favoriteIds, currentChannelId, visible, onSele
       <div className="px-4 sm:px-6 lg:px-8 mb-1.5 flex items-center gap-1.5">
         <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
         <span className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
-          Favoritos
+          Favoritos {focusedIndex != null && <span className="text-primary">• ↑↓ sair · ←→ navegar · OK assistir</span>}
         </span>
       </div>
       <div
@@ -53,16 +56,19 @@ const FavoritesBar = ({ channels, favoriteIds, currentChannelId, visible, onSele
         className="flex gap-3 sm:gap-4 overflow-x-auto px-4 sm:px-6 lg:px-8 pb-2 scrollbar-thin"
         style={{ scrollbarWidth: "thin" }}
       >
-        {favs.map((ch) => {
+        {favs.map((ch, idx) => {
           const isActive = ch.id === currentChannelId;
+          const isFocused = focusedIndex === idx;
           return (
             <button
               key={ch.id}
-              ref={isActive ? activeRef : undefined}
+              ref={isFocused ? focusedRef : isActive ? activeRef : undefined}
               onClick={(e) => { e.stopPropagation(); onSelect(ch); }}
               className={`flex-shrink-0 flex flex-col items-center gap-1 rounded-lg p-2 transition-all ${
-                isActive
-                  ? "bg-primary/20 ring-2 ring-primary scale-105"
+                isFocused
+                  ? "bg-primary/30 ring-2 ring-primary scale-110"
+                  : isActive
+                  ? "bg-primary/20 ring-2 ring-primary/60 scale-105"
                   : "bg-background/60 backdrop-blur-sm hover:bg-background/80 border border-border/40"
               }`}
               style={{ width: 96 }}
