@@ -12,11 +12,14 @@ import ChannelPreview from "@/components/player/ChannelPreview";
 import ChannelList from "@/components/player/ChannelList";
 import SynopsisModal from "@/components/player/SynopsisModal";
 import StatsOverlay from "@/components/player/StatsOverlay";
+import FavoritesBar from "@/components/player/FavoritesBar";
+import { useFavorites } from "@/hooks/useFavorites";
 import { List, ChevronUp, ChevronDown } from "lucide-react";
 
 const PlayerPage = () => {
   const { signOut } = useAuth();
   const isMobile = useIsMobile();
+  const { favorites, isFavorite, toggleFavorite } = useFavorites();
 
   useEffect(() => {
     document.body.classList.add("player-mode");
@@ -45,6 +48,7 @@ const PlayerPage = () => {
   );
 
   const [showOSD, setShowOSD] = useState(true);
+  const [showFavoritesBar, setShowFavoritesBar] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showChannelList, setShowChannelList] = useState(false);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
@@ -58,6 +62,9 @@ const PlayerPage = () => {
   const [synopsisProgram, setSynopsisProgram] = useState<EPGProgram | null>(null);
   const lastEnterRef = useRef<{ id: string; time: number }>({ id: "", time: 0 });
   const enterHandledRef = useRef(false);
+  const enterLongPressFiredRef = useRef(false);
+  const enterLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const LONG_PRESS_MS = 600;
 
   // Easter egg: ← ← ← → → ← + OK -> stats overlay
   const [showStats, setShowStats] = useState(false);
@@ -94,8 +101,12 @@ const PlayerPage = () => {
 
   const showOSDTemporarily = useCallback(() => {
     setShowOSD(true);
+    setShowFavoritesBar(true);
     if (osdTimeout) clearTimeout(osdTimeout);
-    const t = setTimeout(() => setShowOSD(false), 3000);
+    const t = setTimeout(() => {
+      setShowOSD(false);
+      setShowFavoritesBar(false);
+    }, 4000);
     setOsdTimeout(t);
   }, [osdTimeout]);
 
@@ -240,38 +251,52 @@ const PlayerPage = () => {
             setShowStats((s) => !s);
             break;
           }
-          if (e.repeat) {
-            if (!enterHandledRef.current) {
-              enterHandledRef.current = true;
-              openSynopsisForFocused();
-            }
-            break;
-          }
-          const id = focusedChannel?.id ?? "";
-          const now = Date.now();
-          const last = lastEnterRef.current;
-          if (id && last.id === id && now - last.time < 400) {
-            lastEnterRef.current = { id: "", time: 0 };
-            openSynopsisForFocused();
-          } else {
-            lastEnterRef.current = { id, time: now };
-            window.setTimeout(() => {
-              if (lastEnterRef.current.id === id && lastEnterRef.current.time === now) {
-                lastEnterRef.current = { id: "", time: 0 };
-                if (showPreview) {
-                  confirmPreview();
-                } else {
-                  setShowChannelList(true);
-                }
-              }
-            }, 400);
-          }
+          if (e.repeat) break;
+          // Arm long-press timer for favorite toggle
+          enterLongPressFiredRef.current = false;
+          if (enterLongPressTimerRef.current) clearTimeout(enterLongPressTimerRef.current);
+          const focusedId = focusedChannel?.id ?? "";
+          enterLongPressTimerRef.current = setTimeout(() => {
+            enterLongPressFiredRef.current = true;
+            if (focusedId) toggleFavorite(focusedId);
+          }, LONG_PRESS_MS);
           break;
         }
       }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === "Enter") enterHandledRef.current = false;
+      if (e.key !== "Enter") return;
+      enterHandledRef.current = false;
+      if (enterLongPressTimerRef.current) {
+        clearTimeout(enterLongPressTimerRef.current);
+        enterLongPressTimerRef.current = null;
+      }
+      if (enterLongPressFiredRef.current) {
+        enterLongPressFiredRef.current = false;
+        return;
+      }
+      if (showChannelList || synopsisProgram || showStats) return;
+      const id = focusedChannel?.id ?? "";
+      const now = Date.now();
+      const last = lastEnterRef.current;
+      // Double press within 400ms -> open list (or confirm preview)
+      if (id && last.id === id && now - last.time < 400) {
+        lastEnterRef.current = { id: "", time: 0 };
+        if (showPreview) confirmPreview();
+        else setShowChannelList(true);
+        return;
+      }
+      lastEnterRef.current = { id, time: now };
+      if (showPreview) {
+        window.setTimeout(() => {
+          if (lastEnterRef.current.id === id && lastEnterRef.current.time === now) {
+            lastEnterRef.current = { id: "", time: 0 };
+            confirmPreview();
+          }
+        }, 400);
+      } else {
+        showOSDTemporarily();
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -280,7 +305,7 @@ const PlayerPage = () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats]);
+  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, toggleFavorite, showOSDTemporarily]);
 
   // Auto-hide OSD after initial show
   useEffect(() => {
@@ -344,7 +369,22 @@ const PlayerPage = () => {
               direction={previewIndex !== null && previewIndex > currentIndex ? "next" : "prev"}
             />
           ) : (
-            <ChannelOSD channel={currentChannel} visible={showOSD} />
+            <>
+              <FavoritesBar
+                channels={channels}
+                favoriteIds={favorites.map((f) => f.channel_id)}
+                currentChannelId={currentChannel.id}
+                visible={showFavoritesBar}
+                onSelect={(ch) => {
+                  const idx = channels.findIndex((c) => c.id === ch.id);
+                  if (idx >= 0) {
+                    setCurrentIndex(idx);
+                    showOSDTemporarily();
+                  }
+                }}
+              />
+              <ChannelOSD channel={currentChannel} visible={showOSD} isFavorite={isFavorite(currentChannel.id)} />
+            </>
           )}
 
           {/* Top info bar */}

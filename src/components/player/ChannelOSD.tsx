@@ -1,5 +1,6 @@
 import type { Channel } from "@/hooks/useChannels";
 import { useEPG } from "@/hooks/useEPG";
+import { Star } from "lucide-react";
 
 function RatingBadge({ rating }: { rating: string | null }) {
   if (!rating) return null;
@@ -21,6 +22,7 @@ function RatingBadge({ rating }: { rating: string | null }) {
 interface ChannelOSDProps {
   channel: Channel;
   visible: boolean;
+  isFavorite?: boolean;
 }
 
 function formatTime(dateStr: string) {
@@ -45,7 +47,7 @@ function ProgramProgress({ startDate, endDate }: { startDate: string; endDate: s
   );
 }
 
-const ChannelOSD = ({ channel, visible }: ChannelOSDProps) => {
+const ChannelOSD = ({ channel, visible, isFavorite }: ChannelOSDProps) => {
   const ch = channel as any;
   const { data: epg } = useEPG({
     epg_type: ch.epg_type,
@@ -78,9 +80,14 @@ const ChannelOSD = ({ channel, visible }: ChannelOSDProps) => {
 
         {/* Info block */}
         <div className="flex-1 min-w-0">
-          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-foreground leading-tight">
-            {channel.name}
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-foreground leading-tight truncate">
+              {channel.name}
+            </h2>
+            {isFavorite && (
+              <Star className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-500 fill-yellow-500 flex-shrink-0" />
+            )}
+          </div>
 
           {epg?.current ? (
             <div className="mt-1.5 sm:mt-2">
