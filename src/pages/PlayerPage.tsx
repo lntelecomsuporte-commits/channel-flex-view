@@ -295,7 +295,7 @@ const PlayerPage = () => {
           }
         }, 400);
       } else {
-        showOSDTemporarily();
+        showOSDTemporarily(true);
       }
     };
 
