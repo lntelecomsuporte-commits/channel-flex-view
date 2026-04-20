@@ -12,6 +12,8 @@ import ChannelPreview from "@/components/player/ChannelPreview";
 import ChannelList from "@/components/player/ChannelList";
 import SynopsisModal from "@/components/player/SynopsisModal";
 import StatsOverlay from "@/components/player/StatsOverlay";
+import FavoritesBar from "@/components/player/FavoritesBar";
+import { useFavorites } from "@/hooks/useFavorites";
 import { List, ChevronUp, ChevronDown } from "lucide-react";
 
 const PlayerPage = () => {
