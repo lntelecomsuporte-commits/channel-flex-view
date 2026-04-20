@@ -361,6 +361,7 @@ const PlayerPage = () => {
           default:
             if (isSelectKey(e)) {
               e.preventDefault();
+              enterHandledRef.current = true;
               if (favChannels.length > 0 && favFocusIndex < favChannels.length) {
                 const target = favChannels[favFocusIndex];
                 const idx = channels?.findIndex((c) => c.id === target.id) ?? -1;
