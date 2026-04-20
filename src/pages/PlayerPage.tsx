@@ -420,27 +420,23 @@ const PlayerPage = () => {
         return;
       }
       if (showChannelList || synopsisProgram || showStats) return;
+      // Preview ativo: OK confirma instantaneamente (sem delay de double-press)
+      if (showPreview) {
+        lastEnterRef.current = { id: "", time: 0 };
+        confirmPreview();
+        return;
+      }
       const id = focusedChannel?.id ?? "";
       const now = Date.now();
       const last = lastEnterRef.current;
-      // Double press within 400ms -> open list (or confirm preview)
+      // Double press within 400ms -> open list
       if (id && last.id === id && now - last.time < 400) {
         lastEnterRef.current = { id: "", time: 0 };
-        if (showPreview) confirmPreview();
-        else setShowChannelList(true);
+        setShowChannelList(true);
         return;
       }
       lastEnterRef.current = { id, time: now };
-      if (showPreview) {
-        window.setTimeout(() => {
-          if (lastEnterRef.current.id === id && lastEnterRef.current.time === now) {
-            lastEnterRef.current = { id: "", time: 0 };
-            confirmPreview();
-          }
-        }, 400);
-      } else {
-        showOSDTemporarily(true);
-      }
+      showOSDTemporarily(true);
     };
 
     window.addEventListener("keydown", handleKeyDown);
