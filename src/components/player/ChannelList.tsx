@@ -4,7 +4,7 @@ import type { Channel } from "@/hooks/useChannels";
 import { useMultiEPG } from "@/hooks/useMultiEPG";
 import type { EPGProgram } from "@/hooks/useEPG";
 import { useFavorites } from "@/hooks/useFavorites";
-import { isSelectKey } from "@/lib/remoteKeys";
+import { isSelectKey, isPageNextKey, isPagePrevKey } from "@/lib/remoteKeys";
 import { LogOut, X, Search, Info, Star } from "lucide-react";
 import { CachedLogo } from "@/components/CachedLogo";
 
@@ -336,6 +336,20 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
       }
 
       const isSearchFocused = document.activeElement === searchRef.current;
+
+      // FF / RW / Ch+ / Ch- → paginate by 10
+      if (isPageNextKey(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+        setFocusedIndex((prev) => Math.min(filteredChannels.length - 1, prev + 10));
+        return;
+      }
+      if (isPagePrevKey(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+        setFocusedIndex((prev) => Math.max(0, prev - 10));
+        return;
+      }
 
       switch (e.key) {
         case "ArrowUp":
