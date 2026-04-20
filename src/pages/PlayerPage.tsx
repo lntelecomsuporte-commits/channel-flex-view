@@ -4,6 +4,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useTouchControls } from "@/hooks/useTouchControls";
 import { useAuth } from "@/hooks/useAuth";
 import { useEPG, type EPGProgram } from "@/hooks/useEPG";
+import { useMultiEPG } from "@/hooks/useMultiEPG";
 import { useNativeBackButton } from "@/hooks/useNativeBackButton";
 import VideoPlayer, { type VideoPlayerHandle } from "@/components/player/VideoPlayer";
 import ChannelOSD from "@/components/player/ChannelOSD";
@@ -24,6 +25,25 @@ const PlayerPage = () => {
 
   const { data: channels, isLoading } = useChannels();
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Pré-carrega EPG em segundo plano (cache compartilhado com a ChannelList)
+  // Espera 3s após o player iniciar para não competir com o stream
+  const [preloadEpg, setPreloadEpg] = useState(false);
+  useEffect(() => {
+    if (!channels?.length) return;
+    const t = setTimeout(() => setPreloadEpg(true), 3000);
+    return () => clearTimeout(t);
+  }, [channels?.length]);
+  useMultiEPG(
+    channels?.map((ch: any) => ({
+      id: ch.id,
+      epg_type: ch.epg_type,
+      epg_url: ch.epg_url,
+      epg_channel_id: ch.epg_channel_id,
+    })) ?? [],
+    preloadEpg
+  );
+
   const [showOSD, setShowOSD] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
   const [showChannelList, setShowChannelList] = useState(false);

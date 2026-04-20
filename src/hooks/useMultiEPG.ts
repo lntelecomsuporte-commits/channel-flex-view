@@ -9,17 +9,30 @@ interface ChannelEPGInput {
   epg_channel_id?: string | null;
 }
 
-function parseXmltvDate(str: string): Date | null {
+function parseXmltvDate(str: string): string | null {
+  // Returns ISO string directly (faster — no Date allocation per program if not needed)
   const match = str.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s*([+-]\d{4})?/);
   if (!match) return null;
   const [, y, mo, d, h, mi, s, tz] = match;
-  const isoStr = `${y}-${mo}-${d}T${h}:${mi}:${s}${tz ? tz.replace(/(\d{2})(\d{2})/, "$1:$2") : "+00:00"}`;
-  return new Date(isoStr);
+  const tzFormatted = tz ? tz.replace(/(\d{2})(\d{2})/, "$1:$2") : "+00:00";
+  return `${y}-${mo}-${d}T${h}:${mi}:${s}${tzFormatted}`;
 }
 
 type XmltvBundle = { kind: "xmltv"; byChannel: Map<string, EPGProgram[]> };
 type EpgPwBundle = { kind: "epgpw"; programs: EPGProgram[] };
 type Bundle = XmltvBundle | EpgPwBundle;
+
+// Yield to the browser between heavy chunks so UI stays responsive
+const yieldToMain = () =>
+  new Promise<void>((resolve) => {
+    // @ts-ignore — scheduler is available in modern Chromium (Android TV WebView)
+    if (typeof scheduler !== "undefined" && scheduler.yield) {
+      // @ts-ignore
+      scheduler.yield().then(resolve);
+    } else {
+      setTimeout(resolve, 0);
+    }
+  });
 
 async function fetchXmltvBundle(url: string): Promise<XmltvBundle> {
   const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/epg-proxy?url=${encodeURIComponent(normalizeGithubUrl(url))}`;
@@ -27,30 +40,46 @@ async function fetchXmltvBundle(url: string): Promise<XmltvBundle> {
   const byChannel = new Map<string, EPGProgram[]>();
   if (!res.ok) return { kind: "xmltv", byChannel };
   const text = await res.text();
+
+  // Yield before parsing the whole document (can be megabytes)
+  await yieldToMain();
   const parser = new DOMParser();
   const doc = parser.parseFromString(text, "text/xml");
-  // Single pass over all programmes — group by channel attribute
+  await yieldToMain();
+
   const programmes = doc.getElementsByTagName("programme");
-  for (let i = 0; i < programmes.length; i++) {
+  const total = programmes.length;
+  const CHUNK = 500;
+
+  for (let i = 0; i < total; i++) {
     const prog = programmes[i];
-    const channelId = prog.getAttribute("channel") || "";
+    const channelId = prog.getAttribute("channel");
     if (!channelId) continue;
-    const startAttr = prog.getAttribute("start") || "";
-    const startDate = parseXmltvDate(startAttr);
-    if (!startDate) continue;
+    const startAttr = prog.getAttribute("start");
+    if (!startAttr) continue;
+    const startIso = parseXmltvDate(startAttr);
+    if (!startIso) continue;
+
     const titleEl = prog.getElementsByTagName("title")[0];
     const descEl = prog.getElementsByTagName("desc")[0];
     const ratingEl = prog.querySelector("rating value");
+
     const program: EPGProgram = {
       title: titleEl?.textContent || "",
-      start_date: startDate.toISOString(),
+      start_date: startIso,
       desc: descEl?.textContent || null,
       rating: ratingEl?.textContent || null,
     };
     const arr = byChannel.get(channelId);
     if (arr) arr.push(program);
     else byChannel.set(channelId, [program]);
+
+    // Yield to UI every CHUNK programmes
+    if (i > 0 && i % CHUNK === 0) {
+      await yieldToMain();
+    }
   }
+
   // Sort each channel's programs once
   byChannel.forEach((arr) => arr.sort((a, b) => a.start_date.localeCompare(b.start_date)));
   return { kind: "xmltv", byChannel };
@@ -65,8 +94,15 @@ async function fetchEpgPw(url: string): Promise<EpgPwBundle> {
   return { kind: "epgpw", programs: (json.epg_list || []) as EPGProgram[] };
 }
 
-export function useMultiEPG(channels: ChannelEPGInput[]) {
-  // Group channels by unique source (type + url) so each EPG file is fetched/parsed ONCE
+/**
+ * Hook que pré-carrega EPG em segundo plano. Pode ser chamado enquanto
+ * o usuário está assistindo TV — o parsing roda em chunks com yield para
+ * não travar a UI. Quando a lista de canais abrir, os dados já estarão prontos.
+ */
+export function useMultiEPG(channels: ChannelEPGInput[], enabled: boolean = true) {
+  // Group by unique source so each EPG file is fetched/parsed ONCE
+  const sourcesKey = channels.map((c) => `${c.epg_type}|${c.epg_url}`).join("~");
+
   const sources = useMemo(() => {
     const map = new Map<string, { kind: "xmltv" | "epgpw"; url: string }>();
     for (const ch of channels) {
@@ -79,18 +115,22 @@ export function useMultiEPG(channels: ChannelEPGInput[]) {
     }
     return Array.from(map.entries()).map(([key, v]) => ({ key, ...v }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channels.map((c) => `${c.epg_type}|${c.epg_url}`).join("~")]);
+  }, [sourcesKey]);
 
   const queries = useQueries({
     queries: sources.map((src) => ({
       queryKey: ["epg-bundle", src.kind, src.url],
-      staleTime: 60_000,
-      refetchInterval: 120_000,
+      enabled,
+      // Cache agressivo — EPG não muda toda hora
+      staleTime: 5 * 60_000, // 5 min
+      gcTime: 30 * 60_000, // 30 min
+      refetchInterval: 10 * 60_000, // refresh em segundo plano a cada 10 min
+      refetchOnWindowFocus: false,
+      refetchOnMount: false,
       queryFn: () => (src.kind === "xmltv" ? fetchXmltvBundle(src.url) : fetchEpgPw(src.url)),
     })),
   });
 
-  // Build stable map only when query data changes
   const dataSig = queries.map((q) => (q.data ? "1" : "0")).join("");
 
   const epgMap = useMemo(() => {
@@ -119,7 +159,7 @@ export function useMultiEPG(channels: ChannelEPGInput[]) {
     }
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataSig, channels.length]);
+  }, [dataSig, sourcesKey]);
 
   return epgMap;
 }
