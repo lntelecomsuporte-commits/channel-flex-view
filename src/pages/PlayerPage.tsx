@@ -14,8 +14,11 @@ import SynopsisModal from "@/components/player/SynopsisModal";
 import StatsOverlay from "@/components/player/StatsOverlay";
 import FavoritesBar from "@/components/player/FavoritesBar";
 import { useFavorites } from "@/hooks/useFavorites";
+import { isSelectKey } from "@/lib/remoteKeys";
 import { List, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+
+const LONG_PRESS_MS = 600;
 
 const PlayerPage = () => {
   const { signOut } = useAuth();
@@ -38,8 +41,6 @@ const PlayerPage = () => {
   const [osdTimeout, setOsdTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [previewTimeout, setPreviewTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
 
-  // Pré-carrega EPG em segundo plano. Pausa quando a lista está aberta ou
-  // o usuário troca de canal; só retoma após 8s de inatividade.
   const [preloadEpg, setPreloadEpg] = useState(false);
   useEffect(() => {
     if (!channels?.length || showChannelList) {
@@ -61,7 +62,6 @@ const PlayerPage = () => {
     preloadEpg
   );
 
-
   const currentChannel: Channel | null = channels?.[currentIndex] ?? null;
   const previewChannel: Channel | null = previewIndex !== null ? channels?.[previewIndex] ?? null : null;
   const focusedChannel: Channel | null = previewChannel ?? currentChannel;
@@ -72,16 +72,13 @@ const PlayerPage = () => {
   const enterHandledRef = useRef(false);
   const enterLongPressFiredRef = useRef(false);
   const enterLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const LONG_PRESS_MS = 600;
 
-  // Easter egg: ← ← ← → → ← + OK -> stats overlay
   const [showStats, setShowStats] = useState(false);
   const playerRef = useRef<VideoPlayerHandle>(null);
   const comboRef = useRef<string[]>([]);
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const COMBO_SEQUENCE = ["L", "L", "L", "R", "R", "L"];
 
-  // Numeric channel jump: digite 149 + auto-confirma após 1.5s ou OK
   const [numBuffer, setNumBuffer] = useState("");
   const numTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const jumpToChannelNumber = useCallback(
@@ -100,23 +97,29 @@ const PlayerPage = () => {
     },
     [channels]
   );
-  const pushDigit = useCallback((digit: string) => {
-    if (numTimerRef.current) clearTimeout(numTimerRef.current);
-    setNumBuffer((prev) => {
-      const next = (prev + digit).slice(-4);
-      numTimerRef.current = setTimeout(() => {
-        jumpToChannelNumber(next);
-        setNumBuffer("");
-      }, 1500);
-      return next;
-    });
-  }, [jumpToChannelNumber]);
+
+  const pushDigit = useCallback(
+    (digit: string) => {
+      if (numTimerRef.current) clearTimeout(numTimerRef.current);
+      setNumBuffer((prev) => {
+        const next = (prev + digit).slice(-4);
+        numTimerRef.current = setTimeout(() => {
+          jumpToChannelNumber(next);
+          setNumBuffer("");
+        }, 1500);
+        return next;
+      });
+    },
+    [jumpToChannelNumber]
+  );
 
   const pushCombo = useCallback((key: "L" | "R") => {
     const next = [...comboRef.current, key].slice(-COMBO_SEQUENCE.length);
     comboRef.current = next;
     if (comboTimerRef.current) clearTimeout(comboTimerRef.current);
-    comboTimerRef.current = setTimeout(() => { comboRef.current = []; }, 3000);
+    comboTimerRef.current = setTimeout(() => {
+      comboRef.current = [];
+    }, 3000);
   }, []);
 
   const isComboArmed = useCallback(() => {
@@ -138,16 +141,19 @@ const PlayerPage = () => {
     }
   }, [focusedEpg, focusedChannel]);
 
-  const showOSDTemporarily = useCallback((withFavorites = false) => {
-    setShowOSD(true);
-    if (withFavorites) setShowFavoritesBar(true);
-    if (osdTimeout) clearTimeout(osdTimeout);
-    const t = setTimeout(() => {
-      setShowOSD(false);
-      setShowFavoritesBar(false);
-    }, 4000);
-    setOsdTimeout(t);
-  }, [osdTimeout]);
+  const showOSDTemporarily = useCallback(
+    (withFavorites = false) => {
+      setShowOSD(true);
+      if (withFavorites) setShowFavoritesBar(true);
+      if (osdTimeout) clearTimeout(osdTimeout);
+      const t = setTimeout(() => {
+        setShowOSD(false);
+        setShowFavoritesBar(false);
+      }, 4000);
+      setOsdTimeout(t);
+    },
+    [osdTimeout]
+  );
 
   const changeChannel = useCallback(
     (direction: "up" | "down") => {
@@ -177,8 +183,8 @@ const PlayerPage = () => {
             ? baseIdx + 1
             : 0
           : baseIdx > 0
-          ? baseIdx - 1
-          : channels.length - 1;
+            ? baseIdx - 1
+            : channels.length - 1;
       setPreviewIndex(nextIdx);
       setShowPreview(true);
 
@@ -202,7 +208,6 @@ const PlayerPage = () => {
     }
   }, [previewIndex, previewTimeout, showOSDTemporarily]);
 
-  // Touch/swipe controls for mobile
   const touchHandlers = useTouchControls({
     onSwipeUp: () => {
       if (!showChannelList) changeChannel("up");
@@ -233,14 +238,24 @@ const PlayerPage = () => {
     },
   });
 
-  // Triple-press back to exit. Counter resets after 2s of inactivity.
   const backPressRef = useRef<{ count: number; timer: ReturnType<typeof setTimeout> | null }>({ count: 0, timer: null });
   const handleBackPress = useCallback((): boolean => {
-    // 1) Close any open overlay first (always handled)
-    if (showStats) { setShowStats(false); return true; }
-    if (synopsisProgram) { setSynopsisProgram(null); return true; }
-    if (showChannelList) { setShowChannelList(false); return true; }
-    if (favFocusIndex !== null) { setFavFocusIndex(null); return true; }
+    if (showStats) {
+      setShowStats(false);
+      return true;
+    }
+    if (synopsisProgram) {
+      setSynopsisProgram(null);
+      return true;
+    }
+    if (showChannelList) {
+      setShowChannelList(false);
+      return true;
+    }
+    if (favFocusIndex !== null) {
+      setFavFocusIndex(null);
+      return true;
+    }
     if (showPreview) {
       setShowPreview(false);
       setPreviewIndex(null);
@@ -254,13 +269,12 @@ const PlayerPage = () => {
       return true;
     }
 
-    // 2) Nothing open — require 3 consecutive presses within 2s to exit
     backPressRef.current.count += 1;
     if (backPressRef.current.timer) clearTimeout(backPressRef.current.timer);
 
     if (backPressRef.current.count >= 3) {
       backPressRef.current.count = 0;
-      return false; // let app exit
+      return false;
     }
 
     const remaining = 3 - backPressRef.current.count;
@@ -271,7 +285,6 @@ const PlayerPage = () => {
     return true;
   }, [showStats, synopsisProgram, showChannelList, favFocusIndex, showPreview, previewTimeout, showOSD, showFavoritesBar, osdTimeout]);
 
-  // Hardware/remote Back button (Android TV)
   useNativeBackButton(handleBackPress);
 
   useEffect(() => {
@@ -283,18 +296,17 @@ const PlayerPage = () => {
         return;
       }
       if (synopsisProgram) {
-        if (e.key === "Escape" || e.key === "Enter" || e.key === "Backspace") {
+        if (e.key === "Escape" || e.key === "Backspace" || isSelectKey(e)) {
           e.preventDefault();
           setSynopsisProgram(null);
         }
         return;
       }
-      // Build ordered favorite channels (matches FavoritesBar ordering)
+
       const favChannels = favorites
         .map((f) => channels?.find((c) => c.id === f.channel_id))
         .filter((c): c is Channel => !!c);
 
-      // ---- Favorites focus mode (only active when OSD+favorites bar is visible) ----
       if (favFocusIndex !== null) {
         switch (e.key) {
           case "ArrowLeft":
@@ -320,33 +332,32 @@ const PlayerPage = () => {
             setFavFocusIndex(null);
             return;
           case "ArrowUp":
-            // stay in favorites focus
             e.preventDefault();
             return;
-          case "Enter":
-            e.preventDefault();
-            if (e.repeat) return;
-            if (favChannels.length > 0 && favFocusIndex < favChannels.length) {
-              const target = favChannels[favFocusIndex];
-              const idx = channels?.findIndex((c) => c.id === target.id) ?? -1;
-              if (idx >= 0) {
-                setCurrentIndex(idx);
-                setFavFocusIndex(null);
-                showOSDTemporarily(false);
+          default:
+            if (isSelectKey(e)) {
+              e.preventDefault();
+              if (favChannels.length > 0 && favFocusIndex < favChannels.length) {
+                const target = favChannels[favFocusIndex];
+                const idx = channels?.findIndex((c) => c.id === target.id) ?? -1;
+                if (idx >= 0) {
+                  setCurrentIndex(idx);
+                  setFavFocusIndex(null);
+                  showOSDTemporarily(false);
+                }
               }
+              return;
             }
-            return;
         }
       }
 
-      // Numeric keys: jump to channel by number
       if (/^[0-9]$/.test(e.key)) {
         e.preventDefault();
         pushDigit(e.key);
         return;
       }
-      // OK while typing number = confirm immediately
-      if (numBuffer && e.key === "Enter") {
+
+      if (numBuffer && isSelectKey(e)) {
         if (numTimerRef.current) clearTimeout(numTimerRef.current);
         e.preventDefault();
         const buf = numBuffer;
@@ -360,56 +371,56 @@ const PlayerPage = () => {
         case "Backspace":
           e.preventDefault();
           handleBackPress();
-          break;
+          return;
         case "ArrowUp":
           e.preventDefault();
           comboRef.current = [];
-          // If OSD+favorites bar is showing and we have favorites, enter favorites focus
           if (showOSD && showFavoritesBar && favChannels.length > 0) {
             const activeIdx = favChannels.findIndex((c) => c.id === currentChannel?.id);
             setFavFocusIndex(activeIdx >= 0 ? activeIdx : 0);
             showOSDTemporarily(true);
-            break;
+            return;
           }
           changeChannel("up");
-          break;
+          return;
         case "ArrowDown":
           e.preventDefault();
           comboRef.current = [];
           changeChannel("down");
-          break;
+          return;
         case "ArrowRight":
           e.preventDefault();
           pushCombo("R");
           showNextPreview("next");
-          break;
+          return;
         case "ArrowLeft":
           e.preventDefault();
           pushCombo("L");
           showNextPreview("prev");
-          break;
-        case "Enter": {
-          e.preventDefault();
-          if (isComboArmed()) {
-            comboRef.current = [];
-            setShowStats((s) => !s);
-            break;
+          return;
+        default:
+          if (isSelectKey(e)) {
+            e.preventDefault();
+            if (isComboArmed()) {
+              comboRef.current = [];
+              setShowStats((s) => !s);
+              return;
+            }
+            if (!enterLongPressTimerRef.current) {
+              enterLongPressFiredRef.current = false;
+              const focusedId = focusedChannel?.id ?? "";
+              enterLongPressTimerRef.current = setTimeout(() => {
+                enterLongPressFiredRef.current = true;
+                enterLongPressTimerRef.current = null;
+                if (focusedId) toggleFavorite(focusedId);
+              }, LONG_PRESS_MS);
+            }
           }
-          if (e.repeat) break;
-          // Arm long-press timer for favorite toggle
-          enterLongPressFiredRef.current = false;
-          if (enterLongPressTimerRef.current) clearTimeout(enterLongPressTimerRef.current);
-          const focusedId = focusedChannel?.id ?? "";
-          enterLongPressTimerRef.current = setTimeout(() => {
-            enterLongPressFiredRef.current = true;
-            if (focusedId) toggleFavorite(focusedId);
-          }, LONG_PRESS_MS);
-          break;
-        }
       }
     };
+
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key !== "Enter") return;
+      if (!isSelectKey(e)) return;
       enterHandledRef.current = false;
       if (enterLongPressTimerRef.current) {
         clearTimeout(enterLongPressTimerRef.current);
@@ -420,7 +431,6 @@ const PlayerPage = () => {
         return;
       }
       if (showChannelList || synopsisProgram || showStats) return;
-      // Preview ativo: OK confirma instantaneamente (sem delay de double-press)
       if (showPreview) {
         lastEnterRef.current = { id: "", time: 0 };
         confirmPreview();
@@ -429,7 +439,6 @@ const PlayerPage = () => {
       const id = focusedChannel?.id ?? "";
       const now = Date.now();
       const last = lastEnterRef.current;
-      // Double press within 400ms -> open list
       if (id && last.id === id && now - last.time < 400) {
         lastEnterRef.current = { id: "", time: 0 };
         setShowChannelList(true);
@@ -447,12 +456,10 @@ const PlayerPage = () => {
     };
   }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, toggleFavorite, showOSDTemporarily, favFocusIndex, favorites, channels, currentChannel, showOSD, showFavoritesBar, handleBackPress, pushDigit, numBuffer, jumpToChannelNumber]);
 
-  // Clear favorites focus when OSD hides
   useEffect(() => {
     if (!showFavoritesBar || !showOSD) setFavFocusIndex(null);
   }, [showFavoritesBar, showOSD]);
 
-  // Auto-hide OSD after initial show
   useEffect(() => {
     const t = setTimeout(() => setShowOSD(false), 3000);
     return () => clearTimeout(t);
@@ -474,9 +481,7 @@ const PlayerPage = () => {
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="text-center glass-panel p-8">
           <p className="text-xl font-semibold text-foreground">Nenhum canal disponível</p>
-          <p className="text-muted-foreground mt-2">
-            Adicione canais no painel de administração
-          </p>
+          <p className="text-muted-foreground mt-2">Adicione canais no painel de administração</p>
         </div>
       </div>
     );
@@ -485,7 +490,7 @@ const PlayerPage = () => {
   return (
     <div
       className="relative w-full h-full overflow-hidden bg-background select-none"
-      style={{ width: '100vw', height: '100vh' }}
+      style={{ width: "100vw", height: "100vh" }}
       {...touchHandlers}
       onClick={() => {
         if (!isMobile && !showChannelList) {
@@ -533,7 +538,6 @@ const PlayerPage = () => {
             </>
           )}
 
-          {/* Top info bar */}
           {showOSD && (
             <div className="absolute top-0 left-0 right-0 osd-top-gradient p-4 animate-fade-in z-10">
               <div className="flex justify-between items-center">
@@ -546,7 +550,6 @@ const PlayerPage = () => {
             </div>
           )}
 
-          {/* Numeric channel input overlay */}
           {numBuffer && (
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none animate-fade-in">
               <div className="glass-panel px-8 py-6 text-center">
@@ -556,25 +559,33 @@ const PlayerPage = () => {
             </div>
           )}
 
-          {/* Mobile floating controls */}
           {isMobile && (
             <div className="absolute right-3 bottom-20 z-20 flex flex-col items-center gap-2 animate-fade-in">
               <button
-                onClick={(e) => { e.stopPropagation(); changeChannel("up"); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  changeChannel("up");
+                }}
                 className="w-12 h-12 rounded-full bg-background/60 backdrop-blur-sm border border-border flex items-center justify-center active:bg-primary/30 transition-colors"
                 aria-label="Canal anterior"
               >
                 <ChevronUp className="w-6 h-6 text-foreground" />
               </button>
               <button
-                onClick={(e) => { e.stopPropagation(); setShowChannelList(true); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowChannelList(true);
+                }}
                 className="w-14 h-14 rounded-full bg-primary/80 backdrop-blur-sm flex items-center justify-center active:bg-primary transition-colors shadow-lg"
                 aria-label="Lista de canais"
               >
                 <List className="w-7 h-7 text-primary-foreground" />
               </button>
               <button
-                onClick={(e) => { e.stopPropagation(); changeChannel("down"); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  changeChannel("down");
+                }}
                 className="w-12 h-12 rounded-full bg-background/60 backdrop-blur-sm border border-border flex items-center justify-center active:bg-primary/30 transition-colors"
                 aria-label="Próximo canal"
               >
