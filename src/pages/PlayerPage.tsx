@@ -200,6 +200,7 @@ const PlayerPage = () => {
     if (showStats) { setShowStats(false); return true; }
     if (synopsisProgram) { setSynopsisProgram(null); return true; }
     if (showChannelList) { setShowChannelList(false); return true; }
+    if (favFocusIndex !== null) { setFavFocusIndex(null); return true; }
     if (showPreview) {
       setShowPreview(false);
       setPreviewIndex(null);
