@@ -4,6 +4,7 @@ import type { Channel } from "@/hooks/useChannels";
 import { useMultiEPG } from "@/hooks/useMultiEPG";
 import type { EPGProgram } from "@/hooks/useEPG";
 import { useFavorites } from "@/hooks/useFavorites";
+import { isSelectKey } from "@/lib/remoteKeys";
 import { LogOut, X, Search, Info, Star } from "lucide-react";
 
 interface ChannelListProps {
@@ -14,6 +15,8 @@ interface ChannelListProps {
   onClose: () => void;
   onLogout?: () => void;
 }
+
+const LONG_PRESS_MS = 600;
 
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
@@ -78,7 +81,6 @@ function findCurrentAndUpcoming(programs: EPGProgram[]): EPGProgram[] {
   }
 
   if (startIdx === -1) return [];
-  // Return current + up to 3 upcoming
   return programs.slice(startIdx, startIdx + 4);
 }
 
@@ -112,13 +114,15 @@ const ChannelEPGInfo = memo(function ChannelEPGInfo({
   return (
     <div className="flex-1 min-w-0 overflow-x-auto">
       <div className="flex items-stretch gap-1">
-        {/* Current program - highlighted */}
         <div className="flex-shrink-0 min-w-[160px] max-w-[220px] space-y-0.5">
           <div className="flex items-center gap-1.5">
             <RatingBadge rating={current.rating} />
             <p className="text-sm text-foreground truncate font-semibold">{current.title}</p>
             <button
-              onClick={(e) => { e.stopPropagation(); onClickSynopsis(current); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onClickSynopsis(current);
+              }}
               className="flex-shrink-0 text-primary hover:text-primary/80 transition-colors"
               title="Ver sinopse"
             >
@@ -134,28 +138,28 @@ const ChannelEPGInfo = memo(function ChannelEPGInfo({
           </div>
         </div>
 
-        {/* Upcoming programs */}
-        {upcoming.slice(1).map((prog, i) => {
-          return (
-            <div
-              key={i}
-              className="flex-shrink-0 min-w-[140px] max-w-[180px] border-l border-border/30 pl-2 space-y-0.5 opacity-70"
-            >
-              <div className="flex items-center gap-1">
-                <RatingBadge rating={prog.rating} />
-                <p className="text-xs text-foreground/80 truncate">{prog.title}</p>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onClickSynopsis(prog); }}
-                  className="flex-shrink-0 text-primary/60 hover:text-primary transition-colors"
-                  title="Ver sinopse"
-                >
-                  <Info className="w-3 h-3" />
-                </button>
-              </div>
-              <span className="text-[10px] text-muted-foreground">{formatTime(prog.start_date)}</span>
+        {upcoming.slice(1).map((prog, i) => (
+          <div
+            key={i}
+            className="flex-shrink-0 min-w-[140px] max-w-[180px] border-l border-border/30 pl-2 space-y-0.5 opacity-70"
+          >
+            <div className="flex items-center gap-1">
+              <RatingBadge rating={prog.rating} />
+              <p className="text-xs text-foreground/80 truncate">{prog.title}</p>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClickSynopsis(prog);
+                }}
+                className="flex-shrink-0 text-primary/60 hover:text-primary transition-colors"
+                title="Ver sinopse"
+              >
+                <Info className="w-3 h-3" />
+              </button>
             </div>
-          );
-        })}
+            <span className="text-[10px] text-muted-foreground">{formatTime(prog.start_date)}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -216,8 +220,8 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
           isFocused
             ? "bg-primary/15 ring-1 ring-inset ring-primary/40"
             : isActive
-            ? "bg-accent/20"
-            : "hover:bg-accent/10"
+              ? "bg-accent/20"
+              : "hover:bg-accent/10"
         }`}
       >
         <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-md overflow-hidden bg-white/10 flex items-center justify-center relative">
@@ -226,9 +230,7 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
           ) : (
             <span className="text-xs text-muted-foreground font-bold">{channel.name.substring(0, 2)}</span>
           )}
-          {isFav && (
-            <Star className="absolute -top-1 -right-1 w-3.5 h-3.5 fill-yellow-400 text-yellow-400 drop-shadow" />
-          )}
+          {isFav && <Star className="absolute -top-1 -right-1 w-3.5 h-3.5 fill-yellow-400 text-yellow-400 drop-shadow" />}
         </div>
         <div className="flex-shrink-0 w-20 sm:w-24">
           <span className="text-lg sm:text-xl font-bold text-foreground">{String(channel.channel_number).padStart(3, "0")}</span>
@@ -257,10 +259,8 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
   const { favorites, toggleFavorite } = useFavorites();
   const favoriteIds = useMemo(() => new Set(favorites.map((f) => f.channel_id)), [favorites]);
 
-  const lastEnterRef = useRef<{ index: number; time: number }>({ index: -1, time: 0 });
   const enterLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enterLongPressFiredRef = useRef(false);
-  const LONG_PRESS_MS = 600;
 
   const epgMap = useMultiEPG(
     channels.map((ch) => ({
@@ -275,11 +275,7 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
   const filteredChannels = useMemo(() => {
     if (!searchQuery.trim()) return channels;
     const q = searchQuery.toLowerCase();
-    return channels.filter(
-      (ch) =>
-        ch.name.toLowerCase().includes(q) ||
-        String(ch.channel_number).includes(q)
-    );
+    return channels.filter((ch) => ch.name.toLowerCase().includes(q) || String(ch.channel_number).includes(q));
   }, [channels, searchQuery]);
 
   useEffect(() => {
@@ -296,7 +292,6 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
     listRef.current?.scrollToItem(focusedIndex, "smart");
   }, [focusedIndex]);
 
-  // Measure container for FixedSizeList
   useEffect(() => {
     if (!visible) return;
     const el = containerRef.current;
@@ -312,61 +307,74 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
     itemRefs.current[index] = el;
   };
 
-  const rowData = useMemo<RowData>(() => ({
-    filteredChannels,
-    channels,
-    currentIndex,
-    focusedIndex,
-    epgMap,
-    favoriteIds,
-    onSelect,
-    onSynopsis: (p: EPGProgram) => setSynopsisProgram(p),
-    setItemRef,
-  }), [filteredChannels, channels, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect]);
+  const rowData = useMemo<RowData>(
+    () => ({
+      filteredChannels,
+      channels,
+      currentIndex,
+      focusedIndex,
+      epgMap,
+      favoriteIds,
+      onSelect,
+      onSynopsis: (p: EPGProgram) => setSynopsisProgram(p),
+      setItemRef,
+    }),
+    [filteredChannels, channels, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect]
+  );
 
   useEffect(() => {
     if (!visible) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (synopsisProgram) {
-        if (e.key === "Escape") { e.preventDefault(); setSynopsisProgram(null); }
+        if (e.key === "Escape" || isSelectKey(e)) {
+          e.preventDefault();
+          setSynopsisProgram(null);
+        }
         return;
       }
+
       const isSearchFocused = document.activeElement === searchRef.current;
 
       switch (e.key) {
         case "ArrowUp":
-          e.preventDefault(); e.stopPropagation();
+          e.preventDefault();
+          e.stopPropagation();
           setFocusedIndex((prev) => (prev > 0 ? prev - 1 : filteredChannels.length - 1));
-          break;
+          return;
         case "ArrowDown":
-          e.preventDefault(); e.stopPropagation();
+          e.preventDefault();
+          e.stopPropagation();
           setFocusedIndex((prev) => (prev < filteredChannels.length - 1 ? prev + 1 : 0));
-          break;
-        case "Enter":
-          e.preventDefault(); e.stopPropagation();
-          if (e.repeat) break;
-          enterLongPressFiredRef.current = false;
-          if (enterLongPressTimerRef.current) clearTimeout(enterLongPressTimerRef.current);
-          {
-            const ch = filteredChannels[focusedIndex];
-            const focusedId = ch?.id ?? "";
-            enterLongPressTimerRef.current = setTimeout(() => {
-              enterLongPressFiredRef.current = true;
-              if (focusedId) toggleFavorite(focusedId);
-            }, LONG_PRESS_MS);
-          }
-          break;
+          return;
         case "Escape":
         case "Backspace":
           if (!isSearchFocused || e.key === "Escape") {
-            e.preventDefault(); e.stopPropagation();
+            e.preventDefault();
+            e.stopPropagation();
             onClose();
           }
-          break;
+          return;
+        default:
+          if (isSelectKey(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!enterLongPressTimerRef.current) {
+              enterLongPressFiredRef.current = false;
+              const ch = filteredChannels[focusedIndex];
+              const focusedId = ch?.id ?? "";
+              enterLongPressTimerRef.current = setTimeout(() => {
+                enterLongPressFiredRef.current = true;
+                enterLongPressTimerRef.current = null;
+                if (focusedId) toggleFavorite(focusedId);
+              }, LONG_PRESS_MS);
+            }
+          }
       }
     };
+
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key !== "Enter") return;
+      if (!isSelectKey(e)) return;
       if (enterLongPressTimerRef.current) {
         clearTimeout(enterLongPressTimerRef.current);
         enterLongPressTimerRef.current = null;
@@ -380,19 +388,19 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
         if (realIndex >= 0) onSelect(realIndex);
       }
     };
+
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("keyup", handleKeyUp, true);
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
     };
-  }, [visible, focusedIndex, filteredChannels, channels, onSelect, onClose, synopsisProgram, epgMap, toggleFavorite]);
+  }, [visible, focusedIndex, filteredChannels, channels, onSelect, onClose, synopsisProgram, toggleFavorite]);
 
   if (!visible) return null;
 
   return (
     <div className="absolute inset-0 z-30 flex flex-col bg-black/90 animate-fade-in">
-      {/* Header */}
       <div className="p-3 sm:p-4 border-b border-border/50 flex-shrink-0">
         <div className="flex justify-between items-center gap-3">
           <h2 className="text-lg sm:text-xl font-bold text-foreground flex-shrink-0">Canais</h2>
@@ -404,7 +412,10 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
               type="text"
               placeholder="Buscar canal..."
               value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setFocusedIndex(0); }}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setFocusedIndex(0);
+              }}
               className="w-full pl-8 pr-3 py-1.5 text-sm bg-secondary/50 border border-border/50 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
@@ -420,7 +431,6 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
         </div>
       </div>
 
-      {/* Channel list */}
       <div className="flex-1 min-h-0" ref={containerRef}>
         {filteredChannels.length === 0 ? (
           <div className="flex items-center justify-center py-12">
