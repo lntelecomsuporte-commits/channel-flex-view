@@ -3,7 +3,8 @@ import { FixedSizeList, type ListChildComponentProps } from "react-window";
 import type { Channel } from "@/hooks/useChannels";
 import { useMultiEPG } from "@/hooks/useMultiEPG";
 import type { EPGProgram } from "@/hooks/useEPG";
-import { LogOut, X, Search, Info } from "lucide-react";
+import { useFavorites } from "@/hooks/useFavorites";
+import { LogOut, X, Search, Info, Star } from "lucide-react";
 
 interface ChannelListProps {
   channels: Channel[];
