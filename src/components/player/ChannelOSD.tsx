@@ -1,6 +1,7 @@
 import type { Channel } from "@/hooks/useChannels";
 import { useEPG } from "@/hooks/useEPG";
 import { Star } from "lucide-react";
+import { CachedLogo } from "@/components/CachedLogo";
 
 function RatingBadge({ rating }: { rating: string | null }) {
   if (!rating) return null;
@@ -65,7 +66,7 @@ const ChannelOSD = ({ channel, visible, isFavorite }: ChannelOSDProps) => {
         {/* Logo */}
         {channel.logo_url && (
           <div className="flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 rounded-lg overflow-hidden bg-white/10 flex items-center justify-center">
-            <img
+            <CachedLogo
               src={channel.logo_url}
               alt={channel.name}
               className="w-full h-full object-contain p-1"
