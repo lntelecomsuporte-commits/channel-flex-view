@@ -81,7 +81,7 @@ function findCurrentAndUpcoming(programs: EPGProgram[]): EPGProgram[] {
   return programs.slice(startIdx, startIdx + 4);
 }
 
-function ChannelEPGInfo({
+const ChannelEPGInfo = memo(function ChannelEPGInfo({
   programs,
   altText,
   epgType,
@@ -92,14 +92,14 @@ function ChannelEPGInfo({
   epgType: string | null;
   onClickSynopsis: (program: EPGProgram) => void;
 }) {
+  const upcoming = useMemo(() => findCurrentAndUpcoming(programs), [programs]);
+
   if (programs.length === 0) {
     if (epgType === "alt_text" && altText) {
       return <span className="text-xs text-muted-foreground italic truncate">{altText}</span>;
     }
     return <span className="text-xs text-muted-foreground">Programação não disponível</span>;
   }
-
-  const upcoming = findCurrentAndUpcoming(programs);
 
   if (upcoming.length === 0) {
     return <span className="text-xs text-muted-foreground">Programação não disponível</span>;
@@ -158,7 +158,7 @@ function ChannelEPGInfo({
       </div>
     </div>
   );
-}
+});
 
 function SynopsisModal({ program, onClose }: { program: EPGProgram; onClose: () => void }) {
   return (
@@ -200,7 +200,7 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
   const programs = epgMap.get(channel.id) || [];
   const altText = ch.epg_alt_text as string | null;
   const epgType = ch.epg_type as string | null;
-  const realIndex = channels.indexOf(channel);
+  const realIndex = useMemo(() => channels.indexOf(channel), [channels, channel]);
   const isActive = realIndex === currentIndex;
   const isFocused = index === focusedIndex;
 
@@ -219,7 +219,7 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
       >
         <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-md overflow-hidden bg-white/10 flex items-center justify-center">
           {channel.logo_url ? (
-            <img src={channel.logo_url} alt={channel.name} className="w-full h-full object-contain p-0.5" loading="lazy" />
+            <img src={channel.logo_url} alt={channel.name} className="w-full h-full object-contain p-0.5" loading="lazy" decoding="async" />
           ) : (
             <span className="text-xs text-muted-foreground font-bold">{channel.name.substring(0, 2)}</span>
           )}
