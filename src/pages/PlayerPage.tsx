@@ -48,6 +48,7 @@ const PlayerPage = () => {
   );
 
   const [showOSD, setShowOSD] = useState(true);
+  const [showFavoritesBar, setShowFavoritesBar] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showChannelList, setShowChannelList] = useState(false);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
