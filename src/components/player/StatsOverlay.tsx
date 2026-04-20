@@ -27,7 +27,7 @@ const formatBitrate = (bps: number) => {
   return `${bps.toFixed(0)} bps`;
 };
 
-const StatsOverlay = ({ videoEl, hls, onClose }: StatsOverlayProps) => {
+const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, hls, onClose }, ref) => {
   const [stats, setStats] = useState<Stats>({
     resolution: "—",
     fps: 0,
@@ -111,7 +111,7 @@ const StatsOverlay = ({ videoEl, hls, onClose }: StatsOverlayProps) => {
   }, [videoEl, hls]);
 
   return (
-    <div className="absolute top-4 right-4 z-40 glass-panel p-4 min-w-[280px] animate-fade-in font-mono text-sm">
+    <div ref={ref} className="absolute top-4 right-4 z-40 glass-panel p-4 min-w-[280px] animate-fade-in font-mono text-sm">
       <div className="flex items-center justify-between mb-3 pb-2 border-b border-border">
         <span className="font-bold text-primary">📊 Estatísticas</span>
         <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
@@ -130,7 +130,8 @@ const StatsOverlay = ({ videoEl, hls, onClose }: StatsOverlayProps) => {
       </div>
     </div>
   );
-};
+});
+StatsOverlay.displayName = "StatsOverlay";
 
 const Row = ({ label, value }: { label: string; value: string }) => (
   <div className="flex justify-between gap-4">
