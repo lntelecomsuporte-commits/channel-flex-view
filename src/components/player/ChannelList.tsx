@@ -81,7 +81,7 @@ function findCurrentAndUpcoming(programs: EPGProgram[]): EPGProgram[] {
   return programs.slice(startIdx, startIdx + 4);
 }
 
-function ChannelEPGInfo({
+const ChannelEPGInfo = memo(function ChannelEPGInfo({
   programs,
   altText,
   epgType,
@@ -92,14 +92,14 @@ function ChannelEPGInfo({
   epgType: string | null;
   onClickSynopsis: (program: EPGProgram) => void;
 }) {
+  const upcoming = useMemo(() => findCurrentAndUpcoming(programs), [programs]);
+
   if (programs.length === 0) {
     if (epgType === "alt_text" && altText) {
       return <span className="text-xs text-muted-foreground italic truncate">{altText}</span>;
     }
     return <span className="text-xs text-muted-foreground">Programação não disponível</span>;
   }
-
-  const upcoming = findCurrentAndUpcoming(programs);
 
   if (upcoming.length === 0) {
     return <span className="text-xs text-muted-foreground">Programação não disponível</span>;
