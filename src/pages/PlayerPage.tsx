@@ -339,6 +339,22 @@ const PlayerPage = () => {
         }
       }
 
+      // Numeric keys: jump to channel by number
+      if (/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        pushDigit(e.key);
+        return;
+      }
+      // OK while typing number = confirm immediately
+      if (numBuffer && e.key === "Enter") {
+        if (numTimerRef.current) clearTimeout(numTimerRef.current);
+        e.preventDefault();
+        const buf = numBuffer;
+        setNumBuffer("");
+        jumpToChannelNumber(buf);
+        return;
+      }
+
       switch (e.key) {
         case "Escape":
         case "Backspace":
