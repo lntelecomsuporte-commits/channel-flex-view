@@ -5,11 +5,12 @@ import { useTouchControls } from "@/hooks/useTouchControls";
 import { useAuth } from "@/hooks/useAuth";
 import { useEPG, type EPGProgram } from "@/hooks/useEPG";
 import { useNativeBackButton } from "@/hooks/useNativeBackButton";
-import VideoPlayer from "@/components/player/VideoPlayer";
+import VideoPlayer, { type VideoPlayerHandle } from "@/components/player/VideoPlayer";
 import ChannelOSD from "@/components/player/ChannelOSD";
 import ChannelPreview from "@/components/player/ChannelPreview";
 import ChannelList from "@/components/player/ChannelList";
 import SynopsisModal from "@/components/player/SynopsisModal";
+import StatsOverlay from "@/components/player/StatsOverlay";
 import { List, ChevronUp, ChevronDown } from "lucide-react";
 
 const PlayerPage = () => {
@@ -37,6 +38,26 @@ const PlayerPage = () => {
   const [synopsisProgram, setSynopsisProgram] = useState<EPGProgram | null>(null);
   const lastEnterRef = useRef<{ id: string; time: number }>({ id: "", time: 0 });
   const enterHandledRef = useRef(false);
+
+  // Easter egg: ← ← ← → → ← + OK -> stats overlay
+  const [showStats, setShowStats] = useState(false);
+  const playerRef = useRef<VideoPlayerHandle>(null);
+  const comboRef = useRef<string[]>([]);
+  const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const COMBO_SEQUENCE = ["L", "L", "L", "R", "R", "L"];
+
+  const pushCombo = useCallback((key: "L" | "R") => {
+    const next = [...comboRef.current, key].slice(-COMBO_SEQUENCE.length);
+    comboRef.current = next;
+    if (comboTimerRef.current) clearTimeout(comboTimerRef.current);
+    comboTimerRef.current = setTimeout(() => { comboRef.current = []; }, 3000);
+  }, []);
+
+  const isComboArmed = useCallback(() => {
+    const c = comboRef.current;
+    if (c.length !== COMBO_SEQUENCE.length) return false;
+    return c.every((k, i) => k === COMBO_SEQUENCE[i]);
+  }, []);
 
   const fc: any = focusedChannel;
   const { data: focusedEpg } = useEPG({
@@ -168,22 +189,31 @@ const PlayerPage = () => {
       switch (e.key) {
         case "ArrowUp":
           e.preventDefault();
+          comboRef.current = [];
           changeChannel("up");
           break;
         case "ArrowDown":
           e.preventDefault();
+          comboRef.current = [];
           changeChannel("down");
           break;
         case "ArrowRight":
           e.preventDefault();
+          pushCombo("R");
           showNextPreview("next");
           break;
         case "ArrowLeft":
           e.preventDefault();
+          pushCombo("L");
           showNextPreview("prev");
           break;
         case "Enter": {
           e.preventDefault();
+          if (isComboArmed()) {
+            comboRef.current = [];
+            setShowStats((s) => !s);
+            break;
+          }
           if (e.repeat) {
             if (!enterHandledRef.current) {
               enterHandledRef.current = true;
@@ -224,7 +254,7 @@ const PlayerPage = () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused]);
+  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed]);
 
   // Auto-hide OSD after initial show
   useEffect(() => {
@@ -273,7 +303,14 @@ const PlayerPage = () => {
     >
       {currentChannel && (
         <>
-          <VideoPlayer streamUrl={currentChannel.stream_url} />
+          <VideoPlayer ref={playerRef} streamUrl={currentChannel.stream_url} />
+          {showStats && (
+            <StatsOverlay
+              videoEl={playerRef.current?.getVideoElement() ?? null}
+              hls={playerRef.current?.getHls() ?? null}
+              onClose={() => setShowStats(false)}
+            />
+          )}
           {showPreview && previewChannel ? (
             <ChannelPreview
               channel={previewChannel}

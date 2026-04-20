@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react";
 import Hls from "hls.js";
 import { getPlayableStreamUrl } from "@/lib/stream";
 
@@ -7,11 +7,21 @@ interface VideoPlayerProps {
   autoPlay?: boolean;
 }
 
-const VideoPlayer = ({ streamUrl, autoPlay = true }: VideoPlayerProps) => {
+export interface VideoPlayerHandle {
+  getVideoElement: () => HTMLVideoElement | null;
+  getHls: () => Hls | null;
+}
+
+const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [muted, setMuted] = useState(true);
   const playableStreamUrl = getPlayableStreamUrl(streamUrl);
+
+  useImperativeHandle(ref, () => ({
+    getVideoElement: () => videoRef.current,
+    getHls: () => hlsRef.current,
+  }), []);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -27,7 +37,7 @@ const VideoPlayer = ({ streamUrl, autoPlay = true }: VideoPlayerProps) => {
     }
 
     // On iOS/Safari, prefer native HLS for better AirPlay support
-    const isAppleDevice = /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent) && 
+    const isAppleDevice = /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent) &&
       video.canPlayType("application/vnd.apple.mpegurl");
 
     if (isAppleDevice) {
@@ -87,6 +97,8 @@ const VideoPlayer = ({ streamUrl, autoPlay = true }: VideoPlayerProps) => {
       crossOrigin="anonymous"
     />
   );
-};
+});
+
+VideoPlayer.displayName = "VideoPlayer";
 
 export default VideoPlayer;
