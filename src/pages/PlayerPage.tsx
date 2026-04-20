@@ -259,7 +259,12 @@ const PlayerPage = () => {
 
       // ---- Favorites focus mode (only active when OSD+favorites bar is visible) ----
       if (favFocusIndex !== null) {
-        switch (e.key) {
+      switch (e.key) {
+        case "Escape":
+        case "Backspace":
+          e.preventDefault();
+          handleBackPress();
+          break;
           case "ArrowLeft":
             e.preventDefault();
             setFavFocusIndex((i) => {
