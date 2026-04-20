@@ -409,7 +409,7 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
           </div>
 
           <div className="flex items-center gap-3 flex-shrink-0">
-            <span className="text-xs text-muted-foreground hidden sm:inline">↑↓ Navegar • OK Selecionar • OK 2x/Longo Sinopse • ESC Fechar</span>
+            <span className="text-xs text-muted-foreground hidden sm:inline">↑↓ Navegar • OK Selecionar • Segure OK Favoritar • ESC Fechar</span>
             {onLogout && (
               <button onClick={(e) => { e.stopPropagation(); onLogout(); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-destructive/20 hover:bg-destructive/40 text-destructive text-xs font-medium transition-colors">
                 <LogOut className="w-3.5 h-3.5" /> Sair
