@@ -196,8 +196,10 @@ const PlayerPage = () => {
     },
   });
 
-  // Hardware/remote Back button (Android TV) — close overlays instead of exiting
-  useNativeBackButton(() => {
+  // Triple-press back to exit. Counter resets after 2s of inactivity.
+  const backPressRef = useRef<{ count: number; timer: ReturnType<typeof setTimeout> | null }>({ count: 0, timer: null });
+  const handleBackPress = useCallback((): boolean => {
+    // 1) Close any open overlay first (always handled)
     if (showStats) { setShowStats(false); return true; }
     if (synopsisProgram) { setSynopsisProgram(null); return true; }
     if (showChannelList) { setShowChannelList(false); return true; }
@@ -208,8 +210,32 @@ const PlayerPage = () => {
       if (previewTimeout) clearTimeout(previewTimeout);
       return true;
     }
-    return false; // let app exit
-  });
+    if (showOSD || showFavoritesBar) {
+      setShowOSD(false);
+      setShowFavoritesBar(false);
+      if (osdTimeout) clearTimeout(osdTimeout);
+      return true;
+    }
+
+    // 2) Nothing open — require 3 consecutive presses within 2s to exit
+    backPressRef.current.count += 1;
+    if (backPressRef.current.timer) clearTimeout(backPressRef.current.timer);
+
+    if (backPressRef.current.count >= 3) {
+      backPressRef.current.count = 0;
+      return false; // let app exit
+    }
+
+    const remaining = 3 - backPressRef.current.count;
+    toast(`Pressione Voltar mais ${remaining}x para sair`, { duration: 2000 });
+    backPressRef.current.timer = setTimeout(() => {
+      backPressRef.current.count = 0;
+    }, 2000);
+    return true;
+  }, [showStats, synopsisProgram, showChannelList, favFocusIndex, showPreview, previewTimeout, showOSD, showFavoritesBar, osdTimeout]);
+
+  // Hardware/remote Back button (Android TV)
+  useNativeBackButton(handleBackPress);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
