@@ -438,6 +438,13 @@ const PlayerPage = () => {
         confirmPreview();
         return;
       }
+      // Se OSD está aberto e o usuário NÃO está navegando favoritos,
+      // o próximo OK abre a lista de canais.
+      if (showOSD && favFocusIndex === null) {
+        lastEnterRef.current = { id: "", time: 0 };
+        setShowChannelList(true);
+        return;
+      }
       const id = focusedChannel?.id ?? "";
       const now = Date.now();
       const last = lastEnterRef.current;
