@@ -31,12 +31,23 @@ const PlayerPage = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
 
   // Pré-carrega EPG em segundo plano (cache compartilhado com a ChannelList)
-  // Espera 3s após o player iniciar para não competir com o stream
+  // Espera 8s após canais carregarem para não competir com boot/stream em Android TV
   const [preloadEpg, setPreloadEpg] = useState(false);
   useEffect(() => {
     if (!channels?.length) return;
-    const t = setTimeout(() => setPreloadEpg(true), 3000);
-    return () => clearTimeout(t);
+    // Usa requestIdleCallback quando disponível para esperar o browser ficar ocioso
+    const schedule = (cb: () => void) => {
+      // @ts-ignore
+      if (typeof requestIdleCallback !== "undefined") {
+        // @ts-ignore
+        const id = requestIdleCallback(cb, { timeout: 12000 });
+        // @ts-ignore
+        return () => cancelIdleCallback(id);
+      }
+      const t = setTimeout(cb, 8000);
+      return () => clearTimeout(t);
+    };
+    return schedule(() => setPreloadEpg(true));
   }, [channels?.length]);
   useMultiEPG(
     channels?.map((ch: any) => ({
