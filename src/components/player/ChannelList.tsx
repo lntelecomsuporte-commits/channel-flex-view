@@ -268,7 +268,8 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
       epg_type: (ch as any).epg_type,
       epg_url: (ch as any).epg_url,
       epg_channel_id: (ch as any).epg_channel_id,
-    }))
+    })),
+    visible
   );
 
   const filteredChannels = useMemo(() => {
