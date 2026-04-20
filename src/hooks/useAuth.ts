@@ -8,13 +8,20 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   const checkBlocked = useCallback(async (userId: string) => {
-    const { data: profile } = await supabase
+    const { data: profile, error } = await supabase
       .from("profiles")
       .select("is_blocked, is_active")
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
 
-    if (profile?.is_blocked || (profile && !profile.is_active)) {
+    // Network/transient errors: do NOT sign out (FireTV suspend, offline, etc.)
+    if (error) {
+      console.warn("[useAuth] checkBlocked error (ignored):", error.message);
+      return false;
+    }
+
+    // Only sign out on EXPLICIT block/inactive — never on missing profile
+    if (profile && (profile.is_blocked || !profile.is_active)) {
       await supabase.auth.signOut();
       return true;
     }
