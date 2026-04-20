@@ -15,6 +15,7 @@ import StatsOverlay from "@/components/player/StatsOverlay";
 import FavoritesBar from "@/components/player/FavoritesBar";
 import { useFavorites } from "@/hooks/useFavorites";
 import { List, ChevronUp, ChevronDown } from "lucide-react";
+import { toast } from "sonner";
 
 const PlayerPage = () => {
   const { signOut } = useAuth();
