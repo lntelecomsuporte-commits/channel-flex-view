@@ -438,6 +438,7 @@ const PlayerPage = () => {
                 favoriteIds={favorites.map((f) => f.channel_id)}
                 currentChannelId={currentChannel.id}
                 visible={showFavoritesBar}
+                focusedIndex={favFocusIndex}
                 onSelect={(ch) => {
                   const idx = channels.findIndex((c) => c.id === ch.id);
                   if (idx >= 0) {
