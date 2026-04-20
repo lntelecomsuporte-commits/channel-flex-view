@@ -165,6 +165,7 @@ const PlayerPage = () => {
 
   // Hardware/remote Back button (Android TV) — close overlays instead of exiting
   useNativeBackButton(() => {
+    if (showStats) { setShowStats(false); return true; }
     if (synopsisProgram) { setSynopsisProgram(null); return true; }
     if (showChannelList) { setShowChannelList(false); return true; }
     if (showPreview) {
@@ -179,6 +180,11 @@ const PlayerPage = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (showChannelList) return;
+      if (showStats && (e.key === "Escape" || e.key === "Backspace")) {
+        e.preventDefault();
+        setShowStats(false);
+        return;
+      }
       if (synopsisProgram) {
         if (e.key === "Escape" || e.key === "Enter" || e.key === "Backspace") {
           e.preventDefault();
@@ -254,7 +260,7 @@ const PlayerPage = () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed]);
+  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats]);
 
   // Auto-hide OSD after initial show
   useEffect(() => {
