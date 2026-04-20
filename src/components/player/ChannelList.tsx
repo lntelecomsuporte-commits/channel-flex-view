@@ -4,8 +4,9 @@ import type { Channel } from "@/hooks/useChannels";
 import { useMultiEPG } from "@/hooks/useMultiEPG";
 import type { EPGProgram } from "@/hooks/useEPG";
 import { useFavorites } from "@/hooks/useFavorites";
-import { isSelectKey } from "@/lib/remoteKeys";
+import { isSelectKey, isPageNextKey, isPagePrevKey } from "@/lib/remoteKeys";
 import { LogOut, X, Search, Info, Star } from "lucide-react";
+import { CachedLogo } from "@/components/CachedLogo";
 
 interface ChannelListProps {
   channels: Channel[];
@@ -226,7 +227,7 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
       >
         <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-md overflow-hidden bg-white/10 flex items-center justify-center relative">
           {channel.logo_url ? (
-            <img src={channel.logo_url} alt={channel.name} className="w-full h-full object-contain p-0.5" loading="lazy" decoding="async" />
+            <CachedLogo src={channel.logo_url} alt={channel.name} className="w-full h-full object-contain p-0.5" loading="lazy" decoding="async" />
           ) : (
             <span className="text-xs text-muted-foreground font-bold">{channel.name.substring(0, 2)}</span>
           )}
@@ -335,6 +336,20 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
       }
 
       const isSearchFocused = document.activeElement === searchRef.current;
+
+      // FF / RW / Ch+ / Ch- → paginate by 10
+      if (isPageNextKey(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+        setFocusedIndex((prev) => Math.min(filteredChannels.length - 1, prev + 10));
+        return;
+      }
+      if (isPagePrevKey(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+        setFocusedIndex((prev) => Math.max(0, prev - 10));
+        return;
+      }
 
       switch (e.key) {
         case "ArrowUp":

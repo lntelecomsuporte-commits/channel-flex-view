@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Channel } from "@/hooks/useChannels";
 import { Star } from "lucide-react";
+import { CachedLogo } from "@/components/CachedLogo";
 
 interface FavoritesBarProps {
   channels: Channel[];
@@ -75,7 +76,7 @@ const FavoritesBar = ({ channels, favoriteIds, currentChannelId, visible, onSele
             >
               <div className="w-16 h-16 rounded-md overflow-hidden bg-white/10 flex items-center justify-center">
                 {ch.logo_url ? (
-                  <img src={ch.logo_url} alt={ch.name} className="w-full h-full object-contain p-1" />
+                  <CachedLogo src={ch.logo_url} alt={ch.name} className="w-full h-full object-contain p-1" />
                 ) : (
                   <span className="text-lg font-bold text-foreground/70">
                     {String(ch.channel_number).padStart(3, "0")}
