@@ -406,6 +406,8 @@ const PlayerPage = () => {
               setShowStats((s) => !s);
               return;
             }
+            // Fire TV dispara múltiplos keydown - ignorar repetidos
+            if (e.repeat) return;
             if (!enterLongPressTimerRef.current) {
               enterLongPressFiredRef.current = false;
               const focusedId = focusedChannel?.id ?? "";
