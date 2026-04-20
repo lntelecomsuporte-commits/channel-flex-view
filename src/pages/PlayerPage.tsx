@@ -98,8 +98,12 @@ const PlayerPage = () => {
 
   const showOSDTemporarily = useCallback(() => {
     setShowOSD(true);
+    setShowFavoritesBar(true);
     if (osdTimeout) clearTimeout(osdTimeout);
-    const t = setTimeout(() => setShowOSD(false), 3000);
+    const t = setTimeout(() => {
+      setShowOSD(false);
+      setShowFavoritesBar(false);
+    }, 4000);
     setOsdTimeout(t);
   }, [osdTimeout]);
 
