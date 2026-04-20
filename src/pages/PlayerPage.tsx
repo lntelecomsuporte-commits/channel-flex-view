@@ -19,6 +19,7 @@ import { List, ChevronUp, ChevronDown } from "lucide-react";
 const PlayerPage = () => {
   const { signOut } = useAuth();
   const isMobile = useIsMobile();
+  const { favorites, isFavorite, toggleFavorite } = useFavorites();
 
   useEffect(() => {
     document.body.classList.add("player-mode");
