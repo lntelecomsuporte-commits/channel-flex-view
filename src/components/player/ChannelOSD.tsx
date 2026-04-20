@@ -21,6 +21,7 @@ function RatingBadge({ rating }: { rating: string | null }) {
 interface ChannelOSDProps {
   channel: Channel;
   visible: boolean;
+  isFavorite?: boolean;
 }
 
 function formatTime(dateStr: string) {
