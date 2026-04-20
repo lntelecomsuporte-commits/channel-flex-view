@@ -363,7 +363,12 @@ const PlayerPage = () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, toggleFavorite, showOSDTemporarily]);
+  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, toggleFavorite, showOSDTemporarily, favFocusIndex, favorites, channels, currentChannel, showOSD, showFavoritesBar]);
+
+  // Clear favorites focus when OSD hides
+  useEffect(() => {
+    if (!showFavoritesBar || !showOSD) setFavFocusIndex(null);
+  }, [showFavoritesBar, showOSD]);
 
   // Auto-hide OSD after initial show
   useEffect(() => {
