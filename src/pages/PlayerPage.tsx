@@ -30,25 +30,27 @@ const PlayerPage = () => {
   const { data: channels, isLoading } = useChannels();
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Pré-carrega EPG em segundo plano (cache compartilhado com a ChannelList)
-  // Espera 8s após canais carregarem para não competir com boot/stream em Android TV
+  const [showOSD, setShowOSD] = useState(true);
+  const [showFavoritesBar, setShowFavoritesBar] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [showChannelList, setShowChannelList] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [osdTimeout, setOsdTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [previewTimeout, setPreviewTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
+
+  // Pré-carrega EPG em segundo plano. Pausa quando a lista está aberta ou
+  // o usuário troca de canal; só retoma após 8s de inatividade.
   const [preloadEpg, setPreloadEpg] = useState(false);
   useEffect(() => {
-    if (!channels?.length) return;
-    // Usa requestIdleCallback quando disponível para esperar o browser ficar ocioso
-    const schedule = (cb: () => void) => {
-      // @ts-ignore
-      if (typeof requestIdleCallback !== "undefined") {
-        // @ts-ignore
-        const id = requestIdleCallback(cb, { timeout: 12000 });
-        // @ts-ignore
-        return () => cancelIdleCallback(id);
-      }
-      const t = setTimeout(cb, 8000);
-      return () => clearTimeout(t);
-    };
-    return schedule(() => setPreloadEpg(true));
-  }, [channels?.length]);
+    if (!channels?.length || showChannelList) {
+      setPreloadEpg(false);
+      return;
+    }
+    setPreloadEpg(false);
+    const t = setTimeout(() => setPreloadEpg(true), 8000);
+    return () => clearTimeout(t);
+  }, [channels?.length, currentIndex, showChannelList]);
+
   useMultiEPG(
     channels?.map((ch: any) => ({
       id: ch.id,
@@ -59,13 +61,6 @@ const PlayerPage = () => {
     preloadEpg
   );
 
-  const [showOSD, setShowOSD] = useState(true);
-  const [showFavoritesBar, setShowFavoritesBar] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
-  const [showChannelList, setShowChannelList] = useState(false);
-  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
-  const [osdTimeout, setOsdTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
-  const [previewTimeout, setPreviewTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   const currentChannel: Channel | null = channels?.[currentIndex] ?? null;
   const previewChannel: Channel | null = previewIndex !== null ? channels?.[previewIndex] ?? null : null;
