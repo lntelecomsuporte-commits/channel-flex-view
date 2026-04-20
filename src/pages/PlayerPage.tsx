@@ -303,6 +303,11 @@ const PlayerPage = () => {
       }
 
       switch (e.key) {
+        case "Escape":
+        case "Backspace":
+          e.preventDefault();
+          handleBackPress();
+          break;
         case "ArrowUp":
           e.preventDefault();
           comboRef.current = [];
