@@ -189,13 +189,14 @@ interface RowData {
   currentIndex: number;
   focusedIndex: number;
   epgMap: Map<string, EPGProgram[]>;
+  favoriteIds: Set<string>;
   onSelect: (index: number) => void;
   onSynopsis: (p: EPGProgram) => void;
   setItemRef: (index: number, el: HTMLDivElement | null) => void;
 }
 
 const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
-  const { filteredChannels, channels, currentIndex, focusedIndex, epgMap, onSelect, onSynopsis, setItemRef } = data;
+  const { filteredChannels, channels, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect, onSynopsis, setItemRef } = data;
   const channel = filteredChannels[index];
   const ch = channel as any;
   const programs = epgMap.get(channel.id) || [];
@@ -204,6 +205,7 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
   const realIndex = useMemo(() => channels.indexOf(channel), [channels, channel]);
   const isActive = realIndex === currentIndex;
   const isFocused = index === focusedIndex;
+  const isFav = favoriteIds.has(channel.id);
 
   return (
     <div style={style}>
@@ -218,11 +220,14 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
             : "hover:bg-accent/10"
         }`}
       >
-        <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-md overflow-hidden bg-white/10 flex items-center justify-center">
+        <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-md overflow-hidden bg-white/10 flex items-center justify-center relative">
           {channel.logo_url ? (
             <img src={channel.logo_url} alt={channel.name} className="w-full h-full object-contain p-0.5" loading="lazy" decoding="async" />
           ) : (
             <span className="text-xs text-muted-foreground font-bold">{channel.name.substring(0, 2)}</span>
+          )}
+          {isFav && (
+            <Star className="absolute -top-1 -right-1 w-3.5 h-3.5 fill-yellow-400 text-yellow-400 drop-shadow" />
           )}
         </div>
         <div className="flex-shrink-0 w-20 sm:w-24">
