@@ -158,7 +158,7 @@ const ChannelEPGInfo = memo(function ChannelEPGInfo({
       </div>
     </div>
   );
-}
+});
 
 function SynopsisModal({ program, onClose }: { program: EPGProgram; onClose: () => void }) {
   return (
