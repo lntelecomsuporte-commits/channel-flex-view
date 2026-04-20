@@ -81,6 +81,37 @@ const PlayerPage = () => {
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const COMBO_SEQUENCE = ["L", "L", "L", "R", "R", "L"];
 
+  // Numeric channel jump: digite 149 + auto-confirma após 1.5s ou OK
+  const [numBuffer, setNumBuffer] = useState("");
+  const numTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const jumpToChannelNumber = useCallback(
+    (numStr: string) => {
+      if (!channels?.length || !numStr) return;
+      const target = parseInt(numStr, 10);
+      if (isNaN(target)) return;
+      const idx = channels.findIndex((c) => c.channel_number === target);
+      if (idx >= 0) {
+        setShowPreview(false);
+        setPreviewIndex(null);
+        setCurrentIndex(idx);
+      } else {
+        toast.error(`Canal ${target} não encontrado`);
+      }
+    },
+    [channels]
+  );
+  const pushDigit = useCallback((digit: string) => {
+    if (numTimerRef.current) clearTimeout(numTimerRef.current);
+    setNumBuffer((prev) => {
+      const next = (prev + digit).slice(-4);
+      numTimerRef.current = setTimeout(() => {
+        jumpToChannelNumber(next);
+        setNumBuffer("");
+      }, 1500);
+      return next;
+    });
+  }, [jumpToChannelNumber]);
+
   const pushCombo = useCallback((key: "L" | "R") => {
     const next = [...comboRef.current, key].slice(-COMBO_SEQUENCE.length);
     comboRef.current = next;
@@ -308,6 +339,22 @@ const PlayerPage = () => {
         }
       }
 
+      // Numeric keys: jump to channel by number
+      if (/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        pushDigit(e.key);
+        return;
+      }
+      // OK while typing number = confirm immediately
+      if (numBuffer && e.key === "Enter") {
+        if (numTimerRef.current) clearTimeout(numTimerRef.current);
+        e.preventDefault();
+        const buf = numBuffer;
+        setNumBuffer("");
+        jumpToChannelNumber(buf);
+        return;
+      }
+
       switch (e.key) {
         case "Escape":
         case "Backspace":
@@ -402,7 +449,7 @@ const PlayerPage = () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, toggleFavorite, showOSDTemporarily, favFocusIndex, favorites, channels, currentChannel, showOSD, showFavoritesBar, handleBackPress]);
+  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, toggleFavorite, showOSDTemporarily, favFocusIndex, favorites, channels, currentChannel, showOSD, showFavoritesBar, handleBackPress, pushDigit, numBuffer, jumpToChannelNumber]);
 
   // Clear favorites focus when OSD hides
   useEffect(() => {
@@ -499,6 +546,16 @@ const PlayerPage = () => {
                     ? "↕ Deslize para trocar • Toque para info"
                     : "↑↓ Trocar canal • →← Ver próximo • OK Lista de canais"}
                 </span>
+              </div>
+            </div>
+          )}
+
+          {/* Numeric channel input overlay */}
+          {numBuffer && (
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none animate-fade-in">
+              <div className="glass-panel px-8 py-6 text-center">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Canal</p>
+                <p className="text-6xl font-bold text-foreground tabular-nums">{numBuffer}</p>
               </div>
             </div>
           )}
