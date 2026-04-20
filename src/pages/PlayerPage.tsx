@@ -361,6 +361,7 @@ const PlayerPage = () => {
           default:
             if (isSelectKey(e)) {
               e.preventDefault();
+              enterHandledRef.current = true;
               if (favChannels.length > 0 && favFocusIndex < favChannels.length) {
                 const target = favChannels[favFocusIndex];
                 const idx = channels?.findIndex((c) => c.id === target.id) ?? -1;
@@ -447,13 +448,17 @@ const PlayerPage = () => {
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (!isSelectKey(e)) return;
-      enterHandledRef.current = false;
       if (enterLongPressTimerRef.current) {
         clearTimeout(enterLongPressTimerRef.current);
         enterLongPressTimerRef.current = null;
       }
       if (enterLongPressFiredRef.current) {
         enterLongPressFiredRef.current = false;
+        enterHandledRef.current = false;
+        return;
+      }
+      if (enterHandledRef.current) {
+        enterHandledRef.current = false;
         return;
       }
       if (showChannelList || synopsisProgram || showStats) return;
