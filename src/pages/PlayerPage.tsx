@@ -550,6 +550,16 @@ const PlayerPage = () => {
             </div>
           )}
 
+          {/* Numeric channel input overlay */}
+          {numBuffer && (
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none animate-fade-in">
+              <div className="glass-panel px-8 py-6 text-center">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Canal</p>
+                <p className="text-6xl font-bold text-foreground tabular-nums">{numBuffer}</p>
+              </div>
+            </div>
+          )}
+
           {/* Mobile floating controls */}
           {isMobile && (
             <div className="absolute right-3 bottom-20 z-20 flex flex-col items-center gap-2 animate-fade-in">
