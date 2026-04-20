@@ -81,6 +81,37 @@ const PlayerPage = () => {
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const COMBO_SEQUENCE = ["L", "L", "L", "R", "R", "L"];
 
+  // Numeric channel jump: digite 149 + auto-confirma após 1.5s ou OK
+  const [numBuffer, setNumBuffer] = useState("");
+  const numTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const jumpToChannelNumber = useCallback(
+    (numStr: string) => {
+      if (!channels?.length || !numStr) return;
+      const target = parseInt(numStr, 10);
+      if (isNaN(target)) return;
+      const idx = channels.findIndex((c) => c.channel_number === target);
+      if (idx >= 0) {
+        setShowPreview(false);
+        setPreviewIndex(null);
+        setCurrentIndex(idx);
+      } else {
+        toast.error(`Canal ${target} não encontrado`);
+      }
+    },
+    [channels]
+  );
+  const pushDigit = useCallback((digit: string) => {
+    if (numTimerRef.current) clearTimeout(numTimerRef.current);
+    setNumBuffer((prev) => {
+      const next = (prev + digit).slice(-4);
+      numTimerRef.current = setTimeout(() => {
+        jumpToChannelNumber(next);
+        setNumBuffer("");
+      }, 1500);
+      return next;
+    });
+  }, [jumpToChannelNumber]);
+
   const pushCombo = useCallback((key: "L" | "R") => {
     const next = [...comboRef.current, key].slice(-COMBO_SEQUENCE.length);
     comboRef.current = next;
