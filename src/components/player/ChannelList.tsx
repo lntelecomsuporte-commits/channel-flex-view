@@ -3,7 +3,8 @@ import { FixedSizeList, type ListChildComponentProps } from "react-window";
 import type { Channel } from "@/hooks/useChannels";
 import { useMultiEPG } from "@/hooks/useMultiEPG";
 import type { EPGProgram } from "@/hooks/useEPG";
-import { LogOut, X, Search, Info } from "lucide-react";
+import { useFavorites } from "@/hooks/useFavorites";
+import { LogOut, X, Search, Info, Star } from "lucide-react";
 
 interface ChannelListProps {
   channels: Channel[];
@@ -188,13 +189,14 @@ interface RowData {
   currentIndex: number;
   focusedIndex: number;
   epgMap: Map<string, EPGProgram[]>;
+  favoriteIds: Set<string>;
   onSelect: (index: number) => void;
   onSynopsis: (p: EPGProgram) => void;
   setItemRef: (index: number, el: HTMLDivElement | null) => void;
 }
 
 const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
-  const { filteredChannels, channels, currentIndex, focusedIndex, epgMap, onSelect, onSynopsis, setItemRef } = data;
+  const { filteredChannels, channels, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect, onSynopsis, setItemRef } = data;
   const channel = filteredChannels[index];
   const ch = channel as any;
   const programs = epgMap.get(channel.id) || [];
@@ -203,6 +205,7 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
   const realIndex = useMemo(() => channels.indexOf(channel), [channels, channel]);
   const isActive = realIndex === currentIndex;
   const isFocused = index === focusedIndex;
+  const isFav = favoriteIds.has(channel.id);
 
   return (
     <div style={style}>
@@ -217,11 +220,14 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
             : "hover:bg-accent/10"
         }`}
       >
-        <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-md overflow-hidden bg-white/10 flex items-center justify-center">
+        <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-md overflow-hidden bg-white/10 flex items-center justify-center relative">
           {channel.logo_url ? (
             <img src={channel.logo_url} alt={channel.name} className="w-full h-full object-contain p-0.5" loading="lazy" decoding="async" />
           ) : (
             <span className="text-xs text-muted-foreground font-bold">{channel.name.substring(0, 2)}</span>
+          )}
+          {isFav && (
+            <Star className="absolute -top-1 -right-1 w-3.5 h-3.5 fill-yellow-400 text-yellow-400 drop-shadow" />
           )}
         </div>
         <div className="flex-shrink-0 w-20 sm:w-24">
@@ -248,8 +254,13 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  const { favorites, toggleFavorite } = useFavorites();
+  const favoriteIds = useMemo(() => new Set(favorites.map((f) => f.channel_id)), [favorites]);
+
   const lastEnterRef = useRef<{ index: number; time: number }>({ index: -1, time: 0 });
-  const enterHoldTimerRef = useRef<number | null>(null);
+  const enterLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const enterLongPressFiredRef = useRef(false);
+  const LONG_PRESS_MS = 600;
 
   const epgMap = useMultiEPG(
     channels.map((ch) => ({
@@ -306,10 +317,11 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
     currentIndex,
     focusedIndex,
     epgMap,
+    favoriteIds,
     onSelect,
     onSynopsis: (p: EPGProgram) => setSynopsisProgram(p),
     setItemRef,
-  }), [filteredChannels, channels, currentIndex, focusedIndex, epgMap, onSelect]);
+  }), [filteredChannels, channels, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect]);
 
   useEffect(() => {
     if (!visible) return;
@@ -319,14 +331,6 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
         return;
       }
       const isSearchFocused = document.activeElement === searchRef.current;
-
-      const openSynopsisForFocused = () => {
-        const ch = filteredChannels[focusedIndex];
-        if (!ch) return;
-        const programs = epgMap.get(ch.id) || [];
-        const upcoming = findCurrentAndUpcoming(programs);
-        if (upcoming[0]) setSynopsisProgram(upcoming[0]);
-      };
 
       switch (e.key) {
         case "ArrowUp":
@@ -339,32 +343,16 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
           break;
         case "Enter":
           e.preventDefault(); e.stopPropagation();
-          if (e.repeat) {
-            // Long-press: open synopsis once
-            if (enterHoldTimerRef.current === null) {
-              enterHoldTimerRef.current = window.setTimeout(() => {}, 0);
-              openSynopsisForFocused();
-            }
-            break;
-          }
-          // Detect double-press within 400ms on same item
-          const now = Date.now();
-          const last = lastEnterRef.current;
-          if (last.index === focusedIndex && now - last.time < 400) {
-            lastEnterRef.current = { index: -1, time: 0 };
-            openSynopsisForFocused();
-          } else {
-            lastEnterRef.current = { index: focusedIndex, time: now };
-            // Delay select to allow double-press detection
-            window.setTimeout(() => {
-              if (lastEnterRef.current.index === focusedIndex && lastEnterRef.current.time === now) {
-                lastEnterRef.current = { index: -1, time: 0 };
-                if (filteredChannels[focusedIndex]) {
-                  const realIndex = channels.indexOf(filteredChannels[focusedIndex]);
-                  if (realIndex >= 0) onSelect(realIndex);
-                }
-              }
-            }, 400);
+          if (e.repeat) break;
+          enterLongPressFiredRef.current = false;
+          if (enterLongPressTimerRef.current) clearTimeout(enterLongPressTimerRef.current);
+          {
+            const ch = filteredChannels[focusedIndex];
+            const focusedId = ch?.id ?? "";
+            enterLongPressTimerRef.current = setTimeout(() => {
+              enterLongPressFiredRef.current = true;
+              if (focusedId) toggleFavorite(focusedId);
+            }, LONG_PRESS_MS);
           }
           break;
         case "Escape":
@@ -377,7 +365,19 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
       }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === "Enter") enterHoldTimerRef.current = null;
+      if (e.key !== "Enter") return;
+      if (enterLongPressTimerRef.current) {
+        clearTimeout(enterLongPressTimerRef.current);
+        enterLongPressTimerRef.current = null;
+      }
+      if (enterLongPressFiredRef.current) {
+        enterLongPressFiredRef.current = false;
+        return;
+      }
+      if (filteredChannels[focusedIndex]) {
+        const realIndex = channels.indexOf(filteredChannels[focusedIndex]);
+        if (realIndex >= 0) onSelect(realIndex);
+      }
     };
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("keyup", handleKeyUp, true);
@@ -385,7 +385,7 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
     };
-  }, [visible, focusedIndex, filteredChannels, channels, onSelect, onClose, synopsisProgram, epgMap]);
+  }, [visible, focusedIndex, filteredChannels, channels, onSelect, onClose, synopsisProgram, epgMap, toggleFavorite]);
 
   if (!visible) return null;
 
@@ -409,7 +409,7 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
           </div>
 
           <div className="flex items-center gap-3 flex-shrink-0">
-            <span className="text-xs text-muted-foreground hidden sm:inline">↑↓ Navegar • OK Selecionar • OK 2x/Longo Sinopse • ESC Fechar</span>
+            <span className="text-xs text-muted-foreground hidden sm:inline">↑↓ Navegar • OK Selecionar • Segure OK Favoritar • ESC Fechar</span>
             {onLogout && (
               <button onClick={(e) => { e.stopPropagation(); onLogout(); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-destructive/20 hover:bg-destructive/40 text-destructive text-xs font-medium transition-colors">
                 <LogOut className="w-3.5 h-3.5" /> Sair
