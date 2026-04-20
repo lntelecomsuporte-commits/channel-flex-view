@@ -272,10 +272,13 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
 
   useEffect(() => {
     if (visible) {
-      setFocusedIndex(0);
+      setFocusedIndex(currentIndex);
       setSearchQuery("");
+      requestAnimationFrame(() => {
+        listRef.current?.scrollToItem(currentIndex, "center");
+      });
     }
-  }, [visible]);
+  }, [visible, currentIndex]);
 
   useEffect(() => {
     listRef.current?.scrollToItem(focusedIndex, "smart");
