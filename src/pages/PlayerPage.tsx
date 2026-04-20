@@ -99,9 +99,9 @@ const PlayerPage = () => {
     }
   }, [focusedEpg, focusedChannel]);
 
-  const showOSDTemporarily = useCallback(() => {
+  const showOSDTemporarily = useCallback((withFavorites = false) => {
     setShowOSD(true);
-    setShowFavoritesBar(true);
+    if (withFavorites) setShowFavoritesBar(true);
     if (osdTimeout) clearTimeout(osdTimeout);
     const t = setTimeout(() => {
       setShowOSD(false);
