@@ -254,8 +254,13 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  const { favorites, toggleFavorite } = useFavorites();
+  const favoriteIds = useMemo(() => new Set(favorites.map((f) => f.channel_id)), [favorites]);
+
   const lastEnterRef = useRef<{ index: number; time: number }>({ index: -1, time: 0 });
-  const enterHoldTimerRef = useRef<number | null>(null);
+  const enterLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const enterLongPressFiredRef = useRef(false);
+  const LONG_PRESS_MS = 600;
 
   const epgMap = useMultiEPG(
     channels.map((ch) => ({
