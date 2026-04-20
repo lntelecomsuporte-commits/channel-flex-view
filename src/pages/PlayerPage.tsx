@@ -62,6 +62,9 @@ const PlayerPage = () => {
   const [synopsisProgram, setSynopsisProgram] = useState<EPGProgram | null>(null);
   const lastEnterRef = useRef<{ id: string; time: number }>({ id: "", time: 0 });
   const enterHandledRef = useRef(false);
+  const enterLongPressFiredRef = useRef(false);
+  const enterLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const LONG_PRESS_MS = 600;
 
   // Easter egg: ← ← ← → → ← + OK -> stats overlay
   const [showStats, setShowStats] = useState(false);
