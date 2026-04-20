@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useState } from "react";
 import type Hls from "hls.js";
 import { X } from "lucide-react";
 
