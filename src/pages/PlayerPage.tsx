@@ -17,11 +17,12 @@ import { useFavorites } from "@/hooks/useFavorites";
 import { isSelectKey } from "@/lib/remoteKeys";
 import { List, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const LONG_PRESS_MS = 600;
 
 const PlayerPage = () => {
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const isMobile = useIsMobile();
   const { favorites, isFavorite, toggleFavorite } = useFavorites();
 
@@ -29,6 +30,29 @@ const PlayerPage = () => {
     document.body.classList.add("player-mode");
     return () => document.body.classList.remove("player-mode");
   }, []);
+
+  // Boas-vindas ao abrir o app
+  const welcomedRef = useRef(false);
+  useEffect(() => {
+    if (!user || welcomedRef.current) return;
+    welcomedRef.current = true;
+    (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("display_name, username")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      const name =
+        data?.display_name?.trim() ||
+        data?.username?.trim() ||
+        user.email?.split("@")[0] ||
+        "";
+      const firstName = name.split(/\s+/)[0];
+      const greeting = firstName ? `Bem-vindo, ${firstName}!` : "Bem-vindo!";
+      toast(greeting, { duration: 3500 });
+    })();
+  }, [user]);
+
 
   const { data: channels, isLoading } = useChannels();
   const [currentIndex, setCurrentIndex] = useState(0);
