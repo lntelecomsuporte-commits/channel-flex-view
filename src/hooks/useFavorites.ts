@@ -59,9 +59,17 @@ export function useFavorites() {
   const isFavorite = (channelId: string) =>
     (query.data ?? []).some((f) => f.channel_id === channelId);
 
+  const setFavorite = (channelId: string, shouldBeFavorite: boolean) => {
+    const currentlyFavorite = isFavorite(channelId);
+    if (toggle.isPending || currentlyFavorite === shouldBeFavorite) return;
+    toggle.mutate(channelId);
+  };
+
   return {
     favorites: query.data ?? [],
     isFavorite,
     toggleFavorite: (channelId: string) => toggle.mutate(channelId),
+    setFavorite,
+    isUpdatingFavorite: toggle.isPending,
   };
 }
