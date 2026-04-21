@@ -176,8 +176,8 @@ const ProxyMonitoring = () => {
                       <span className="flex items-center gap-1"><User className="h-3 w-3" /> {getUserLabel(l.user_id)}</span>
                     </div>
                   </div>
-                  <Badge variant="default" className="bg-green-600 hover:bg-green-700">
-                    <span className="h-2 w-2 rounded-full bg-white mr-1.5 animate-pulse" />
+                  <Badge className="bg-primary/20 text-primary hover:bg-primary/30 border border-primary/40">
+                    <span className="h-2 w-2 rounded-full bg-primary mr-1.5 animate-pulse" />
                     Ao vivo
                   </Badge>
                 </div>
