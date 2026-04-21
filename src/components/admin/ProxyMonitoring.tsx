@@ -62,8 +62,19 @@ const formatBytes = (bytes: number) => {
 };
 
 const ProxyMonitoring = () => {
+  const queryClient = useQueryClient();
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const { data: logs, isLoading } = useProxyAccess();
   const { data: profiles } = useProfilesMap();
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["proxy-access-log"] }),
+      queryClient.invalidateQueries({ queryKey: ["profiles-map"] }),
+    ]);
+    setIsRefreshing(false);
+  };
 
   const now = Date.now();
   const ACTIVE_WINDOW_MS = 90_000;
