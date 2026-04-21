@@ -96,19 +96,28 @@ const ProxyMonitoring = () => {
   const now = Date.now();
   const ACTIVE_WINDOW_MS = 45_000;
 
-  // Fonte de verdade do canal atual: user_sessions (heartbeat). 
-  // Filtra para sessões realmente assistindo no momento.
-  const activeList = (sessions ?? [])
-    .filter((s) => s.is_watching && s.current_channel_name)
+  // Todos os usuários online (com heartbeat recente), assistindo ou não
+  const onlineUsers = (sessions ?? [])
     .map((s) => ({
       id: `${s.user_id}-${s.current_channel_id ?? "x"}`,
       user_id: s.user_id,
       ip_address: s.ip_address ?? "—",
       channel_name: s.current_channel_name,
-      stream_host: null as string | null,
+      is_watching: s.is_watching,
       last_seen_at: s.last_heartbeat_at,
     }))
     .sort((a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime());
+
+  // Ativos no proxy: cruza sessões assistindo com logs recentes do proxy
+  const proxyRecentSince = now - ACTIVE_WINDOW_MS * 4; // ~3min
+  const proxyActiveKeys = new Set(
+    (logs ?? [])
+      .filter((l) => new Date(l.last_seen_at).getTime() >= proxyRecentSince)
+      .map((l) => `${l.user_id ?? "anon"}|${l.channel_name ?? ""}`)
+  );
+  const activeList = onlineUsers
+    .filter((s) => s.is_watching && s.channel_name)
+    .filter((s) => proxyActiveKeys.has(`${s.user_id}|${s.channel_name}`));
 
   // Agrega histórico (24h) por IP+canal
   const since24h = now - 24 * 60 * 60 * 1000;
@@ -147,14 +156,25 @@ const ProxyMonitoring = () => {
   return (
     <div className="space-y-6">
       {/* Métricas resumidas */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-md bg-primary/10 text-primary">
+              <User className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Online agora</p>
+              <p className="text-2xl font-bold text-foreground">{onlineUsers.length}</p>
+            </div>
+          </CardContent>
+        </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 rounded-md bg-primary/10 text-primary">
               <Activity className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Ativos agora</p>
+              <p className="text-xs text-muted-foreground">No proxy agora</p>
               <p className="text-2xl font-bold text-foreground">{activeList.length}</p>
             </div>
           </CardContent>
@@ -183,22 +203,65 @@ const ProxyMonitoring = () => {
         </Card>
       </div>
 
-      {/* Sessões ativas */}
+      {/* Usuários online */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between gap-2">
             <span className="flex items-center gap-2">
-              <Activity className="h-4 w-4 text-primary" /> Ativos no proxy agora
+              <User className="h-4 w-4 text-primary" /> Usuários online agora
             </span>
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleRefresh}
               disabled={isRefreshing || isLoading}
             >
               <RefreshCw className={`h-4 w-4 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
               Atualizar
             </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!onlineUsers.length ? (
+            <p className="text-muted-foreground text-sm">Nenhum usuário online no momento.</p>
+          ) : (
+            <div className="space-y-2">
+              {onlineUsers.map((s) => (
+                <div key={s.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Tv2 className="h-3.5 w-3.5 text-primary" />
+                      <span className="font-medium text-foreground">
+                        {s.channel_name ?? <span className="text-muted-foreground italic">sem canal</span>}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1"><Globe className="h-3 w-3" /> {s.ip_address}</span>
+                      <span className="flex items-center gap-1"><User className="h-3 w-3" /> {getUserLabel(s.user_id)}</span>
+                    </div>
+                  </div>
+                  {s.is_watching ? (
+                    <Badge className="bg-primary/20 text-primary hover:bg-primary/30 border border-primary/40">
+                      <span className="h-2 w-2 rounded-full bg-primary mr-1.5 animate-pulse" />
+                      Assistindo
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-muted-foreground">
+                      Online
+                    </Badge>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Sessões ativas no proxy */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-4 w-4 text-primary" /> Ativos no proxy agora
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -213,7 +276,7 @@ const ProxyMonitoring = () => {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-sm">
                       <Tv2 className="h-3.5 w-3.5 text-primary" />
-                      <span className="font-medium text-foreground">{l.channel_name ?? l.stream_host ?? "—"}</span>
+                      <span className="font-medium text-foreground">{l.channel_name ?? "—"}</span>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1"><Globe className="h-3 w-3" /> {l.ip_address}</span>
