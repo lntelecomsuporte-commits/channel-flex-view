@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Plus, Trash2, ShieldOff, ShieldCheck, Pencil } from "lucide-react";
 import { useCategories } from "@/hooks/useChannels";
+import { UserStatusBadge } from "./UserStatusBadge";
 
 function useProfiles() {
   return useQuery({
@@ -233,6 +234,7 @@ const UserManagement = () => {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
+                    <UserStatusBadge userId={p.user_id} />
                     <span className={`text-xs px-2 py-0.5 rounded ${p.is_blocked ? "bg-destructive/20 text-destructive" : p.is_active ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
                       {p.is_blocked ? "Bloqueado" : p.is_active ? "Ativo" : "Inativo"}
                     </span>

@@ -503,6 +503,10 @@ const AdminPanel = () => {
           <TabsContent value="hubsoft">
             <HubsoftIntegration />
           </TabsContent>
+
+          <TabsContent value="monitoring">
+            <ProxyMonitoring />
+          </TabsContent>
         </Tabs>
       </div>
     </div>
