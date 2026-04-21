@@ -166,8 +166,19 @@ const ProxyMonitoring = () => {
       {/* Sessões ativas */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="h-4 w-4 text-primary" /> Ativos no proxy agora
+          <CardTitle className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2">
+              <Activity className="h-4 w-4 text-primary" /> Ativos no proxy agora
+            </span>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleRefresh}
+              disabled={isRefreshing || isLoading}
+            >
+              <RefreshCw className={`h-4 w-4 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Atualizar
+            </Button>
           </CardTitle>
         </CardHeader>
         <CardContent>
