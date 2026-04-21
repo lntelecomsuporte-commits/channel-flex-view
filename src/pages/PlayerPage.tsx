@@ -14,6 +14,7 @@ import SynopsisModal from "@/components/player/SynopsisModal";
 import StatsOverlay from "@/components/player/StatsOverlay";
 import FavoritesBar from "@/components/player/FavoritesBar";
 import { useFavorites } from "@/hooks/useFavorites";
+import { useSessionHeartbeat } from "@/hooks/useSessionHeartbeat";
 import { isSelectKey } from "@/lib/remoteKeys";
 import { List, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
@@ -81,6 +82,13 @@ const PlayerPage = () => {
   const currentChannel: Channel | null = channels?.[currentIndex] ?? null;
   const previewChannel: Channel | null = previewIndex !== null ? channels?.[previewIndex] ?? null : null;
   const focusedChannel: Channel | null = previewChannel ?? currentChannel;
+
+  // Mantém sessão viva no banco (admin enxerga online/canal atual)
+  useSessionHeartbeat({
+    channelId: currentChannel?.id ?? null,
+    channelName: currentChannel?.name ?? null,
+    isWatching: !!currentChannel,
+  });
 
   const [synopsisProgram, setSynopsisProgram] = useState<EPGProgram | null>(null);
   const [favFocusIndex, setFavFocusIndex] = useState<number | null>(null);

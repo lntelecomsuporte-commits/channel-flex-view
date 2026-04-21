@@ -13,10 +13,11 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Trash2, LogOut, Tv, Layers, Users, Link } from "lucide-react";
+import { Plus, Trash2, LogOut, Tv, Layers, Users, Link, Activity } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import UserManagement from "@/components/admin/UserManagement";
 import HubsoftIntegration from "@/components/admin/HubsoftIntegration";
+import ProxyMonitoring from "@/components/admin/ProxyMonitoring";
 import EpgChannelPicker from "@/components/admin/EpgChannelPicker";
 
 const emptyChannelForm = {
@@ -251,6 +252,7 @@ const AdminPanel = () => {
             <TabsTrigger value="categories"><Layers className="h-4 w-4 mr-1" /> Categorias</TabsTrigger>
             <TabsTrigger value="users"><Users className="h-4 w-4 mr-1" /> Usuários</TabsTrigger>
             <TabsTrigger value="hubsoft"><Link className="h-4 w-4 mr-1" /> Hubsoft</TabsTrigger>
+            <TabsTrigger value="monitoring"><Activity className="h-4 w-4 mr-1" /> Monitoramento</TabsTrigger>
           </TabsList>
 
           <TabsContent value="channels">
@@ -500,6 +502,10 @@ const AdminPanel = () => {
 
           <TabsContent value="hubsoft">
             <HubsoftIntegration />
+          </TabsContent>
+
+          <TabsContent value="monitoring">
+            <ProxyMonitoring />
           </TabsContent>
         </Tabs>
       </div>

@@ -247,6 +247,51 @@ export type Database = {
         }
         Relationships: []
       }
+      proxy_access_log: {
+        Row: {
+          bucket_minute: string
+          bytes_transferred: number
+          channel_id: string | null
+          channel_name: string | null
+          created_at: string
+          first_seen_at: string
+          id: string
+          ip_address: string
+          last_seen_at: string
+          request_count: number
+          stream_host: string | null
+          user_id: string | null
+        }
+        Insert: {
+          bucket_minute: string
+          bytes_transferred?: number
+          channel_id?: string | null
+          channel_name?: string | null
+          created_at?: string
+          first_seen_at?: string
+          id?: string
+          ip_address: string
+          last_seen_at?: string
+          request_count?: number
+          stream_host?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          bucket_minute?: string
+          bytes_transferred?: number
+          channel_id?: string | null
+          channel_name?: string | null
+          created_at?: string
+          first_seen_at?: string
+          id?: string
+          ip_address?: string
+          last_seen_at?: string
+          request_count?: number
+          stream_host?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       user_category_access: {
         Row: {
           category_id: string
@@ -339,11 +384,67 @@ export type Database = {
         }
         Relationships: []
       }
+      user_sessions: {
+        Row: {
+          created_at: string
+          current_channel_id: string | null
+          current_channel_name: string | null
+          ended_at: string | null
+          id: string
+          ip_address: string | null
+          is_watching: boolean
+          last_heartbeat_at: string
+          session_token: string
+          started_at: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_channel_id?: string | null
+          current_channel_name?: string | null
+          ended_at?: string | null
+          id?: string
+          ip_address?: string | null
+          is_watching?: boolean
+          last_heartbeat_at?: string
+          session_token: string
+          started_at?: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_channel_id?: string | null
+          current_channel_name?: string | null
+          ended_at?: string | null
+          id?: string
+          ip_address?: string | null
+          is_watching?: boolean
+          last_heartbeat_at?: string
+          session_token?: string
+          started_at?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      cleanup_old_monitoring_data: { Args: never; Returns: undefined }
+      get_user_online_status: {
+        Args: { _user_id: string }
+        Returns: {
+          current_channel_name: string
+          is_logged_in: boolean
+          is_watching: boolean
+          last_seen: string
+          session_started_at: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
