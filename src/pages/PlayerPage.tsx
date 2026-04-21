@@ -574,6 +574,7 @@ const PlayerPage = () => {
               channel={previewChannel}
               visible={true}
               direction={previewIndex !== null && previewIndex > currentIndex ? "next" : "prev"}
+              epgEnabled={preloadEpg}
             />
           ) : (
             <>

@@ -6,9 +6,10 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_launcher_tv"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:logo="@drawable/tv_launcher_logo"
+        android:roundIcon="@drawable/ic_launcher_tv"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
         android:banner="@drawable/tv_banner">
@@ -19,7 +20,8 @@
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
-            android:icon="@mipmap/ic_launcher"
+            android:icon="@drawable/ic_launcher_tv"
+            android:logo="@drawable/tv_launcher_logo"
             android:banner="@drawable/tv_banner"
             android:exported="true">
 
