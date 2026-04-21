@@ -458,6 +458,7 @@ const PlayerPage = () => {
       if (enterLongPressFiredRef.current) {
         enterLongPressFiredRef.current = false;
         enterHandledRef.current = false;
+        enterPressLockedRef.current = false;
         return;
       }
       enterPressLockedRef.current = false;

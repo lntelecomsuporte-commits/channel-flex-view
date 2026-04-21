@@ -400,6 +400,7 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
       }
       if (enterLongPressFiredRef.current) {
         enterLongPressFiredRef.current = false;
+        enterPressLockedRef.current = false;
         return;
       }
       enterPressLockedRef.current = false;
