@@ -1,4 +1,4 @@
-package app.lovable.dce7d3392c3f4716a54b6eb723a76e37;
+package net.lntelecom.tv;
 
 import com.getcapacitor.BridgeActivity;
 
