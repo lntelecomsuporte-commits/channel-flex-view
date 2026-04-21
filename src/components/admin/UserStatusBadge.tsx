@@ -179,6 +179,70 @@ export const UserStatusBadge = ({ userId }: UserStatusProps) => {
             )}
           </div>
 
+          <div className="border-t border-border pt-2 space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground">Buscar reprodução por data/hora</p>
+            <div className="flex gap-2 items-end">
+              <div className="flex-1 space-y-1">
+                <Label className="text-[10px] text-muted-foreground">Data e hora</Label>
+                <Input
+                  type="datetime-local"
+                  value={searchAt}
+                  onChange={(e) => setSearchAt(e.target.value)}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="w-20 space-y-1">
+                <Label className="text-[10px] text-muted-foreground">± min</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={240}
+                  value={windowMin}
+                  onChange={(e) => setWindowMin(Math.max(1, Number(e.target.value) || 15))}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <Button size="sm" className="h-8" onClick={handleSearch} disabled={!searchAt}>
+                <Search className="h-3 w-3" />
+              </Button>
+              {activeQuery && (
+                <Button size="sm" variant="ghost" className="h-8 px-2" onClick={clearSearch}>
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+            {activeQuery && (
+              <div className="max-h-44 overflow-y-auto space-y-1.5 mt-2">
+                {isSearching ? (
+                  <p className="text-xs text-muted-foreground italic">Buscando...</p>
+                ) : !nearbyPlayback?.length ? (
+                  <p className="text-xs text-muted-foreground italic">
+                    Nada reproduzido em ±{activeQuery.window} min de{" "}
+                    {format(new Date(activeQuery.at), "dd/MM HH:mm", { locale: ptBR })}.
+                  </p>
+                ) : (
+                  nearbyPlayback.map((it, idx) => (
+                    <div key={idx} className="text-xs p-2 rounded bg-secondary">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-foreground flex items-center gap-1">
+                          <Tv2 className="h-3 w-3 text-primary" /> {it.channel}
+                        </span>
+                        <span className="text-[10px] uppercase text-muted-foreground">{it.source}</span>
+                      </div>
+                      <div className="flex items-center justify-between mt-0.5 ml-4 text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {format(new Date(it.time), "dd/MM HH:mm", { locale: ptBR })}
+                        </span>
+                        {it.meta && <span>{it.meta}</span>}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="border-t border-border pt-2">
             <p className="text-xs font-semibold text-muted-foreground mb-2">Histórico recente</p>
             {!sessions?.length ? (
