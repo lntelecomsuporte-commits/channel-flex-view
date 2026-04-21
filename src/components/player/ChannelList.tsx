@@ -12,6 +12,7 @@ interface ChannelListProps {
   channels: Channel[];
   currentIndex: number;
   visible: boolean;
+  preloadEpg?: boolean;
   onSelect: (index: number) => void;
   onClose: () => void;
   onLogout?: () => void;
@@ -247,7 +248,7 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
 });
 Row.displayName = "ChannelRow";
 
-const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLogout }: ChannelListProps) => {
+const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSelect, onClose, onLogout }: ChannelListProps) => {
   const [focusedIndex, setFocusedIndex] = useState(currentIndex);
   const [synopsisProgram, setSynopsisProgram] = useState<EPGProgram | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -271,7 +272,7 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
       epg_url: (ch as any).epg_url,
       epg_channel_id: (ch as any).epg_channel_id,
     })),
-    visible
+    visible && preloadEpg
   );
 
   const filteredChannels = useMemo(() => {
