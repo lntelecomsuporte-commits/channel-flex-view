@@ -81,12 +81,14 @@ const ProxyMonitoring = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { data: logs, isLoading } = useProxyAccess();
   const { data: profiles } = useProfilesMap();
+  const { data: sessions } = useActiveSessions();
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["proxy-access-log"] }),
       queryClient.invalidateQueries({ queryKey: ["profiles-map"] }),
+      queryClient.invalidateQueries({ queryKey: ["active-sessions-monitoring"] }),
     ]);
     setIsRefreshing(false);
   };
@@ -94,18 +96,19 @@ const ProxyMonitoring = () => {
   const now = Date.now();
   const ACTIVE_WINDOW_MS = 45_000;
 
-  const active = (logs ?? []).filter((l) => now - new Date(l.last_seen_at).getTime() < ACTIVE_WINDOW_MS);
-
-  // Agrupa "ativos agora" por IP+user (mostra APENAS o canal mais recente — usuário assiste 1 canal por vez)
-  const activeMap = new Map<string, ProxyAccess>();
-  active.forEach((l) => {
-    const key = `${l.ip_address}|${l.user_id ?? "anon"}`;
-    const prev = activeMap.get(key);
-    if (!prev || new Date(l.last_seen_at) > new Date(prev.last_seen_at)) activeMap.set(key, l);
-  });
-  const activeList = [...activeMap.values()].sort(
-    (a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime()
-  );
+  // Fonte de verdade do canal atual: user_sessions (heartbeat). 
+  // Filtra para sessões realmente assistindo no momento.
+  const activeList = (sessions ?? [])
+    .filter((s) => s.is_watching && s.current_channel_name)
+    .map((s) => ({
+      id: `${s.user_id}-${s.current_channel_id ?? "x"}`,
+      user_id: s.user_id,
+      ip_address: s.ip_address ?? "—",
+      channel_name: s.current_channel_name,
+      stream_host: null as string | null,
+      last_seen_at: s.last_heartbeat_at,
+    }))
+    .sort((a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime());
 
   // Agrega histórico (24h) por IP+canal
   const since24h = now - 24 * 60 * 60 * 1000;
