@@ -49,6 +49,21 @@ const useProfilesMap = () =>
     },
   });
 
+const useActiveSessions = () =>
+  useQuery({
+    queryKey: ["active-sessions-monitoring"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_sessions")
+        .select("user_id, current_channel_id, current_channel_name, ip_address, last_heartbeat_at, is_watching")
+        .is("ended_at", null)
+        .gte("last_heartbeat_at", new Date(Date.now() - 90_000).toISOString());
+      if (error) throw error;
+      return data ?? [];
+    },
+    refetchInterval: 10_000,
+  });
+
 const formatBytes = (bytes: number) => {
   if (!bytes) return "—";
   const units = ["B", "KB", "MB", "GB", "TB"];
