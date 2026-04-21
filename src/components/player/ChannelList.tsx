@@ -17,7 +17,7 @@ interface ChannelListProps {
   onLogout?: () => void;
 }
 
-const LONG_PRESS_MS = 600;
+const LONG_PRESS_MS = 450;
 
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
@@ -257,11 +257,12 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const { favorites, toggleFavorite } = useFavorites();
+  const { favorites, isFavorite, setFavorite, isUpdatingFavorite } = useFavorites();
   const favoriteIds = useMemo(() => new Set(favorites.map((f) => f.channel_id)), [favorites]);
 
   const enterLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enterLongPressFiredRef = useRef(false);
+  const enterPressLockedRef = useRef(false);
 
   const epgMap = useMultiEPG(
     channels.map((ch) => ({
@@ -374,14 +375,17 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
           if (isSelectKey(e)) {
             e.preventDefault();
             e.stopPropagation();
+            if (e.repeat || enterPressLockedRef.current || isUpdatingFavorite) return;
             if (!enterLongPressTimerRef.current) {
               enterLongPressFiredRef.current = false;
               const ch = filteredChannels[focusedIndex];
               const focusedId = ch?.id ?? "";
+              const shouldFavorite = focusedId ? !isFavorite(focusedId) : false;
               enterLongPressTimerRef.current = setTimeout(() => {
                 enterLongPressFiredRef.current = true;
+                enterPressLockedRef.current = true;
                 enterLongPressTimerRef.current = null;
-                if (focusedId) toggleFavorite(focusedId);
+                if (focusedId) setFavorite(focusedId, shouldFavorite);
               }, LONG_PRESS_MS);
             }
           }
@@ -398,6 +402,7 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
         enterLongPressFiredRef.current = false;
         return;
       }
+      enterPressLockedRef.current = false;
       if (filteredChannels[focusedIndex]) {
         const realIndex = channels.indexOf(filteredChannels[focusedIndex]);
         if (realIndex >= 0) onSelect(realIndex);
@@ -410,7 +415,7 @@ const ChannelList = ({ channels, currentIndex, visible, onSelect, onClose, onLog
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
     };
-  }, [visible, focusedIndex, filteredChannels, channels, onSelect, onClose, synopsisProgram, toggleFavorite]);
+  }, [visible, focusedIndex, filteredChannels, channels, onSelect, onClose, synopsisProgram, setFavorite, isFavorite, isUpdatingFavorite]);
 
   if (!visible) return null;
 
