@@ -19,12 +19,12 @@ import { List, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
-const LONG_PRESS_MS = 600;
+const LONG_PRESS_MS = 450;
 
 const PlayerPage = () => {
   const { user, signOut } = useAuth();
   const isMobile = useIsMobile();
-  const { favorites, isFavorite, toggleFavorite } = useFavorites();
+  const { favorites, isFavorite, setFavorite, isUpdatingFavorite } = useFavorites();
 
   useEffect(() => {
     document.body.classList.add("player-mode");
@@ -96,6 +96,7 @@ const PlayerPage = () => {
   const enterHandledRef = useRef(false);
   const enterLongPressFiredRef = useRef(false);
   const enterLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const enterPressLockedRef = useRef(false);
 
   const [showStats, setShowStats] = useState(false);
   const playerRef = useRef<VideoPlayerHandle>(null);
@@ -432,14 +433,16 @@ const PlayerPage = () => {
               return;
             }
             // Fire TV dispara múltiplos keydown - ignorar repetidos
-            if (e.repeat) return;
+            if (e.repeat || enterPressLockedRef.current || isUpdatingFavorite) return;
             if (!enterLongPressTimerRef.current) {
               enterLongPressFiredRef.current = false;
               const focusedId = focusedChannel?.id ?? "";
+              const shouldFavorite = focusedId ? !isFavorite(focusedId) : false;
               enterLongPressTimerRef.current = setTimeout(() => {
                 enterLongPressFiredRef.current = true;
+                enterPressLockedRef.current = true;
                 enterLongPressTimerRef.current = null;
-                if (focusedId) toggleFavorite(focusedId);
+                if (focusedId) setFavorite(focusedId, shouldFavorite);
               }, LONG_PRESS_MS);
             }
           }
@@ -455,8 +458,10 @@ const PlayerPage = () => {
       if (enterLongPressFiredRef.current) {
         enterLongPressFiredRef.current = false;
         enterHandledRef.current = false;
+        enterPressLockedRef.current = false;
         return;
       }
+      enterPressLockedRef.current = false;
       if (enterHandledRef.current) {
         enterHandledRef.current = false;
         return;
@@ -492,7 +497,7 @@ const PlayerPage = () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, toggleFavorite, showOSDTemporarily, favFocusIndex, favorites, channels, currentChannel, showOSD, showFavoritesBar, handleBackPress, pushDigit, numBuffer, jumpToChannelNumber]);
+  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, setFavorite, isUpdatingFavorite, isFavorite, showOSDTemporarily, favFocusIndex, favorites, channels, currentChannel, showOSD, showFavoritesBar, handleBackPress, pushDigit, numBuffer, jumpToChannelNumber]);
 
   useEffect(() => {
     if (!showFavoritesBar || !showOSD) setFavFocusIndex(null);
