@@ -1,4 +1,4 @@
-package net.lntelecom.tv;
+package tv.lntelecom.net;
 
 import com.getcapacitor.BridgeActivity;
 
