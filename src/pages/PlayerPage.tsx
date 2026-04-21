@@ -421,12 +421,20 @@ const PlayerPage = () => {
             showOSDTemporarily(true);
             return;
           }
-          changeChannel("up");
+          if (e.repeat) {
+            showNextPreview("next");
+          } else {
+            changeChannel("up");
+          }
           return;
         case "ArrowDown":
           e.preventDefault();
           comboRef.current = [];
-          changeChannel("down");
+          if (e.repeat) {
+            showNextPreview("prev");
+          } else {
+            changeChannel("down");
+          }
           return;
         case "ArrowRight":
           e.preventDefault();
