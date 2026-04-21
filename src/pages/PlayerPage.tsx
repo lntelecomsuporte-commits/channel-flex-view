@@ -67,27 +67,6 @@ const PlayerPage = () => {
   const [previewTimeout, setPreviewTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   const [preloadEpg, setPreloadEpg] = useState(false);
-  useEffect(() => {
-    const canWarmEpg =
-      !!channels?.length &&
-      !showChannelList &&
-      !showPreview &&
-      favFocusIndex === null &&
-      !synopsisProgram &&
-      !showStats &&
-      !numBuffer &&
-      !showOSD &&
-      !showFavoritesBar;
-
-    if (!canWarmEpg) {
-      setPreloadEpg(false);
-      return;
-    }
-
-    setPreloadEpg(false);
-    const t = setTimeout(() => setPreloadEpg(true), EPG_IDLE_MS);
-    return () => clearTimeout(t);
-  }, [channels?.length, currentIndex, showChannelList, showPreview, favFocusIndex, synopsisProgram, showStats, numBuffer, showOSD, showFavoritesBar]);
 
   useMultiEPG(
     channels?.map((ch: any) => ({
@@ -167,6 +146,28 @@ const PlayerPage = () => {
   }, []);
 
   const fc: any = focusedChannel;
+  useEffect(() => {
+    const canWarmEpg =
+      !!channels?.length &&
+      !showChannelList &&
+      !showPreview &&
+      favFocusIndex === null &&
+      !synopsisProgram &&
+      !showStats &&
+      !numBuffer &&
+      !showOSD &&
+      !showFavoritesBar;
+
+    if (!canWarmEpg) {
+      setPreloadEpg(false);
+      return;
+    }
+
+    setPreloadEpg(false);
+    const t = setTimeout(() => setPreloadEpg(true), EPG_IDLE_MS);
+    return () => clearTimeout(t);
+  }, [channels?.length, currentIndex, showChannelList, showPreview, favFocusIndex, synopsisProgram, showStats, numBuffer, showOSD, showFavoritesBar]);
+
   const { data: focusedEpg } = useEPG({
     epg_type: fc?.epg_type,
     epg_url: fc?.epg_url,
@@ -590,7 +591,7 @@ const PlayerPage = () => {
                   }
                 }}
               />
-              <ChannelOSD channel={currentChannel} visible={showOSD} isFavorite={isFavorite(currentChannel.id)} />
+              <ChannelOSD channel={currentChannel} visible={showOSD} isFavorite={isFavorite(currentChannel.id)} epgEnabled={preloadEpg} />
             </>
           )}
 
@@ -654,6 +655,7 @@ const PlayerPage = () => {
             channels={channels}
             currentIndex={currentIndex}
             visible={showChannelList}
+            preloadEpg={preloadEpg}
             onSelect={(index) => {
               setCurrentIndex(index);
               setShowChannelList(false);
