@@ -93,25 +93,39 @@ const validateToken = async (token: string): Promise<string | null> => {
   }
 };
 
-// Cache de canais por host (5min) para evitar lookups
+// Cache de canais (5min). Chave = host + primeiro segmento distintivo do path
+// (ex: "200.194.238.229:8383|urbanturbo") para diferenciar canais no mesmo host.
 const channelCache = new Map<string, { id: string | null; name: string | null; expiresAt: number }>();
+
+const getChannelKey = (u: URL): string => {
+  // Pega o segmento mais "distintivo" do path: normalmente o nome do stream
+  // Ex: /live/urbanturbo/playlist.m3u8 → "urbanturbo"
+  const segments = u.pathname.split("/").filter(Boolean);
+  // Remove segmentos genéricos finais (playlist.m3u8, index.m3u8, chunklist*, etc) e iniciais (live)
+  const meaningful = segments.filter(
+    (s) => !/^(live|hls|stream)$/i.test(s) && !/\.(m3u8|ts|m4s|mp4|key)$/i.test(s) && !/^chunklist/i.test(s),
+  );
+  const distinctive = meaningful[0] ?? segments[0] ?? "";
+  return `${u.host}|${distinctive}`;
+};
 
 const lookupChannel = async (targetUrl: string): Promise<{ id: string | null; name: string | null }> => {
   try {
     const u = new URL(targetUrl);
-    const host = u.host;
-    const cached = channelCache.get(host);
+    const cacheKey = getChannelKey(u);
+    const cached = channelCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) return { id: cached.id, name: cached.name };
 
-    const { data } = await adminClient
-      .from("channels")
-      .select("id, name, stream_url")
-      .ilike("stream_url", `%${host}%`)
-      .limit(1);
+    // Match exato pelo path do stream (mais preciso que match por host)
+    // Buscamos canais cujo stream_url contém host + segmento distintivo
+    const [, distinctive] = cacheKey.split("|");
+    let query = adminClient.from("channels").select("id, name, stream_url").ilike("stream_url", `%${u.host}%`);
+    if (distinctive) query = query.ilike("stream_url", `%/${distinctive}/%`);
 
+    const { data } = await query.limit(1);
     const ch = data?.[0];
     const result = { id: ch?.id ?? null, name: ch?.name ?? null };
-    channelCache.set(host, { ...result, expiresAt: Date.now() + 5 * 60_000 });
+    channelCache.set(cacheKey, { ...result, expiresAt: Date.now() + 5 * 60_000 });
     return result;
   } catch {
     return { id: null, name: null };
