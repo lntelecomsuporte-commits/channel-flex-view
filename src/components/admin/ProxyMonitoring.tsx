@@ -77,18 +77,20 @@ const ProxyMonitoring = () => {
   };
 
   const now = Date.now();
-  const ACTIVE_WINDOW_MS = 90_000;
+  const ACTIVE_WINDOW_MS = 45_000;
 
   const active = (logs ?? []).filter((l) => now - new Date(l.last_seen_at).getTime() < ACTIVE_WINDOW_MS);
 
-  // Agrupa "ativos agora" por IP+user+canal (o mais recente por chave)
+  // Agrupa "ativos agora" por IP+user (mostra APENAS o canal mais recente — usuário assiste 1 canal por vez)
   const activeMap = new Map<string, ProxyAccess>();
   active.forEach((l) => {
-    const key = `${l.ip_address}|${l.user_id ?? "anon"}|${l.channel_id ?? "?"}`;
+    const key = `${l.ip_address}|${l.user_id ?? "anon"}`;
     const prev = activeMap.get(key);
     if (!prev || new Date(l.last_seen_at) > new Date(prev.last_seen_at)) activeMap.set(key, l);
   });
-  const activeList = [...activeMap.values()];
+  const activeList = [...activeMap.values()].sort(
+    (a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime()
+  );
 
   // Agrega histórico (24h) por IP+canal
   const since24h = now - 24 * 60 * 60 * 1000;
