@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 const LONG_PRESS_MS = 450;
+const EPG_IDLE_MS = 12000;
 
 const PlayerPage = () => {
   const { user, signOut } = useAuth();
@@ -67,14 +68,26 @@ const PlayerPage = () => {
 
   const [preloadEpg, setPreloadEpg] = useState(false);
   useEffect(() => {
-    if (!channels?.length || showChannelList) {
+    const canWarmEpg =
+      !!channels?.length &&
+      !showChannelList &&
+      !showPreview &&
+      favFocusIndex === null &&
+      !synopsisProgram &&
+      !showStats &&
+      !numBuffer &&
+      !showOSD &&
+      !showFavoritesBar;
+
+    if (!canWarmEpg) {
       setPreloadEpg(false);
       return;
     }
+
     setPreloadEpg(false);
-    const t = setTimeout(() => setPreloadEpg(true), 8000);
+    const t = setTimeout(() => setPreloadEpg(true), EPG_IDLE_MS);
     return () => clearTimeout(t);
-  }, [channels?.length, currentIndex, showChannelList]);
+  }, [channels?.length, currentIndex, showChannelList, showPreview, favFocusIndex, synopsisProgram, showStats, numBuffer, showOSD, showFavoritesBar]);
 
   useMultiEPG(
     channels?.map((ch: any) => ({
@@ -158,7 +171,7 @@ const PlayerPage = () => {
     epg_type: fc?.epg_type,
     epg_url: fc?.epg_url,
     epg_channel_id: fc?.epg_channel_id,
-  });
+  }, preloadEpg);
 
   const openSynopsisForFocused = useCallback(() => {
     if (focusedEpg?.current && focusedChannel) {
