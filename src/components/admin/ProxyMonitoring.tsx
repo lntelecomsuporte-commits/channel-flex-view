@@ -1,10 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Activity, Globe, Tv2, User, Wifi } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Activity, Globe, Tv2, User, Wifi, RefreshCw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useState } from "react";
 
 type ProxyAccess = {
   id: string;
@@ -60,8 +62,19 @@ const formatBytes = (bytes: number) => {
 };
 
 const ProxyMonitoring = () => {
+  const queryClient = useQueryClient();
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const { data: logs, isLoading } = useProxyAccess();
   const { data: profiles } = useProfilesMap();
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["proxy-access-log"] }),
+      queryClient.invalidateQueries({ queryKey: ["profiles-map"] }),
+    ]);
+    setIsRefreshing(false);
+  };
 
   const now = Date.now();
   const ACTIVE_WINDOW_MS = 90_000;
@@ -153,8 +166,19 @@ const ProxyMonitoring = () => {
       {/* Sessões ativas */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="h-4 w-4 text-primary" /> Ativos no proxy agora
+          <CardTitle className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2">
+              <Activity className="h-4 w-4 text-primary" /> Ativos no proxy agora
+            </span>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleRefresh}
+              disabled={isRefreshing || isLoading}
+            >
+              <RefreshCw className={`h-4 w-4 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Atualizar
+            </Button>
           </CardTitle>
         </CardHeader>
         <CardContent>
