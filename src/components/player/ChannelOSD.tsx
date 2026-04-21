@@ -24,6 +24,7 @@ interface ChannelOSDProps {
   channel: Channel;
   visible: boolean;
   isFavorite?: boolean;
+  epgEnabled?: boolean;
 }
 
 function formatTime(dateStr: string) {
@@ -48,13 +49,13 @@ function ProgramProgress({ startDate, endDate }: { startDate: string; endDate: s
   );
 }
 
-const ChannelOSD = ({ channel, visible, isFavorite }: ChannelOSDProps) => {
+const ChannelOSD = ({ channel, visible, isFavorite, epgEnabled = true }: ChannelOSDProps) => {
   const ch = channel as any;
   const { data: epg } = useEPG({
     epg_type: ch.epg_type,
     epg_url: ch.epg_url,
     epg_channel_id: ch.epg_channel_id,
-  });
+  }, epgEnabled);
   const altText = ch.epg_alt_text as string | null;
 
   if (!visible) return null;

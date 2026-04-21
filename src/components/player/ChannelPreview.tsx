@@ -5,6 +5,7 @@ interface ChannelPreviewProps {
   channel: Channel | null;
   visible: boolean;
   direction: "next" | "prev";
+  epgEnabled?: boolean;
 }
 
 function formatTime(dateStr: string) {
@@ -29,13 +30,13 @@ function ProgramProgress({ startDate, endDate }: { startDate: string; endDate: s
   );
 }
 
-const ChannelPreview = ({ channel, visible, direction }: ChannelPreviewProps) => {
+const ChannelPreview = ({ channel, visible, direction, epgEnabled = true }: ChannelPreviewProps) => {
   const ch = channel as any;
   const { data: epg } = useEPG({
     epg_type: ch?.epg_type,
     epg_url: ch?.epg_url,
     epg_channel_id: ch?.epg_channel_id,
-  });
+  }, epgEnabled);
   const altText = ch?.epg_alt_text as string | null;
 
   if (!visible || !channel) return null;
