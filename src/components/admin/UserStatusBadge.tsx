@@ -152,7 +152,7 @@ export const UserStatusBadge = ({ userId }: UserStatusProps) => {
           {label}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-3" align="end">
+      <PopoverContent className="w-96 p-3" align="end">
         <div className="space-y-3">
           <div>
             <p className="text-sm font-semibold text-foreground">
