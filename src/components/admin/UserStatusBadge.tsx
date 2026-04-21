@@ -27,6 +27,9 @@ const ACTIVE_WINDOW_MS = 90_000;
 
 export const UserStatusBadge = ({ userId }: UserStatusProps) => {
   const [open, setOpen] = useState(false);
+  const [searchAt, setSearchAt] = useState<string>("");
+  const [windowMin, setWindowMin] = useState<number>(15);
+  const [activeQuery, setActiveQuery] = useState<{ at: string; window: number } | null>(null);
 
   const { data: sessions } = useQuery({
     queryKey: ["user-sessions", userId],
@@ -42,6 +45,70 @@ export const UserStatusBadge = ({ userId }: UserStatusProps) => {
     },
     refetchInterval: 15_000,
   });
+
+  const { data: nearbyPlayback, isFetching: isSearching } = useQuery({
+    queryKey: ["user-playback-near", userId, activeQuery?.at, activeQuery?.window],
+    enabled: !!activeQuery,
+    queryFn: async () => {
+      if (!activeQuery) return [];
+      const center = new Date(activeQuery.at).getTime();
+      const ms = activeQuery.window * 60_000;
+      const from = new Date(center - ms).toISOString();
+      const to = new Date(center + ms).toISOString();
+
+      const [proxyRes, sessRes] = await Promise.all([
+        supabase
+          .from("proxy_access_log")
+          .select("channel_name, bucket_minute, request_count, bytes_transferred")
+          .eq("user_id", userId)
+          .gte("bucket_minute", from)
+          .lte("bucket_minute", to)
+          .order("bucket_minute", { ascending: true }),
+        supabase
+          .from("user_sessions")
+          .select("current_channel_name, last_heartbeat_at, is_watching")
+          .eq("user_id", userId)
+          .gte("last_heartbeat_at", from)
+          .lte("last_heartbeat_at", to)
+          .order("last_heartbeat_at", { ascending: true }),
+      ]);
+
+      type Item = { time: string; channel: string; source: "proxy" | "session"; meta?: string };
+      const items: Item[] = [];
+      (proxyRes.data ?? []).forEach((r: any) => {
+        if (!r.channel_name) return;
+        const mb = (Number(r.bytes_transferred ?? 0) / 1024 / 1024).toFixed(1);
+        items.push({
+          time: r.bucket_minute,
+          channel: r.channel_name,
+          source: "proxy",
+          meta: `${r.request_count} req · ${mb} MB`,
+        });
+      });
+      (sessRes.data ?? []).forEach((r: any) => {
+        if (!r.current_channel_name || !r.is_watching) return;
+        items.push({
+          time: r.last_heartbeat_at,
+          channel: r.current_channel_name,
+          source: "session",
+        });
+      });
+
+      return items.sort(
+        (a, b) => Math.abs(new Date(a.time).getTime() - center) - Math.abs(new Date(b.time).getTime() - center)
+      );
+    },
+  });
+
+  const handleSearch = () => {
+    if (!searchAt) return;
+    setActiveQuery({ at: new Date(searchAt).toISOString(), window: windowMin });
+  };
+
+  const clearSearch = () => {
+    setActiveQuery(null);
+    setSearchAt("");
+  };
 
   const now = Date.now();
   const latest = sessions?.[0];
