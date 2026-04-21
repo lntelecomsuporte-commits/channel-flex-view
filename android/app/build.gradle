@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "app.lovable.dce7d3392c3f4716a54b6eb723a76e37"
+    namespace = "net.lntelecom.tv"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "app.lovable.dce7d3392c3f4716a54b6eb723a76e37"
+        applicationId "net.lntelecom.tv"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
