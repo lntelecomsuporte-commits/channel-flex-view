@@ -1,10 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Activity, Globe, Tv2, User, Wifi } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Activity, Globe, Tv2, User, Wifi, RefreshCw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useState } from "react";
 
 type ProxyAccess = {
   id: string;
