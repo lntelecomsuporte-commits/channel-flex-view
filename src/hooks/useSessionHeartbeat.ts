@@ -30,35 +30,34 @@ export const useSessionHeartbeat = ({ channelId, channelName, isWatching = false
     if (!user) return;
 
     let cancelled = false;
+    const userAgent = navigator.userAgent.slice(0, 500);
 
     const startSession = async () => {
-      const { data, error } = await supabase
-        .from("user_sessions")
-        .insert({
-          user_id: user.id,
-          session_token: tokenRef.current,
-          user_agent: navigator.userAgent.slice(0, 500),
-          current_channel_id: channelInfoRef.current.channelId ?? null,
-          current_channel_name: channelInfoRef.current.channelName ?? null,
-          is_watching: channelInfoRef.current.isWatching,
-        })
-        .select("id")
-        .single();
+      const { data, error } = await supabase.functions.invoke("session-heartbeat", {
+        body: {
+          action: "start",
+          sessionToken: tokenRef.current,
+          userAgent,
+          channelId: channelInfoRef.current.channelId ?? null,
+          channelName: channelInfoRef.current.channelName ?? null,
+          isWatching: channelInfoRef.current.isWatching,
+        },
+      });
 
       if (error || cancelled) return;
       sessionIdRef.current = data.id;
 
       intervalRef.current = setInterval(async () => {
         if (!sessionIdRef.current) return;
-        await supabase
-          .from("user_sessions")
-          .update({
-            last_heartbeat_at: new Date().toISOString(),
-            current_channel_id: channelInfoRef.current.channelId ?? null,
-            current_channel_name: channelInfoRef.current.channelName ?? null,
-            is_watching: channelInfoRef.current.isWatching,
-          })
-          .eq("id", sessionIdRef.current);
+        await supabase.functions.invoke("session-heartbeat", {
+          body: {
+            action: "heartbeat",
+            sessionId: sessionIdRef.current,
+            channelId: channelInfoRef.current.channelId ?? null,
+            channelName: channelInfoRef.current.channelName ?? null,
+            isWatching: channelInfoRef.current.isWatching,
+          },
+        });
       }, HEARTBEAT_INTERVAL_MS);
     };
 
@@ -67,10 +66,13 @@ export const useSessionHeartbeat = ({ channelId, channelName, isWatching = false
     const endSession = () => {
       if (sessionIdRef.current) {
         // beacon-style: fire-and-forget
-        supabase
-          .from("user_sessions")
-          .update({ ended_at: new Date().toISOString() })
-          .eq("id", sessionIdRef.current)
+        supabase.functions
+          .invoke("session-heartbeat", {
+            body: {
+              action: "end",
+              sessionId: sessionIdRef.current,
+            },
+          })
           .then(() => {});
       }
     };
