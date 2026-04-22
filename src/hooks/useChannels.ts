@@ -10,6 +10,12 @@ export type Category = Tables<"categories">;
 export function useChannels() {
   const query = useQuery({
     queryKey: ["channels"],
+    // Sempre revalida ao abrir o app / voltar foco — garante que mudanças
+    // de logo/URL feitas no painel apareçam assim que o APK reabrir.
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
 
