@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react";
 import Hls from "hls.js";
 import { Capacitor } from "@capacitor/core";
-import { getPlayableStreamUrl, getProxyStreamUrl } from "@/lib/stream";
+import { getPlayableStreamUrl } from "@/lib/stream";
 
 const isNative = Capacitor.isNativePlatform();
 
@@ -18,9 +18,8 @@ export interface VideoPlayerHandle {
 const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
-  const hasRetriedWithProxyRef = useRef(false);
   const [muted, setMuted] = useState(true);
-  const [playableStreamUrl, setPlayableStreamUrl] = useState(() => getPlayableStreamUrl(streamUrl));
+  const playableStreamUrl = getPlayableStreamUrl(streamUrl);
 
   useImperativeHandle(ref, () => ({
     getVideoElement: () => videoRef.current,
@@ -28,24 +27,8 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   }), []);
 
   useEffect(() => {
-    hasRetriedWithProxyRef.current = false;
-    setPlayableStreamUrl(getPlayableStreamUrl(streamUrl));
-  }, [streamUrl]);
-
-  useEffect(() => {
     const video = videoRef.current;
     if (!video || !playableStreamUrl) return;
-
-    const fallbackToProxy = () => {
-      if (hasRetriedWithProxyRef.current) return false;
-
-      const proxyUrl = getProxyStreamUrl(streamUrl);
-      if (!proxyUrl || proxyUrl === playableStreamUrl) return false;
-
-      hasRetriedWithProxyRef.current = true;
-      setPlayableStreamUrl(proxyUrl);
-      return true;
-    };
 
     video.pause();
     video.removeAttribute("src");
@@ -74,33 +57,12 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         if (autoPlay) video.play().catch(() => {});
       });
-      hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (!data.fatal) return;
-
-        if (data.type === Hls.ErrorTypes.NETWORK_ERROR && fallbackToProxy()) {
-          hls.destroy();
-          hlsRef.current = null;
-          return;
-        }
-
-        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-          hls.recoverMediaError();
-          return;
-        }
-
-        hls.destroy();
-        hlsRef.current = null;
-      });
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = playableStreamUrl;
-      video.onerror = () => {
-        fallbackToProxy();
-      };
       if (autoPlay) video.play().catch(() => {});
     }
 
     return () => {
-      video.onerror = null;
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;

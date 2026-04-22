@@ -7,16 +7,6 @@ const getProxyBaseUrl = () => {
   return `${backendUrl}/functions/v1/hls-proxy`;
 };
 
-const buildProxyUrl = (streamUrl: string, token: string): string => {
-  const proxyBaseUrl = getProxyBaseUrl();
-  if (!proxyBaseUrl) return streamUrl;
-
-  const proxyUrl = new URL(proxyBaseUrl);
-  proxyUrl.searchParams.set("url", streamUrl);
-  proxyUrl.searchParams.set("token", token);
-  return proxyUrl.toString();
-};
-
 /**
  * Versão SÍNCRONA: usa o token JWT atual em memória.
  * Necessária porque HLS.js carrega segmentos sem await.
@@ -46,23 +36,10 @@ export const getPlayableStreamUrl = (streamUrl: string): string => {
       return streamUrl;
     }
 
-    return buildProxyUrl(streamUrl, token);
-  } catch {
-    return streamUrl;
-  }
-};
-
-export const getProxyStreamUrl = (streamUrl: string): string => {
-  if (!streamUrl) return streamUrl;
-
-  try {
-    const token = getCurrentAccessTokenSync();
-    if (!token) {
-      console.warn("[stream] Sem token JWT — proxy exigirá login");
-      return streamUrl;
-    }
-
-    return buildProxyUrl(streamUrl, token);
+    const proxyUrl = new URL(proxyBaseUrl);
+    proxyUrl.searchParams.set("url", streamUrl);
+    proxyUrl.searchParams.set("token", token);
+    return proxyUrl.toString();
   } catch {
     return streamUrl;
   }
