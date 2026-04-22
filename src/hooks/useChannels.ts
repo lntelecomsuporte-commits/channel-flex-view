@@ -1,12 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import { primeLogoVersions } from "@/lib/logoCache";
 
 export type Channel = Tables<"channels">;
 export type Category = Tables<"categories">;
 
 export function useChannels() {
-  return useQuery({
+  const query = useQuery({
     queryKey: ["channels"],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
