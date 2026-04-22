@@ -3,10 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, Globe, Tv2, User, Wifi, RefreshCw } from "lucide-react";
+import { Activity, Globe, Tv2, User, Wifi, RefreshCw, ChevronDown } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useState } from "react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 type ProxyAccess = {
   id: string;
@@ -55,7 +56,7 @@ const useActiveSessions = () =>
     queryFn: async () => {
       const { data, error } = await supabase
         .from("user_sessions")
-        .select("user_id, current_channel_id, current_channel_name, ip_address, last_heartbeat_at, is_watching")
+        .select("user_id, current_channel_id, current_channel_name, ip_address, client_ipv4, client_ipv6, user_agent, last_heartbeat_at, started_at, is_watching")
         .is("ended_at", null)
         .gte("last_heartbeat_at", new Date(Date.now() - 90_000).toISOString());
       if (error) throw error;
@@ -102,6 +103,10 @@ const ProxyMonitoring = () => {
       id: `${s.user_id}-${s.current_channel_id ?? "x"}`,
       user_id: s.user_id,
       ip_address: s.ip_address ?? "—",
+      client_ipv4: (s as any).client_ipv4 as string | null,
+      client_ipv6: (s as any).client_ipv6 as string | null,
+      user_agent: (s as any).user_agent as string | null,
+      started_at: (s as any).started_at as string | null,
       channel_name: s.current_channel_name,
       is_watching: s.is_watching,
       last_seen_at: s.last_heartbeat_at,
@@ -227,30 +232,69 @@ const ProxyMonitoring = () => {
           ) : (
             <div className="space-y-2">
               {onlineUsers.map((s) => (
-                <div key={s.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Tv2 className="h-3.5 w-3.5 text-primary" />
-                      <span className="font-medium text-foreground">
-                        {s.channel_name ?? <span className="text-muted-foreground italic">sem canal</span>}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><Globe className="h-3 w-3" /> {s.ip_address}</span>
-                      <span className="flex items-center gap-1"><User className="h-3 w-3" /> {getUserLabel(s.user_id)}</span>
-                    </div>
+                <Collapsible key={s.id}>
+                  <div className="rounded-lg bg-secondary">
+                    <CollapsibleTrigger className="w-full flex items-center justify-between p-3 text-left hover:bg-secondary/70 transition-colors rounded-lg group">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Tv2 className="h-3.5 w-3.5 text-primary" />
+                          <span className="font-medium text-foreground">
+                            {s.channel_name ?? <span className="text-muted-foreground italic">sem canal</span>}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                          <span className="flex items-center gap-1"><Globe className="h-3 w-3" /> {s.ip_address}</span>
+                          <span className="flex items-center gap-1"><User className="h-3 w-3" /> {getUserLabel(s.user_id)}</span>
+                          <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" />
+                        </div>
+                      </div>
+                      {s.is_watching ? (
+                        <Badge className="bg-primary/20 text-primary hover:bg-primary/30 border border-primary/40">
+                          <span className="h-2 w-2 rounded-full bg-primary mr-1.5 animate-pulse" />
+                          Assistindo
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-muted-foreground">
+                          Online
+                        </Badge>
+                      )}
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="px-3 pb-3 pt-1 border-t border-border/50 space-y-1.5 text-xs">
+                        <div className="grid grid-cols-[110px_1fr] gap-2">
+                          <span className="text-muted-foreground">IP servidor:</span>
+                          <span className="font-mono text-foreground break-all">{s.ip_address}</span>
+                        </div>
+                        <div className="grid grid-cols-[110px_1fr] gap-2">
+                          <span className="text-muted-foreground">IPv4 cliente:</span>
+                          <span className="font-mono text-foreground break-all">
+                            {s.client_ipv4 ?? <span className="text-muted-foreground italic">não detectado</span>}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-[110px_1fr] gap-2">
+                          <span className="text-muted-foreground">IPv6 cliente:</span>
+                          <span className="font-mono text-foreground break-all">
+                            {s.client_ipv6 ?? <span className="text-muted-foreground italic">sem IPv6</span>}
+                          </span>
+                        </div>
+                        {s.started_at && (
+                          <div className="grid grid-cols-[110px_1fr] gap-2">
+                            <span className="text-muted-foreground">Sessão iniciada:</span>
+                            <span className="text-foreground">
+                              {formatDistanceToNow(new Date(s.started_at), { addSuffix: true, locale: ptBR })}
+                            </span>
+                          </div>
+                        )}
+                        {s.user_agent && (
+                          <div className="grid grid-cols-[110px_1fr] gap-2">
+                            <span className="text-muted-foreground">User agent:</span>
+                            <span className="text-foreground break-all">{s.user_agent}</span>
+                          </div>
+                        )}
+                      </div>
+                    </CollapsibleContent>
                   </div>
-                  {s.is_watching ? (
-                    <Badge className="bg-primary/20 text-primary hover:bg-primary/30 border border-primary/40">
-                      <span className="h-2 w-2 rounded-full bg-primary mr-1.5 animate-pulse" />
-                      Assistindo
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-muted-foreground">
-                      Online
-                    </Badge>
-                  )}
-                </div>
+                </Collapsible>
               ))}
             </div>
           )}
