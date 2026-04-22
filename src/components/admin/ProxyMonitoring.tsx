@@ -130,8 +130,7 @@ const ProxyMonitoring = () => {
       is_watching: boolean;
       last_seen_at: string;
     }>())
-    .values()
-    .toArray()
+    |> Array.from(^.values())
     .sort((a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime());
 
   // Ativos no proxy: cruza sessões assistindo com logs recentes do proxy
