@@ -174,6 +174,13 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
         <Row label="Frames perdidos" value={`${stats.droppedFrames} / ${stats.totalFrames}`} />
         <Row label="Qualidade" value={stats.level} />
         <Row label="Codec" value={stats.codec} />
+        <Row
+          label={`Destino ${destIp.family ?? ""}`.trim()}
+          value={destIp.host ? `${destIp.address}` : "—"}
+        />
+        {destIp.host && (
+          <Row label="Host" value={destIp.host} />
+        )}
       </div>
     </div>
   );
