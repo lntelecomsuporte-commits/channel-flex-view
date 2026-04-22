@@ -46,13 +46,69 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     } else if (Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: true,
+        // Buffer grande para resistir a oscilações de rede (até ~90s à frente)
+        lowLatencyMode: false,
+        maxBufferLength: 60,
+        maxMaxBufferLength: 120,
+        backBufferLength: 30,
+        maxBufferSize: 120 * 1000 * 1000, // 120 MB
+        maxBufferHole: 1.0,
+        highBufferWatchdogPeriod: 3,
+        nudgeMaxRetry: 10,
+        // Retries agressivos para fragmentos e manifestos
+        fragLoadingMaxRetry: 8,
+        fragLoadingRetryDelay: 500,
+        fragLoadingMaxRetryTimeout: 16000,
+        manifestLoadingMaxRetry: 6,
+        manifestLoadingRetryDelay: 500,
+        manifestLoadingMaxRetryTimeout: 16000,
+        levelLoadingMaxRetry: 6,
+        levelLoadingRetryDelay: 500,
+        levelLoadingMaxRetryTimeout: 16000,
+        // ABR conservador: começa baixo, sobe conforme buffer enche
+        startLevel: -1,
+        abrEwmaDefaultEstimate: 500000,
+        abrBandWidthFactor: 0.85,
+        abrBandWidthUpFactor: 0.6,
       });
       hlsRef.current = hls;
       hls.loadSource(playableStreamUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         if (autoPlay) video.play().catch(() => {});
+      });
+
+      // Recuperação automática de erros — em vez de travar, tenta continuar
+      // tocando o que está no buffer (gera efeito "quadriculado" natural do H.264
+      // em vez de imagem congelada).
+      let mediaErrorRecoveryAttempts = 0;
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (!data.fatal) return;
+        switch (data.type) {
+          case Hls.ErrorTypes.NETWORK_ERROR:
+            console.warn("[HLS] Erro de rede fatal — tentando retomar:", data.details);
+            hls.startLoad();
+            break;
+          case Hls.ErrorTypes.MEDIA_ERROR:
+            mediaErrorRecoveryAttempts++;
+            console.warn("[HLS] Erro de mídia fatal — recuperando:", data.details);
+            if (mediaErrorRecoveryAttempts <= 3) {
+              hls.recoverMediaError();
+            } else {
+              hls.swapAudioCodec();
+              hls.recoverMediaError();
+            }
+            break;
+          default:
+            console.error("[HLS] Erro fatal não recuperável:", data);
+            hls.destroy();
+            break;
+        }
+      });
+
+      // Reset contador de recuperação quando voltar a tocar normalmente
+      hls.on(Hls.Events.FRAG_LOADED, () => {
+        mediaErrorRecoveryAttempts = 0;
       });
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = playableStreamUrl;
