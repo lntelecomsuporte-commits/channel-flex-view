@@ -1,5 +1,5 @@
 import { useEffect, useState, type ImgHTMLAttributes } from "react";
-import { getCachedLogo, revalidateLogo, subscribeLogo } from "@/lib/logoCache";
+import { getCachedLogo, subscribeLogo } from "@/lib/logoCache";
 
 interface CachedLogoProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> {
   src: string | null | undefined;
@@ -9,8 +9,9 @@ interface CachedLogoProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src
 /**
  * <img> wrapper that:
  * - Uses cached data URL synchronously if available (no flash, no network).
- * - Falls back to the original URL while cache populates in background.
- * - Schedules a background revalidation to detect logo changes on the server.
+ * - Falls back to original URL while cache populates.
+ * - Does NOT trigger revalidation by itself — that is handled centrally
+ *   by primeLogoVersions() when the channel list loads.
  */
 export function CachedLogo({ src, alt, ...rest }: CachedLogoProps) {
   const [resolved, setResolved] = useState<string | null>(() =>
@@ -22,11 +23,7 @@ export function CachedLogo({ src, alt, ...rest }: CachedLogoProps) {
       setResolved(null);
       return;
     }
-    const cached = getCachedLogo(src);
-    setResolved(cached ?? src);
-
-    // Always queue revalidation — updates cache only if bytes changed
-    revalidateLogo(src);
+    setResolved(getCachedLogo(src) ?? src);
 
     const unsub = subscribeLogo((url, dataUrl) => {
       if (url === src) setResolved(dataUrl);
