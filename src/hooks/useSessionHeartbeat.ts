@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 
@@ -9,6 +10,7 @@ interface HeartbeatOptions {
 }
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
+const isNativeApp = Capacitor.isNativePlatform();
 
 const isIPv4 = (ip: string) => /^(\d{1,3}\.){3}\d{1,3}$/.test(ip);
 const isIPv6 = (ip: string) => ip.includes(":");
@@ -41,21 +43,47 @@ const parseCfTrace = (txt: string) => {
   return m ? m[1] : null;
 };
 
+const mergeDetectedIps = (
+  previous: { ipv4: string | null; ipv6: string | null },
+  detected: { ipv4: string | null; ipv6: string | null }
+) => ({
+  ipv4: detected.ipv4 ?? previous.ipv4,
+  ipv6: detected.ipv6 ?? previous.ipv6,
+});
+
 // Detecta IPv4 e IPv6 do cliente com múltiplos provedores de fallback
 const detectClientIps = async (): Promise<{ ipv4: string | null; ipv6: string | null }> => {
+  const ipv4Providers = isNativeApp
+    ? [
+        { url: "https://api.ipify.org?format=json", parse: parseJsonIp },
+        { url: "https://ipv4.icanhazip.com", parse: parsePlain },
+        { url: "https://api.ipify.org", parse: parsePlain },
+        { url: "https://1.1.1.1/cdn-cgi/trace", parse: parseCfTrace },
+      ]
+    : [
+        { url: "https://1.1.1.1/cdn-cgi/trace", parse: parseCfTrace },
+        { url: "https://api.ipify.org?format=json", parse: parseJsonIp },
+        { url: "https://ipv4.icanhazip.com", parse: parsePlain },
+        { url: "https://api.ipify.org", parse: parsePlain },
+      ];
+
+  const ipv6Providers = isNativeApp
+    ? [
+        { url: "https://api6.ipify.org?format=json", parse: parseJsonIp },
+        { url: "https://api64.ipify.org?format=json", parse: parseJsonIp },
+        { url: "https://ipv6.icanhazip.com", parse: parsePlain },
+        { url: "https://[2606:4700:4700::1111]/cdn-cgi/trace", parse: parseCfTrace },
+      ]
+    : [
+        { url: "https://[2606:4700:4700::1111]/cdn-cgi/trace", parse: parseCfTrace },
+        { url: "https://api6.ipify.org?format=json", parse: parseJsonIp },
+        { url: "https://ipv6.icanhazip.com", parse: parsePlain },
+        { url: "https://api64.ipify.org?format=json", parse: parseJsonIp },
+      ];
+
   const [v4, v6] = await Promise.all([
-    fetchWithFallback([
-      { url: "https://1.1.1.1/cdn-cgi/trace", parse: parseCfTrace },
-      { url: "https://api.ipify.org?format=json", parse: parseJsonIp },
-      { url: "https://ipv4.icanhazip.com", parse: parsePlain },
-      { url: "https://api.ipify.org", parse: parsePlain },
-    ]),
-    fetchWithFallback([
-      { url: "https://[2606:4700:4700::1111]/cdn-cgi/trace", parse: parseCfTrace },
-      { url: "https://api6.ipify.org?format=json", parse: parseJsonIp },
-      { url: "https://ipv6.icanhazip.com", parse: parsePlain },
-      { url: "https://api64.ipify.org?format=json", parse: parseJsonIp },
-    ]),
+    fetchWithFallback(ipv4Providers),
+    fetchWithFallback(ipv6Providers),
   ]);
 
   // Classifica corretamente: alguns endpoints "v6" podem retornar v4 se não houver IPv6
@@ -91,9 +119,14 @@ export const useSessionHeartbeat = ({ channelId, channelName, isWatching = false
 
     let cancelled = false;
     const userAgent = navigator.userAgent.slice(0, 500);
+    const refreshClientIps = async () => {
+      const detected = await detectClientIps();
+      ipsRef.current = mergeDetectedIps(ipsRef.current, detected);
+      return ipsRef.current;
+    };
 
     const startSession = async () => {
-      ipsRef.current = await detectClientIps();
+      await refreshClientIps();
       if (cancelled) return;
 
       const { data, error } = await supabase.functions.invoke("session-heartbeat", {
@@ -115,7 +148,7 @@ export const useSessionHeartbeat = ({ channelId, channelName, isWatching = false
       intervalRef.current = setInterval(async () => {
         if (!sessionIdRef.current) return;
         // Re-detecta IPs periodicamente (rede pode ter mudado)
-        ipsRef.current = await detectClientIps();
+        await refreshClientIps();
         await supabase.functions.invoke("session-heartbeat", {
           body: {
             action: "heartbeat",
