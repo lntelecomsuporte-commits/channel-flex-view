@@ -262,10 +262,6 @@ const ProxyMonitoring = () => {
                     <CollapsibleContent>
                       <div className="px-3 pb-3 pt-1 border-t border-border/50 space-y-1.5 text-xs">
                         <div className="grid grid-cols-[110px_1fr] gap-2">
-                          <span className="text-muted-foreground">IP servidor:</span>
-                          <span className="font-mono text-foreground break-all">{s.ip_address}</span>
-                        </div>
-                        <div className="grid grid-cols-[110px_1fr] gap-2">
                           <span className="text-muted-foreground">IPv4 cliente:</span>
                           <span className="font-mono text-foreground break-all">
                             {s.client_ipv4 ?? <span className="text-muted-foreground italic">não detectado</span>}
