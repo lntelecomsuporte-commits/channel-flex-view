@@ -118,6 +118,45 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
     return () => clearInterval(interval);
   }, [videoEl, hls]);
 
+  // Resolve destino IPv4/IPv6 do hostname do stream via DNS-over-HTTPS.
+  // Browsers não expõem o IP da conexão real; mostramos os endereços publicados
+  // e indicamos a família preferida (IPv6 quando disponível, conforme Happy Eyeballs).
+  useEffect(() => {
+    if (!streamUrl) return;
+    let cancelled = false;
+    let host = "";
+    try {
+      host = new URL(streamUrl).hostname;
+    } catch {
+      setDestIp({ family: null, address: "—", host: "" });
+      return;
+    }
+
+    const queryDoh = async (type: "A" | "AAAA"): Promise<string | null> => {
+      try {
+        const r = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=${type}`, {
+          headers: { accept: "application/dns-json" },
+          signal: AbortSignal.timeout(4000),
+        });
+        const j = await r.json();
+        const ans = (j.Answer ?? []).find((a: any) => (type === "A" ? a.type === 1 : a.type === 28));
+        return ans?.data ?? null;
+      } catch {
+        return null;
+      }
+    };
+
+    setDestIp({ family: null, address: "resolvendo...", host });
+    Promise.all([queryDoh("A"), queryDoh("AAAA")]).then(([v4, v6]) => {
+      if (cancelled) return;
+      if (v6) setDestIp({ family: "IPv6", address: v6, host });
+      else if (v4) setDestIp({ family: "IPv4", address: v4, host });
+      else setDestIp({ family: null, address: "não resolvido", host });
+    });
+
+    return () => { cancelled = true; };
+  }, [streamUrl]);
+
   return (
     <div ref={ref} className="absolute top-4 right-4 z-40 glass-panel p-4 min-w-[280px] animate-fade-in font-mono text-sm">
       <div className="flex items-center justify-between mb-3 pb-2 border-b border-border">
