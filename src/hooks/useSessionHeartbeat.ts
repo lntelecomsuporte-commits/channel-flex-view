@@ -10,27 +10,64 @@ interface HeartbeatOptions {
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 
-// Detecta IPv4 e IPv6 do cliente em paralelo via ipify
-const detectClientIps = async (): Promise<{ ipv4: string | null; ipv6: string | null }> => {
-  const fetchIp = async (url: string): Promise<string | null> => {
+const isIPv4 = (ip: string) => /^(\d{1,3}\.){3}\d{1,3}$/.test(ip);
+const isIPv6 = (ip: string) => ip.includes(":");
+
+// Tenta múltiplos provedores em sequência até obter um IP válido
+const fetchWithFallback = async (urls: { url: string; parse: (txt: string) => string | null }[]): Promise<string | null> => {
+  for (const { url, parse } of urls) {
     try {
       const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 4000);
-      const r = await fetch(url, { signal: ctrl.signal });
+      const t = setTimeout(() => ctrl.abort(), 3500);
+      const r = await fetch(url, { signal: ctrl.signal, cache: "no-store" });
       clearTimeout(t);
-      if (!r.ok) return null;
-      const j = await r.json();
-      return typeof j.ip === "string" ? j.ip : null;
+      if (!r.ok) continue;
+      const txt = await r.text();
+      const ip = parse(txt);
+      if (ip) return ip.trim();
     } catch {
-      return null;
+      // tenta o próximo
     }
-  };
-  const [ipv4, ipv6] = await Promise.all([
-    fetchIp("https://api.ipify.org?format=json"),
-    fetchIp("https://api6.ipify.org?format=json"),
+  }
+  return null;
+};
+
+const parseJsonIp = (txt: string) => {
+  try { const j = JSON.parse(txt); return typeof j.ip === "string" ? j.ip : null; } catch { return null; }
+};
+const parsePlain = (txt: string) => txt.trim() || null;
+const parseCfTrace = (txt: string) => {
+  const m = txt.match(/^ip=(.+)$/m);
+  return m ? m[1] : null;
+};
+
+// Detecta IPv4 e IPv6 do cliente com múltiplos provedores de fallback
+const detectClientIps = async (): Promise<{ ipv4: string | null; ipv6: string | null }> => {
+  const [v4, v6] = await Promise.all([
+    fetchWithFallback([
+      { url: "https://1.1.1.1/cdn-cgi/trace", parse: parseCfTrace },
+      { url: "https://api.ipify.org?format=json", parse: parseJsonIp },
+      { url: "https://ipv4.icanhazip.com", parse: parsePlain },
+      { url: "https://api.ipify.org", parse: parsePlain },
+    ]),
+    fetchWithFallback([
+      { url: "https://[2606:4700:4700::1111]/cdn-cgi/trace", parse: parseCfTrace },
+      { url: "https://api6.ipify.org?format=json", parse: parseJsonIp },
+      { url: "https://ipv6.icanhazip.com", parse: parsePlain },
+      { url: "https://api64.ipify.org?format=json", parse: parseJsonIp },
+    ]),
   ]);
-  // Se v6 retornar igual ao v4 (sem IPv6 disponível), descarta
-  return { ipv4, ipv6: ipv6 && ipv6 !== ipv4 ? ipv6 : null };
+
+  // Classifica corretamente: alguns endpoints "v6" podem retornar v4 se não houver IPv6
+  let ipv4 = v4 && isIPv4(v4) ? v4 : null;
+  let ipv6 = v6 && isIPv6(v6) ? v6 : null;
+
+  // Se v6 endpoint devolveu v4 e ainda não temos v4, aproveita
+  if (!ipv4 && v6 && isIPv4(v6)) ipv4 = v6;
+  // Se v4 endpoint devolveu v6 (raro), aproveita
+  if (!ipv6 && v4 && isIPv6(v4)) ipv6 = v4;
+
+  return { ipv4, ipv6 };
 };
 
 /**
