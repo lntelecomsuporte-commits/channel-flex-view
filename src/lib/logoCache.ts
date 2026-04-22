@@ -135,6 +135,10 @@ async function revalidateOne(url: string) {
 export function revalidateLogo(url: string) {
   if (!url) return;
   if (inflight.has(url) || queue.includes(url)) return;
+  // Skip se já revalidamos recentemente (TTL)
+  const cache = load();
+  const existing = cache[url];
+  if (existing && Date.now() - existing.ts < REVALIDATE_TTL_MS) return;
   queue.push(url);
   // Defer to idle to avoid blocking initial render
   if ("requestIdleCallback" in window) {
