@@ -133,17 +133,27 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
     }
 
     const queryDoh = async (type: "A" | "AAAA"): Promise<string | null> => {
-      try {
-        const r = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=${type}`, {
-          headers: { accept: "application/dns-json" },
-          signal: AbortSignal.timeout(4000),
-        });
-        const j = await r.json();
-        const ans = (j.Answer ?? []).find((a: any) => (type === "A" ? a.type === 1 : a.type === 28));
-        return ans?.data ?? null;
-      } catch {
-        return null;
+      const typeNum = type === "A" ? 1 : 28;
+      const providers = [
+        {
+          url: `https://dns.google/resolve?name=${encodeURIComponent(host)}&type=${type}`,
+          headers: { accept: "application/json" } as Record<string, string>,
+        },
+        {
+          url: `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=${type}`,
+          headers: { accept: "application/dns-json" } as Record<string, string>,
+        },
+      ];
+      for (const p of providers) {
+        try {
+          const r = await fetch(p.url, { headers: p.headers, signal: AbortSignal.timeout(4000) });
+          if (!r.ok) continue;
+          const j = await r.json();
+          const ans = (j.Answer ?? []).find((a: any) => a.type === typeNum);
+          if (ans?.data) return ans.data;
+        } catch { /* tenta próximo */ }
       }
+      return null;
     };
 
     setDestIp({ family: null, address: "resolvendo...", host });
