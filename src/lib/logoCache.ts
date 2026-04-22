@@ -8,11 +8,15 @@
 
 const STORAGE_KEY = "ln-logo-cache:v1";
 const MAX_ENTRIES = 500;
+// Só revalida (consulta servidor) se a logo cacheada tem mais que isso.
+// 24h: na prática a logo é servida instantaneamente do cache durante o dia,
+// e só é checada uma vez por dia por logo.
+const REVALIDATE_TTL_MS = 24 * 60 * 60 * 1000;
 
 interface Entry {
   dataUrl: string;
   hash: string; // sha-1 hex of the original bytes
-  ts: number;
+  ts: number; // última vez que revalidamos contra o servidor
 }
 
 type CacheMap = Record<string, Entry>;
