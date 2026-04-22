@@ -1,12 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import { primeLogoVersions } from "@/lib/logoCache";
 
 export type Channel = Tables<"channels">;
 export type Category = Tables<"categories">;
 
 export function useChannels() {
-  return useQuery({
+  const query = useQuery({
     queryKey: ["channels"],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -43,8 +45,20 @@ export function useChannels() {
         // No access records = no channels
         return [] as Channel[];
       }
+      return [] as Channel[];
     },
   });
+
+  // Sempre que a lista de canais carregar/mudar, sincroniza o cache de logos.
+  // Versão = updated_at do canal: se o admin mexer no canal, a logo é re-baixada.
+  useEffect(() => {
+    if (!query.data) return;
+    primeLogoVersions(
+      query.data.map((c) => ({ url: c.logo_url, version: c.updated_at }))
+    );
+  }, [query.data]);
+
+  return query;
 }
 
 export function useAllChannels() {
