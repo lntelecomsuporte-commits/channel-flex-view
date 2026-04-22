@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 interface StatsOverlayProps {
   videoEl: HTMLVideoElement | null;
   hls: Hls | null;
+  streamUrl?: string;
   onClose: () => void;
 }
 
@@ -18,6 +19,12 @@ interface Stats {
   bandwidth: string;
   level: string;
   codec: string;
+}
+
+interface DestIp {
+  family: "IPv4" | "IPv6" | null;
+  address: string;
+  host: string;
 }
 
 const formatBitrate = (bps: number) => {
