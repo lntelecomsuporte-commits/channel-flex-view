@@ -46,49 +46,13 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     } else if (Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: false,
-        // Buffer de ~6s pra absorver oscilações de internet
-        maxBufferLength: 6,
-        maxMaxBufferLength: 12,
-        maxBufferSize: 60 * 1000 * 1000, // 60MB
-        backBufferLength: 30,
-        // Recuperação automática de erros de rede
-        manifestLoadingTimeOut: 15000,
-        manifestLoadingMaxRetry: 6,
-        manifestLoadingRetryDelay: 1000,
-        levelLoadingTimeOut: 15000,
-        levelLoadingMaxRetry: 6,
-        levelLoadingRetryDelay: 1000,
-        fragLoadingTimeOut: 20000,
-        fragLoadingMaxRetry: 8,
-        fragLoadingRetryDelay: 1000,
-        // Não pausa em erros menores - mantém decodificação parcial (efeito "quadriculado")
-        nudgeMaxRetry: 10,
-        nudgeOffset: 0.2,
+        lowLatencyMode: true,
       });
       hlsRef.current = hls;
       hls.loadSource(playableStreamUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         if (autoPlay) video.play().catch(() => {});
-      });
-
-      // Recupera automaticamente quando a internet oscila
-      hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (!data.fatal) return;
-        switch (data.type) {
-          case Hls.ErrorTypes.NETWORK_ERROR:
-            console.warn("[HLS] Erro de rede - tentando recuperar...");
-            hls.startLoad();
-            break;
-          case Hls.ErrorTypes.MEDIA_ERROR:
-            console.warn("[HLS] Erro de mídia - tentando recuperar...");
-            hls.recoverMediaError();
-            break;
-          default:
-            console.error("[HLS] Erro fatal não recuperável:", data);
-            break;
-        }
       });
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = playableStreamUrl;
