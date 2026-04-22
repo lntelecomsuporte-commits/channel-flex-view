@@ -22,6 +22,13 @@ const getClientIp = (request: Request): string | null => {
   );
 };
 
+const sanitizeIp = (v: unknown): string | null => {
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  if (!t || t.length > 45) return null;
+  return t;
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -49,8 +56,11 @@ Deno.serve(async (req) => {
 
     if (userError || !user) return json({ error: "Unauthorized" }, 401);
 
-    const { action, sessionId, sessionToken, userAgent, channelId, channelName, isWatching } = await req.json();
+    const { action, sessionId, sessionToken, userAgent, channelId, channelName, isWatching, clientIpv4, clientIpv6 } =
+      await req.json();
     const ipAddress = getClientIp(req);
+    const cIpv4 = sanitizeIp(clientIpv4);
+    const cIpv6 = sanitizeIp(clientIpv6);
 
     if (action === "start") {
       const { data, error } = await adminClient
@@ -63,6 +73,8 @@ Deno.serve(async (req) => {
           current_channel_name: channelName ?? null,
           is_watching: !!isWatching,
           ip_address: ipAddress,
+          client_ipv4: cIpv4,
+          client_ipv6: cIpv6,
         })
         .select("id")
         .single();
@@ -92,6 +104,8 @@ Deno.serve(async (req) => {
           current_channel_name: channelName ?? null,
           is_watching: !!isWatching,
           ip_address: ipAddress,
+          client_ipv4: cIpv4,
+          client_ipv6: cIpv6,
         })
         .eq("id", sessionId)
         .eq("user_id", user.id);
