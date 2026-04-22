@@ -386,6 +386,8 @@ export type Database = {
       }
       user_sessions: {
         Row: {
+          client_ipv4: string | null
+          client_ipv6: string | null
           created_at: string
           current_channel_id: string | null
           current_channel_name: string | null
@@ -400,6 +402,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          client_ipv4?: string | null
+          client_ipv6?: string | null
           created_at?: string
           current_channel_id?: string | null
           current_channel_name?: string | null
@@ -414,6 +418,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          client_ipv4?: string | null
+          client_ipv6?: string | null
           created_at?: string
           current_channel_id?: string | null
           current_channel_name?: string | null
