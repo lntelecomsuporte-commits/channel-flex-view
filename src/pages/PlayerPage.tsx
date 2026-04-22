@@ -582,6 +582,7 @@ const PlayerPage = () => {
             <StatsOverlay
               videoEl={playerRef.current?.getVideoElement() ?? null}
               hls={playerRef.current?.getHls() ?? null}
+              streamUrl={currentChannel.stream_url}
               onClose={() => setShowStats(false)}
             />
           )}
