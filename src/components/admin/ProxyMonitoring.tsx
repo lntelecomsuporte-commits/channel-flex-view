@@ -56,7 +56,7 @@ const useActiveSessions = () =>
     queryFn: async () => {
       const { data, error } = await supabase
         .from("user_sessions")
-        .select("user_id, current_channel_id, current_channel_name, ip_address, client_ipv4, client_ipv6, user_agent, last_heartbeat_at, started_at, is_watching")
+        .select("id, user_id, current_channel_id, current_channel_name, ip_address, client_ipv4, client_ipv6, user_agent, last_heartbeat_at, started_at, is_watching")
         .is("ended_at", null)
         .gte("last_heartbeat_at", new Date(Date.now() - 90_000).toISOString());
       if (error) throw error;
@@ -100,7 +100,7 @@ const ProxyMonitoring = () => {
   // Todos os usuários online (com heartbeat recente), assistindo ou não
   const onlineUsers = (sessions ?? [])
     .map((s) => ({
-      id: `${s.user_id}-${s.current_channel_id ?? "x"}`,
+      id: (s as any).id as string,
       user_id: s.user_id,
       ip_address: s.ip_address ?? "—",
       client_ipv4: (s as any).client_ipv4 as string | null,
@@ -111,6 +111,27 @@ const ProxyMonitoring = () => {
       is_watching: s.is_watching,
       last_seen_at: s.last_heartbeat_at,
     }))
+    .reduce((acc, session) => {
+      const key = `${session.user_id}|${session.channel_name ?? "sem-canal"}`;
+      const previous = acc.get(key);
+      if (!previous || new Date(session.last_seen_at).getTime() > new Date(previous.last_seen_at).getTime()) {
+        acc.set(key, session);
+      }
+      return acc;
+    }, new Map<string, {
+      id: string;
+      user_id: string;
+      ip_address: string;
+      client_ipv4: string | null;
+      client_ipv6: string | null;
+      user_agent: string | null;
+      started_at: string | null;
+      channel_name: string | null;
+      is_watching: boolean;
+      last_seen_at: string;
+    }>())
+    .values()
+    .toArray()
     .sort((a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime());
 
   // Ativos no proxy: cruza sessões assistindo com logs recentes do proxy
@@ -264,7 +285,7 @@ const ProxyMonitoring = () => {
                         <div className="grid grid-cols-[110px_1fr] gap-2">
                           <span className="text-muted-foreground">IPv4 cliente:</span>
                           <span className="font-mono text-foreground break-all">
-                            {s.client_ipv4 ?? <span className="text-muted-foreground italic">não detectado</span>}
+                            {s.client_ipv4 ?? s.ip_address ?? <span className="text-muted-foreground italic">não detectado</span>}
                           </span>
                         </div>
                         <div className="grid grid-cols-[110px_1fr] gap-2">
