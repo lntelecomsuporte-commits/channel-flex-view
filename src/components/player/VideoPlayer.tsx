@@ -46,15 +46,10 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     } else if (Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
-        // Buffer grande para resistir a oscilações de rede (até ~90s à frente)
+        // Buffer padrão, mas com folga do ao vivo para absorver oscilações
         lowLatencyMode: false,
-        maxBufferLength: 60,
-        maxMaxBufferLength: 120,
-        backBufferLength: 30,
-        maxBufferSize: 120 * 1000 * 1000, // 120 MB
-        maxBufferHole: 1.0,
-        highBufferWatchdogPeriod: 3,
-        nudgeMaxRetry: 10,
+        liveSyncDurationCount: 6,        // ~6 segmentos atrás do live edge
+        liveMaxLatencyDurationCount: 12, // tolerância antes de re-sincronizar
         // Retries agressivos para fragmentos e manifestos
         fragLoadingMaxRetry: 8,
         fragLoadingRetryDelay: 500,
@@ -65,7 +60,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         levelLoadingMaxRetry: 6,
         levelLoadingRetryDelay: 500,
         levelLoadingMaxRetryTimeout: 16000,
-        // ABR conservador: começa baixo, sobe conforme buffer enche
+        // ABR conservador: começa baixo, sobe devagar
         startLevel: -1,
         abrEwmaDefaultEstimate: 500000,
         abrBandWidthFactor: 0.85,
