@@ -1,22 +1,25 @@
 /**
  * Logo cache: stores fetched channel logos as base64 data URLs in localStorage.
- * - On first paint, returns cached data URL immediately if present.
- * - In background, revalidates by fetching the original URL and updating cache
- *   only if the bytes changed (compared via sha-1 over the response).
- * - Designed to be lightweight: revalidation is queued and throttled.
+ *
+ * Strategy: VERSION-BASED (não usa tempo).
+ * - Cada entrada guarda a "versão" do canal (channel.updated_at).
+ * - Quando o app carrega a lista de canais, chamamos `primeLogoVersions(channels)`
+ *   passando { url, version } de cada logo.
+ * - Se a versão local == versão do servidor → usa cache para sempre, ZERO requests.
+ * - Se a versão mudou (admin trocou logo, URL ou qualquer campo do canal) → baixa de novo.
+ * - Se não existe no cache (primeira instalação) → baixa.
+ *
+ * Resultado: depois da primeira carga, abrir/rolar a lista é instantâneo
+ * sem nenhum tráfego de rede. Só re-baixa quando algo muda no painel.
  */
 
-const STORAGE_KEY = "ln-logo-cache:v1";
+const STORAGE_KEY = "ln-logo-cache:v2";
 const MAX_ENTRIES = 500;
-// Só revalida (consulta servidor) se a logo cacheada tem mais que isso.
-// 24h: na prática a logo é servida instantaneamente do cache durante o dia,
-// e só é checada uma vez por dia por logo.
-const REVALIDATE_TTL_MS = 24 * 60 * 60 * 1000;
 
 interface Entry {
   dataUrl: string;
-  hash: string; // sha-1 hex of the original bytes
-  ts: number; // última vez que revalidamos contra o servidor
+  version: string; // channel.updated_at (ou outro identificador de versão)
+  ts: number;
 }
 
 type CacheMap = Record<string, Entry>;
@@ -41,7 +44,6 @@ function scheduleSave() {
     saveTimer = null;
     try {
       const cache = load();
-      // Trim to MAX_ENTRIES (oldest first)
       const entries = Object.entries(cache);
       if (entries.length > MAX_ENTRIES) {
         entries.sort((a, b) => a[1].ts - b[1].ts);
@@ -51,20 +53,12 @@ function scheduleSave() {
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(memCache));
     } catch {
-      // Quota exceeded — clear and retry once
       try {
         localStorage.removeItem(STORAGE_KEY);
         memCache = {};
       } catch { /* ignore */ }
     }
   }, 500);
-}
-
-async function sha1Hex(buf: ArrayBuffer): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-1", buf);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 function bufferToDataUrl(buf: ArrayBuffer, contentType: string): string {
@@ -79,7 +73,7 @@ function bufferToDataUrl(buf: ArrayBuffer, contentType: string): string {
   return `data:${mime};base64,${b64}`;
 }
 
-/** Returns cached data URL if present, or null. Synchronous. */
+/** Retorna data URL cacheado se presente. Síncrono. */
 export function getCachedLogo(url: string): string | null {
   if (!url) return null;
   const cache = load();
@@ -87,60 +81,62 @@ export function getCachedLogo(url: string): string | null {
 }
 
 const inflight = new Set<string>();
-const queue: string[] = [];
+const queue: Array<{ url: string; version: string }> = [];
 let processing = false;
 
 async function processQueue() {
   if (processing) return;
   processing = true;
   while (queue.length) {
-    const url = queue.shift()!;
-    if (inflight.has(url)) continue;
-    inflight.add(url);
+    const item = queue.shift()!;
+    if (inflight.has(item.url)) continue;
+    inflight.add(item.url);
     try {
-      await revalidateOne(url);
+      await downloadOne(item.url, item.version);
     } catch { /* ignore */ }
-    inflight.delete(url);
-    // Yield between fetches so UI stays responsive
+    inflight.delete(item.url);
     await new Promise((r) => setTimeout(r, 50));
   }
   processing = false;
 }
 
-async function revalidateOne(url: string) {
+async function downloadOne(url: string, version: string) {
   try {
-    const res = await fetch(url, { cache: "no-cache" });
+    const res = await fetch(url);
     if (!res.ok) return;
     const buf = await res.arrayBuffer();
-    const hash = await sha1Hex(buf);
     const cache = load();
-    const existing = cache[url];
-    if (existing && existing.hash === hash) {
-      // No change — just refresh timestamp
-      existing.ts = Date.now();
-      scheduleSave();
-      return;
-    }
     const dataUrl = bufferToDataUrl(buf, res.headers.get("content-type") || "image/png");
-    cache[url] = { dataUrl, hash, ts: Date.now() };
+    cache[url] = { dataUrl, version, ts: Date.now() };
     scheduleSave();
-    // Notify listeners that this URL was updated
     listeners.forEach((cb) => cb(url, dataUrl));
   } catch {
     /* network error — keep cached version */
   }
 }
 
-/** Queue background revalidation. Cheap to call repeatedly. */
-export function revalidateLogo(url: string) {
-  if (!url) return;
-  if (inflight.has(url) || queue.includes(url)) return;
-  // Skip se já revalidamos recentemente (TTL)
+/**
+ * Recebe a lista de logos com suas versões (ex: channel.updated_at).
+ * Para cada uma:
+ *  - Se não está em cache → baixa.
+ *  - Se está em cache mas versão diferente → baixa de novo.
+ *  - Se versão igual → faz NADA (zero rede).
+ *
+ * Chame isto UMA vez quando a lista de canais carregar.
+ */
+export function primeLogoVersions(items: Array<{ url: string | null | undefined; version: string | null | undefined }>) {
   const cache = load();
-  const existing = cache[url];
-  if (existing && Date.now() - existing.ts < REVALIDATE_TTL_MS) return;
-  queue.push(url);
-  // Defer to idle to avoid blocking initial render
+  let queued = 0;
+  for (const item of items) {
+    if (!item.url) continue;
+    const version = item.version || "";
+    const existing = cache[item.url];
+    if (existing && existing.version === version) continue; // já está atualizado
+    if (inflight.has(item.url) || queue.some((q) => q.url === item.url)) continue;
+    queue.push({ url: item.url, version });
+    queued++;
+  }
+  if (queued === 0) return;
   if ("requestIdleCallback" in window) {
     (window as any).requestIdleCallback(() => processQueue(), { timeout: 2000 });
   } else {
@@ -153,4 +149,10 @@ const listeners = new Set<Listener>();
 export function subscribeLogo(cb: Listener): () => void {
   listeners.add(cb);
   return () => listeners.delete(cb);
+}
+
+/** Limpa todo o cache de logos. Útil para botão "atualizar logos" no admin. */
+export function clearLogoCache() {
+  memCache = {};
+  try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
 }
