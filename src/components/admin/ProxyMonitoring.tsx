@@ -98,7 +98,7 @@ const ProxyMonitoring = () => {
   const ACTIVE_WINDOW_MS = 45_000;
 
   // Todos os usuários online (com heartbeat recente), assistindo ou não
-  const onlineUsers = (sessions ?? [])
+  const onlineUsersMap = (sessions ?? [])
     .map((s) => ({
       id: (s as any).id as string,
       user_id: s.user_id,
@@ -129,8 +129,9 @@ const ProxyMonitoring = () => {
       channel_name: string | null;
       is_watching: boolean;
       last_seen_at: string;
-    }>())
-    |> Array.from(^.values())
+    }>());
+
+  const onlineUsers = Array.from(onlineUsersMap.values())
     .sort((a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime());
 
   // Ativos no proxy: cruza sessões assistindo com logs recentes do proxy
