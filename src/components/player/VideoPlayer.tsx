@@ -1,6 +1,9 @@
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react";
 import Hls from "hls.js";
+import { Capacitor } from "@capacitor/core";
 import { getPlayableStreamUrl } from "@/lib/stream";
+
+const isNative = Capacitor.isNativePlatform();
 
 interface VideoPlayerProps {
   streamUrl: string;
