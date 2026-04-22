@@ -34,7 +34,7 @@ const formatBitrate = (bps: number) => {
   return `${bps.toFixed(0)} bps`;
 };
 
-const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, hls, onClose }, ref) => {
+const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, hls, streamUrl, onClose }, ref) => {
   const [stats, setStats] = useState<Stats>({
     resolution: "—",
     fps: 0,
@@ -46,6 +46,7 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
     level: "—",
     codec: "—",
   });
+  const [destIp, setDestIp] = useState<DestIp>({ family: null, address: "resolvendo...", host: "" });
 
   useEffect(() => {
     if (!videoEl) return;
