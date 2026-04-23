@@ -68,7 +68,10 @@ const YouTubePlayer = ({ videoId, autoPlay = true }: YouTubePlayerProps) => {
         playsinline: 1,
         rel: 0,
         modestbranding: 1,
-        controls: 1,
+        controls: 0,
+        disablekb: 1,
+        fs: 0,
+        iv_load_policy: 3,
       },
       events: {
         onReady: (e: any) => {
