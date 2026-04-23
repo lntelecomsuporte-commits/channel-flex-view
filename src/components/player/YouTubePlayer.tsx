@@ -108,7 +108,12 @@ const YouTubePlayer = ({ videoId, autoPlay = true }: YouTubePlayerProps) => {
     });
   }, [videoId]);
 
-  return <div ref={containerRef} className="absolute inset-0 w-full h-full" />;
+  return (
+    <div
+      ref={containerRef}
+      className="absolute inset-0 w-full h-full pointer-events-none"
+    />
+  );
 };
 
 export default YouTubePlayer;
