@@ -72,25 +72,16 @@ const YouTubePlayer = ({ videoId, autoPlay = true }: YouTubePlayerProps) => {
       },
       events: {
         onReady: (e: any) => {
-          // Tenta tocar com som
+          const canUnmute = hasUserInteracted();
           try {
-            e.target.unMute?.();
-            e.target.setVolume?.(100);
+            if (canUnmute) {
+              e.target.unMute?.();
+              e.target.setVolume?.(100);
+            } else {
+              e.target.mute?.();
+            }
             e.target.playVideo?.();
           } catch {}
-
-          // Fallback: se em ~800ms não estiver tocando, força mute + play
-          // (alguns WebViews/Chromes bloqueiam autoplay com áudio)
-          setTimeout(() => {
-            try {
-              const state = e.target.getPlayerState?.();
-              // 1 = playing
-              if (state !== 1) {
-                e.target.mute?.();
-                e.target.playVideo?.();
-              }
-            } catch {}
-          }, 800);
         },
       },
     });
@@ -103,24 +94,16 @@ const YouTubePlayer = ({ videoId, autoPlay = true }: YouTubePlayerProps) => {
     };
   }, [apiReady, videoId, autoPlay]);
 
-  // Desmuta na primeira interação do usuário
+  // Se ainda não havia interação quando o player montou, desmuta na 1ª interação
   useEffect(() => {
-    const unmute = () => {
+    return onFirstInteraction(() => {
       try {
         playerRef.current?.unMute?.();
         playerRef.current?.setVolume?.(100);
         playerRef.current?.playVideo?.();
       } catch {}
-    };
-    window.addEventListener("click", unmute);
-    window.addEventListener("keydown", unmute);
-    window.addEventListener("touchstart", unmute);
-    return () => {
-      window.removeEventListener("click", unmute);
-      window.removeEventListener("keydown", unmute);
-      window.removeEventListener("touchstart", unmute);
-    };
-  }, []);
+    });
+  }, [videoId]);
 
   return <div ref={containerRef} className="absolute inset-0 w-full h-full" />;
 };
