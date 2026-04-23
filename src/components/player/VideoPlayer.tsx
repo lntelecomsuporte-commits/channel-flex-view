@@ -139,6 +139,10 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     };
   }, []);
 
+  if (youTubeVideoId) {
+    return <YouTubePlayer videoId={youTubeVideoId} autoPlay={autoPlay} />;
+  }
+
   return (
     <video
       ref={videoRef}
