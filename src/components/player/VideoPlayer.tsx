@@ -1,6 +1,8 @@
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react";
 import Hls from "hls.js";
 import { getPlayableStreamUrl } from "@/lib/stream";
+import { extractYouTubeVideoId } from "@/lib/youtube";
+import YouTubePlayer from "./YouTubePlayer";
 
 interface VideoPlayerProps {
   streamUrl: string;
@@ -16,7 +18,8 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [muted, setMuted] = useState(true);
-  const playableStreamUrl = getPlayableStreamUrl(streamUrl);
+  const youTubeVideoId = extractYouTubeVideoId(streamUrl);
+  const playableStreamUrl = youTubeVideoId ? "" : getPlayableStreamUrl(streamUrl);
 
   useImperativeHandle(ref, () => ({
     getVideoElement: () => videoRef.current,
@@ -135,6 +138,10 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       window.removeEventListener("touchstart", unmute);
     };
   }, []);
+
+  if (youTubeVideoId) {
+    return <YouTubePlayer videoId={youTubeVideoId} autoPlay={autoPlay} />;
+  }
 
   return (
     <video
