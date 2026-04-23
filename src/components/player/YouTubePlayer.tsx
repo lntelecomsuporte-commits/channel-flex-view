@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { hasUserInteracted, onFirstInteraction } from "@/lib/userInteraction";
 
 interface YouTubePlayerProps {
   videoId: string;
@@ -8,9 +9,9 @@ interface YouTubePlayerProps {
 /**
  * Player do YouTube via IFrame API oficial.
  * Estratégia de áudio:
- * 1. Tenta iniciar SEM mute. Se o navegador/WebView bloquear o autoplay,
- *    cai automaticamente para mute + autoplay e desmuta na primeira interação.
- * 2. Em qualquer caso, qualquer toque/clique/tecla desmuta imediatamente.
+ * 1. Se o usuário já interagiu com o app (login, clique, tecla), abre com som —
+ *    o "crédito" de autoplay com áudio vale pela sessão inteira da aba/WebView.
+ * 2. Caso seja a 1ª ação absoluta no app, inicia mutado e desmuta na 1ª interação.
  */
 const YouTubePlayer = ({ videoId, autoPlay = true }: YouTubePlayerProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
