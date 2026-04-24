@@ -369,6 +369,7 @@ Deno.serve(async (req) => {
     sql += `-- Generated: ${new Date().toISOString()}\n`;
     sql += `-- Source project: ${SUPABASE_URL}\n\n`;
     sql += `BEGIN;\n\n`;
+    sql += schemaSql();
     sql += `SET session_replication_role = 'replica';\n\n`;
 
     // ---------- AUTH USERS ----------
