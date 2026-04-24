@@ -441,6 +441,26 @@ export type Database = {
     }
     Functions: {
       cleanup_old_monitoring_data: { Args: never; Returns: undefined }
+      export_auth_identities: {
+        Args: never
+        Returns: unknown[]
+        SetofOptions: {
+          from: "*"
+          to: "identities"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      export_auth_users: {
+        Args: never
+        Returns: unknown[]
+        SetofOptions: {
+          from: "*"
+          to: "users"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_user_online_status: {
         Args: { _user_id: string }
         Returns: {
