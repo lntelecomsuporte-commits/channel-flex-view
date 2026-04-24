@@ -13,7 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Trash2, LogOut, Tv, Layers, Users, Link, Activity } from "lucide-react";
+import { Plus, Trash2, LogOut, Tv, Layers, Users, Link, Activity, Download } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import UserManagement from "@/components/admin/UserManagement";
 import HubsoftIntegration from "@/components/admin/HubsoftIntegration";
@@ -239,6 +239,35 @@ const AdminPanel = () => {
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => navigate("/")}>
               <Tv className="h-4 w-4 mr-1" /> Ver Player
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                const t = toast.loading("Gerando dump SQL...");
+                try {
+                  const { data: { session } } = await supabase.auth.getSession();
+                  const url = `https://oxunkzltmlafatzfiikj.supabase.co/functions/v1/export-database`;
+                  const res = await fetch(url, {
+                    headers: {
+                      Authorization: `Bearer ${session?.access_token}`,
+                      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                    },
+                  });
+                  if (!res.ok) throw new Error(await res.text());
+                  const blob = await res.blob();
+                  const a = document.createElement("a");
+                  a.href = URL.createObjectURL(blob);
+                  a.download = `lntv-dump-${new Date().toISOString().slice(0, 10)}.sql`;
+                  a.click();
+                  URL.revokeObjectURL(a.href);
+                  toast.success("Dump baixado!", { id: t });
+                } catch (e: any) {
+                  toast.error("Falha: " + e.message, { id: t });
+                }
+              }}
+            >
+              <Download className="h-4 w-4 mr-1" /> Exportar BD
             </Button>
             <Button variant="outline" size="sm" onClick={signOut}>
               <LogOut className="h-4 w-4 mr-1" /> Sair
