@@ -1,0 +1,171 @@
+// Export database to SQL dump (admin only)
+// Returns a downloadable .sql file with schema + data from public + auth.users
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+};
+
+function esc(v: unknown): string {
+  if (v === null || v === undefined) return "NULL";
+  if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
+  if (typeof v === "number") return Number.isFinite(v) ? String(v) : "NULL";
+  if (v instanceof Date) return `'${v.toISOString()}'`;
+  if (typeof v === "object") {
+    return `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb`;
+  }
+  const s = String(v).replace(/'/g, "''");
+  return `'${s}'`;
+}
+
+function toInsert(table: string, rows: any[], schema = "public"): string {
+  if (!rows || rows.length === 0) return `-- ${schema}.${table}: 0 rows\n`;
+  const cols = Object.keys(rows[0]);
+  const colList = cols.map((c) => `"${c}"`).join(", ");
+  const lines = rows.map(
+    (r) => `(${cols.map((c) => esc(r[c])).join(", ")})`,
+  );
+  return `-- ${schema}.${table}: ${rows.length} rows\nINSERT INTO ${schema}.${table} (${colList}) VALUES\n${lines.join(",\n")}\nON CONFLICT DO NOTHING;\n\n`;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  try {
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+    // Verify caller is admin
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: userData, error: userErr } = await userClient.auth.getUser();
+    if (userErr || !userData.user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+    const { data: roleRow } = await admin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userData.user.id)
+      .eq("role", "admin")
+      .maybeSingle();
+    if (!roleRow) {
+      return new Response(JSON.stringify({ error: "Forbidden: admin only" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Tables in dependency order (parents first)
+    const publicTables = [
+      "categories",
+      "category_includes",
+      "channels",
+      "hubsoft_config",
+      "hubsoft_config_categories",
+      "profiles",
+      "user_roles",
+      "user_category_access",
+      "user_favorites",
+      // skipping high-volume ephemeral: proxy_access_log, user_sessions
+    ];
+
+    let sql = "";
+    sql += `-- LN TV Database Export\n`;
+    sql += `-- Generated: ${new Date().toISOString()}\n`;
+    sql += `-- Source project: ${SUPABASE_URL}\n\n`;
+    sql += `BEGIN;\n\n`;
+    sql += `SET session_replication_role = 'replica';\n\n`;
+
+    // ---------- AUTH USERS ----------
+    sql += `-- ============================================\n`;
+    sql += `-- AUTH USERS (with password hashes)\n`;
+    sql += `-- ============================================\n\n`;
+
+    const { data: usersList, error: usersErr } =
+      await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    if (usersErr) throw usersErr;
+
+    const users = usersList.users;
+    sql += `-- ${users.length} users found\n\n`;
+
+    // Direct SQL insert using service role (read raw auth.users)
+    // We need the encrypted_password — admin.listUsers() doesn't return it.
+    // Use rpc or direct query via PostgREST is not possible for auth schema.
+    // Workaround: query via a SECURITY DEFINER function we'll add inline.
+    const { data: rawUsers, error: rawErr } = await admin.rpc(
+      "export_auth_users" as any,
+    );
+
+    if (rawErr) {
+      sql += `-- WARNING: could not export password hashes. Run this migration first:\n`;
+      sql += `-- CREATE OR REPLACE FUNCTION public.export_auth_users() RETURNS SETOF auth.users LANGUAGE sql SECURITY DEFINER SET search_path = auth, public AS $$ SELECT * FROM auth.users $$;\n`;
+      sql += `-- Falling back to user metadata only (passwords will need reset)\n\n`;
+      for (const u of users) {
+        sql += `-- User: ${u.email}\n`;
+        sql += `INSERT INTO auth.users (id, email, email_confirmed_at, raw_user_meta_data, raw_app_meta_data, created_at, updated_at, aud, role)\n`;
+        sql += `VALUES (${esc(u.id)}, ${esc(u.email)}, ${esc(u.email_confirmed_at)}, ${esc(u.user_metadata ?? {})}, ${esc(u.app_metadata ?? {})}, ${esc(u.created_at)}, ${esc(u.updated_at)}, 'authenticated', 'authenticated')\n`;
+        sql += `ON CONFLICT (id) DO NOTHING;\n\n`;
+      }
+    } else {
+      const rows = (rawUsers as any[]) ?? [];
+      sql += `-- Full auth.users export (${rows.length} rows, with password hashes)\n`;
+      sql += toInsert("users", rows, "auth");
+    }
+
+    // identities
+    const { data: identities } = await admin.rpc(
+      "export_auth_identities" as any,
+    );
+    if (identities) {
+      sql += toInsert("identities", identities as any[], "auth");
+    }
+
+    // ---------- PUBLIC SCHEMA ----------
+    sql += `-- ============================================\n`;
+    sql += `-- PUBLIC SCHEMA DATA\n`;
+    sql += `-- ============================================\n\n`;
+
+    for (const table of publicTables) {
+      const { data, error } = await admin.from(table).select("*");
+      if (error) {
+        sql += `-- ERROR exporting ${table}: ${error.message}\n\n`;
+        continue;
+      }
+      sql += toInsert(table, data ?? []);
+    }
+
+    sql += `\nSET session_replication_role = 'origin';\n`;
+    sql += `COMMIT;\n`;
+    sql += `\n-- End of dump\n`;
+
+    return new Response(sql, {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/sql; charset=utf-8",
+        "Content-Disposition": `attachment; filename="lntv-dump-${new Date().toISOString().slice(0, 10)}.sql"`,
+      },
+    });
+  } catch (e) {
+    console.error("export-database error:", e);
+    return new Response(
+      JSON.stringify({ error: (e as Error).message }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+});
