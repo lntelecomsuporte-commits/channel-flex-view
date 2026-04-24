@@ -31,6 +31,15 @@ function toInsert(table: string, rows: any[], schema = "public"): string {
   return `-- ${schema}.${table}: ${rows.length} rows\nINSERT INTO ${schema}.${table} (${colList}) VALUES\n${lines.join(",\n")}\nON CONFLICT DO NOTHING;\n\n`;
 }
 
+function omitColumns(rows: any[], columns: string[]): any[] {
+  const blocked = new Set(columns);
+  return rows.map((row) =>
+    Object.fromEntries(
+      Object.entries(row).filter(([key]) => !blocked.has(key)),
+    ),
+  );
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -122,7 +131,7 @@ Deno.serve(async (req) => {
     } else {
       const rows = (rawUsers as any[]) ?? [];
       sql += `-- Full auth.users export (${rows.length} rows, with password hashes)\n`;
-      sql += toInsert("users", rows, "auth");
+      sql += toInsert("users", omitColumns(rows, ["confirmed_at"]), "auth");
     }
 
     // identities
