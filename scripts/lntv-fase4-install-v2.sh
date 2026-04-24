@@ -139,7 +139,7 @@ log "6/11 Configurando Kong privado e removendo analytics..."
 sed -i 's|"\${KONG_HTTP_PORT}:8000/tcp"|"127.0.0.1:${KONG_HTTP_PORT}:8000/tcp"|g'   "${INSTALL_DIR}/docker-compose.yml" || true
 sed -i 's|"\${KONG_HTTPS_PORT}:8443/tcp"|"127.0.0.1:${KONG_HTTPS_PORT}:8443/tcp"|g' "${INSTALL_DIR}/docker-compose.yml" || true
 
-# Remove o serviço analytics e o acoplamento do Studio (não essencial e quebra em servidores menores)
+# Remove o serviço analytics e normaliza depends_on para formato compatível
 python3 - <<'PY'
 from pathlib import Path
 
@@ -149,7 +149,24 @@ out = []
 i = 0
 removed_service = False
 removed_refs = 0
-removed_studio_depends_on = False
+
+def is_top_level_or_service_header(line: str) -> bool:
+    return (
+        (line and not line.startswith(" ") and line.rstrip().endswith(":"))
+        or (line.startswith("  ") and not line.startswith("    ") and line.rstrip().endswith(":"))
+    )
+
+def is_service_key(line: str) -> bool:
+    return line.startswith("    ") and not line.startswith("      ") and line.strip() and not line.lstrip().startswith("#")
+
+def extract_dep_name(stripped: str):
+    if stripped.startswith("- "):
+        return stripped[2:].split(":", 1)[0].strip().strip('"\'')
+    if stripped.endswith(":"):
+        return stripped[:-1].strip().strip('"\'')
+    if ":" in stripped:
+        return stripped.split(":", 1)[0].strip().strip('"\'')
+    return None
 
 while i < len(lines):
     line = lines[i]
@@ -159,30 +176,40 @@ while i < len(lines):
         i += 1
         while i < len(lines):
             nxt = lines[i]
-            if nxt.startswith("  ") and not nxt.startswith("    ") and nxt.endswith(":"):
+            if is_top_level_or_service_header(nxt):
                 break
             i += 1
         continue
 
-    if line == "    depends_on:" and out and out[-1] == "  studio:":
+    if line == "    depends_on:":
         j = i + 1
         block = []
         while j < len(lines):
             nxt = lines[j]
-            if nxt.startswith("    ") and not nxt.startswith("      ") and nxt.endswith(":"):
+            if is_top_level_or_service_header(nxt) or is_service_key(nxt):
                 break
             block.append(nxt)
             j += 1
 
-        if block == ["      analytics:", "        condition: service_healthy"]:
-            removed_studio_depends_on = True
-            removed_refs += 1
-            i = j
-            continue
+        deps = []
+        for item in block:
+            stripped = item.strip()
+            if not stripped or item.startswith("        "):
+                continue
+            dep_name = extract_dep_name(stripped)
+            if not dep_name:
+                continue
+            if dep_name == "analytics":
+                removed_refs += 1
+                continue
+            if dep_name not in deps:
+                deps.append(dep_name)
 
-    if line == "      - analytics":
-        removed_refs += 1
-        i += 1
+        if deps:
+            out.append("    depends_on:")
+            out.extend(f"      - {dep}" for dep in deps)
+
+        i = j
         continue
 
     out.append(line)
@@ -193,7 +220,7 @@ print(
     "docker-compose.yml: "
     f"analytics removido={removed_service}, "
     f"referencias removidas={removed_refs}, "
-    f"studio_depends_on_removido={removed_studio_depends_on}"
+    "depends_on normalizado=formato_lista"
 )
 PY
 ok "Kong em 127.0.0.1 + analytics desativado"
