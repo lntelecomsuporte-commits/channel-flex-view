@@ -139,7 +139,11 @@ Deno.serve(async (req) => {
       "export_auth_identities" as any,
     );
     if (identities) {
-      sql += toInsert("identities", identities as any[], "auth");
+      sql += toInsert(
+        "identities",
+        omitColumns(identities as any[], ["email"]),
+        "auth",
+      );
     }
 
     // ---------- PUBLIC SCHEMA ----------
