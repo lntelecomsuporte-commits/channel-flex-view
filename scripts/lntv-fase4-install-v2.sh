@@ -8,6 +8,9 @@ set -euo pipefail
 INSTALL_DIR="/opt/lntv"
 BACKUP_DIR="${INSTALL_DIR}/backups"
 SECRETS_FILE="${INSTALL_DIR}/SECRETS-IMPORTANTES.txt"
+SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
+SCRIPT_SOURCE="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_STASH="/tmp/${SCRIPT_NAME}.$$"
 
 c_red()   { printf "\033[31m%s\033[0m\n" "$*"; }
 c_green() { printf "\033[32m%s\033[0m\n" "$*"; }
@@ -18,7 +21,15 @@ ok()   { c_green "✔ $*"; }
 warn() { c_yellow "⚠ $*"; }
 fail() { c_red "✖ $*"; exit 1; }
 
-trap 'fail "Falhou na linha $LINENO. Veja o erro acima. Pra reinstalar do zero: sudo bash $0 reset"' ERR
+restore_installer() {
+  if [[ -f "${SCRIPT_STASH}" ]]; then
+    cp "${SCRIPT_STASH}" "${INSTALL_DIR}/${SCRIPT_NAME}"
+    chmod 700 "${INSTALL_DIR}/${SCRIPT_NAME}" || true
+  fi
+}
+
+cp "${SCRIPT_SOURCE}" "${SCRIPT_STASH}" 2>/dev/null || true
+trap 'fail "Falhou na linha $LINENO. Veja o erro acima. Pra reinstalar do zero: sudo bash ${INSTALL_DIR}/${SCRIPT_NAME} reset"' ERR
 
 # ---------- RESET ----------
 if [[ "${1:-}" == "reset" ]]; then
@@ -37,6 +48,7 @@ if [[ "${1:-}" == "reset" ]]; then
   if [[ -f "${SECRETS_FILE}" ]]; then mv "${SECRETS_FILE}" /tmp/lntv-secrets-$$ ; fi
   rm -rf "${INSTALL_DIR}"
   mkdir -p "${INSTALL_DIR}"
+  restore_installer
   if [[ -d /tmp/lntv-backups-$$ ]]; then mv /tmp/lntv-backups-$$ "${BACKUP_DIR}"; fi
   if [[ -f /tmp/lntv-secrets-$$ ]]; then mv /tmp/lntv-secrets-$$ "${SECRETS_FILE}"; fi
   ok "Reset completo. Rodando instalação limpa..."
@@ -54,6 +66,7 @@ ok "Pré-requisitos OK"
 # ---------- 2/11 ESTRUTURA ----------
 log "2/11 Criando estrutura em ${INSTALL_DIR}..."
 mkdir -p "${INSTALL_DIR}" "${BACKUP_DIR}"
+restore_installer
 cd "${INSTALL_DIR}"
 ok "Diretórios prontos"
 
@@ -71,8 +84,6 @@ log "4/11 Gerando segredos..."
 if [[ ! -f "${SECRETS_FILE}" ]]; then
   POSTGRES_PASSWORD=$(openssl rand -hex 24)
   JWT_SECRET=$(openssl rand -hex 32)
-  ANON_KEY="REGENERATE_AFTER_FIRST_BOOT"
-  SERVICE_ROLE_KEY="REGENERATE_AFTER_FIRST_BOOT"
   DASHBOARD_PASSWORD=$(openssl rand -hex 12)
   cat > "${SECRETS_FILE}" <<EOF
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -87,6 +98,32 @@ else
 fi
 # shellcheck disable=SC1090
 source "${SECRETS_FILE}"
+
+SECRETS_UPDATED=0
+if [[ -z "${POSTGRES_PASSWORD:-}" ]]; then
+  POSTGRES_PASSWORD=$(openssl rand -hex 24)
+  echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}" >> "${SECRETS_FILE}"
+  SECRETS_UPDATED=1
+fi
+if [[ -z "${JWT_SECRET:-}" ]]; then
+  JWT_SECRET=$(openssl rand -hex 32)
+  echo "JWT_SECRET=${JWT_SECRET}" >> "${SECRETS_FILE}"
+  SECRETS_UPDATED=1
+fi
+if [[ -z "${DASHBOARD_USERNAME:-}" ]]; then
+  DASHBOARD_USERNAME="admin"
+  echo "DASHBOARD_USERNAME=${DASHBOARD_USERNAME}" >> "${SECRETS_FILE}"
+  SECRETS_UPDATED=1
+fi
+if [[ -z "${DASHBOARD_PASSWORD:-}" ]]; then
+  DASHBOARD_PASSWORD=$(openssl rand -hex 12)
+  echo "DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD}" >> "${SECRETS_FILE}"
+  SECRETS_UPDATED=1
+fi
+if [[ ${SECRETS_UPDATED} -eq 1 ]]; then
+  chmod 600 "${SECRETS_FILE}"
+  ok "Arquivo de segredos antigo foi completado com valores ausentes"
+fi
 
 # ---------- 5/11 .env ----------
 log "5/11 Gerando ${INSTALL_DIR}/.env..."
@@ -104,16 +141,45 @@ sed -i 's|"\${KONG_HTTPS_PORT}:8443/tcp"|"127.0.0.1:${KONG_HTTPS_PORT}:8443/tcp"
 
 # Remove o serviço analytics e suas dependências (não essencial e quebra em servidores menores)
 python3 - <<'PY'
-import re, sys
-p = "/opt/lntv/docker-compose.yml"
-with open(p) as f: s = f.read()
-# Remove bloco analytics: ... até a próxima service no mesmo nível de indentação
-s = re.sub(r'\n  analytics:\n(?:    .*\n)+', '\n', s)
-# Remove referencias ao analytics em depends_on
-s = re.sub(r'\n      analytics:\n        condition: service_healthy\n', '\n', s)
-s = re.sub(r'\n      - analytics\n', '\n', s)
-with open(p, "w") as f: f.write(s)
-print("docker-compose.yml: serviço 'analytics' removido")
+from pathlib import Path
+
+p = Path("/opt/lntv/docker-compose.yml")
+lines = p.read_text().splitlines()
+out = []
+i = 0
+removed_service = False
+removed_refs = 0
+
+
+def starts_new_block(line: str) -> bool:
+    return bool(line) and ((not line.startswith(" ")) or (line.startswith("  ") and not line.startswith("    ") and line.endswith(":")))
+
+
+while i < len(lines):
+    line = lines[i]
+
+    if line == "  analytics:":
+      removed_service = True
+      i += 1
+      while i < len(lines) and not starts_new_block(lines[i]):
+          i += 1
+      continue
+
+    if line == "      analytics:" and i + 1 < len(lines) and lines[i + 1].strip() == "condition: service_healthy":
+        removed_refs += 1
+        i += 2
+        continue
+
+    if line == "      - analytics":
+        removed_refs += 1
+        i += 1
+        continue
+
+    out.append(line)
+    i += 1
+
+p.write_text("\n".join(out).rstrip() + "\n")
+print(f"docker-compose.yml: analytics removido={removed_service}, referencias removidas={removed_refs}")
 PY
 ok "Kong em 127.0.0.1 + analytics desativado"
 
