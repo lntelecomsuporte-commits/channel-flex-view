@@ -40,6 +40,279 @@ function omitColumns(rows: any[], columns: string[]): any[] {
   );
 }
 
+function schemaSql(): string {
+  return `-- ============================================
+-- PUBLIC SCHEMA STRUCTURE
+-- ============================================
+
+CREATE SCHEMA IF NOT EXISTS public;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typnamespace = 'public'::regnamespace AND typname = 'app_role') THEN
+    CREATE TYPE public.app_role AS ENUM ('admin', 'user');
+  END IF;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path TO 'public'
+AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.has_role(_user_id uuid, _role public.app_role)
+RETURNS boolean
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_id = _user_id AND role = _role
+  )
+$$;
+
+CREATE TABLE IF NOT EXISTS public.categories (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  position integer NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.category_includes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  category_id uuid NOT NULL,
+  included_category_id uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.channels (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  channel_number integer NOT NULL,
+  stream_url text NOT NULL,
+  logo_url text,
+  category_id uuid,
+  is_active boolean NOT NULL DEFAULT true,
+  epg_url text,
+  epg_type text,
+  epg_channel_id text,
+  epg_alt_text text,
+  epg_grab_logo boolean NOT NULL DEFAULT false,
+  epg_show_synopsis boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.hubsoft_config (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL DEFAULT 'Integração Principal',
+  api_url text NOT NULL DEFAULT '',
+  username text NOT NULL DEFAULT '',
+  password text NOT NULL DEFAULT '',
+  api_key text NOT NULL DEFAULT '',
+  package_id text NOT NULL DEFAULT '',
+  is_active boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.hubsoft_config_categories (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  hubsoft_config_id uuid NOT NULL,
+  category_id uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  username text,
+  display_name text,
+  is_active boolean NOT NULL DEFAULT true,
+  is_blocked boolean NOT NULL DEFAULT false,
+  hubsoft_client_id text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.proxy_access_log (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  ip_address text NOT NULL,
+  user_id uuid,
+  channel_id uuid,
+  channel_name text,
+  stream_host text,
+  request_count integer NOT NULL DEFAULT 1,
+  bytes_transferred bigint NOT NULL DEFAULT 0,
+  bucket_minute timestamptz NOT NULL,
+  first_seen_at timestamptz NOT NULL DEFAULT now(),
+  last_seen_at timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.user_roles (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  role public.app_role NOT NULL,
+  UNIQUE (user_id, role)
+);
+
+CREATE TABLE IF NOT EXISTS public.user_category_access (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  category_id uuid NOT NULL,
+  hubsoft_config_id uuid,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.user_favorites (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  channel_id uuid NOT NULL,
+  position integer NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.user_sessions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  session_token text NOT NULL,
+  user_agent text,
+  ip_address text,
+  client_ipv4 text,
+  client_ipv6 text,
+  current_channel_id uuid,
+  current_channel_name text,
+  started_at timestamptz NOT NULL DEFAULT now(),
+  last_heartbeat_at timestamptz NOT NULL DEFAULT now(),
+  ended_at timestamptz,
+  is_watching boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE OR REPLACE FUNCTION public.cleanup_old_monitoring_data()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+BEGIN
+  DELETE FROM public.user_sessions WHERE created_at < now() - interval '30 days';
+  DELETE FROM public.proxy_access_log WHERE created_at < now() - interval '30 days';
+  UPDATE public.user_sessions
+  SET ended_at = last_heartbeat_at
+  WHERE ended_at IS NULL AND last_heartbeat_at < now() - interval '5 minutes';
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_user_online_status(_user_id uuid)
+RETURNS TABLE(is_logged_in boolean, is_watching boolean, current_channel_name text, last_seen timestamptz, session_started_at timestamptz)
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT
+    EXISTS(SELECT 1 FROM public.user_sessions WHERE user_id = _user_id AND ended_at IS NULL AND last_heartbeat_at > now() - interval '90 seconds') AS is_logged_in,
+    EXISTS(SELECT 1 FROM public.user_sessions WHERE user_id = _user_id AND ended_at IS NULL AND is_watching = true AND last_heartbeat_at > now() - interval '90 seconds') AS is_watching,
+    (SELECT current_channel_name FROM public.user_sessions WHERE user_id = _user_id AND ended_at IS NULL ORDER BY last_heartbeat_at DESC LIMIT 1) AS current_channel_name,
+    (SELECT last_heartbeat_at FROM public.user_sessions WHERE user_id = _user_id ORDER BY last_heartbeat_at DESC LIMIT 1) AS last_seen,
+    (SELECT started_at FROM public.user_sessions WHERE user_id = _user_id AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1) AS session_started_at;
+$$;
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+BEGIN
+  INSERT INTO public.profiles (user_id, username, display_name)
+  VALUES (NEW.id, NEW.email, COALESCE(NEW.raw_user_meta_data->>'display_name', NEW.email))
+  ON CONFLICT DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.category_includes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.channels ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.hubsoft_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.hubsoft_config_categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.proxy_access_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_category_access ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_favorites ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_sessions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins can manage categories" ON public.categories;
+CREATE POLICY "Admins can manage categories" ON public.categories FOR ALL TO authenticated USING (public.has_role(auth.uid(), 'admin'::public.app_role)) WITH CHECK (public.has_role(auth.uid(), 'admin'::public.app_role));
+DROP POLICY IF EXISTS "Anyone can view categories" ON public.categories;
+CREATE POLICY "Anyone can view categories" ON public.categories FOR SELECT TO public USING (true);
+
+DROP POLICY IF EXISTS "Admins can manage category includes" ON public.category_includes;
+CREATE POLICY "Admins can manage category includes" ON public.category_includes FOR ALL TO authenticated USING (public.has_role(auth.uid(), 'admin'::public.app_role)) WITH CHECK (public.has_role(auth.uid(), 'admin'::public.app_role));
+DROP POLICY IF EXISTS "Anyone can view category includes" ON public.category_includes;
+CREATE POLICY "Anyone can view category includes" ON public.category_includes FOR SELECT TO public USING (true);
+
+DROP POLICY IF EXISTS "Admins can manage channels" ON public.channels;
+CREATE POLICY "Admins can manage channels" ON public.channels FOR ALL TO authenticated USING (public.has_role(auth.uid(), 'admin'::public.app_role)) WITH CHECK (public.has_role(auth.uid(), 'admin'::public.app_role));
+DROP POLICY IF EXISTS "Anyone can view active channels" ON public.channels;
+CREATE POLICY "Anyone can view active channels" ON public.channels FOR SELECT TO public USING (true);
+
+DROP POLICY IF EXISTS "Admins can manage hubsoft config" ON public.hubsoft_config;
+CREATE POLICY "Admins can manage hubsoft config" ON public.hubsoft_config FOR ALL TO authenticated USING (public.has_role(auth.uid(), 'admin'::public.app_role)) WITH CHECK (public.has_role(auth.uid(), 'admin'::public.app_role));
+
+DROP POLICY IF EXISTS "Admins can manage hubsoft config categories" ON public.hubsoft_config_categories;
+CREATE POLICY "Admins can manage hubsoft config categories" ON public.hubsoft_config_categories FOR ALL TO authenticated USING (public.has_role(auth.uid(), 'admin'::public.app_role)) WITH CHECK (public.has_role(auth.uid(), 'admin'::public.app_role));
+
+DROP POLICY IF EXISTS "Admins can manage profiles" ON public.profiles;
+CREATE POLICY "Admins can manage profiles" ON public.profiles FOR ALL TO authenticated USING (public.has_role(auth.uid(), 'admin'::public.app_role)) WITH CHECK (public.has_role(auth.uid(), 'admin'::public.app_role));
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
+CREATE POLICY "Users can view own profile" ON public.profiles FOR SELECT TO authenticated USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Admins can view proxy log" ON public.proxy_access_log;
+CREATE POLICY "Admins can view proxy log" ON public.proxy_access_log FOR SELECT TO authenticated USING (public.has_role(auth.uid(), 'admin'::public.app_role));
+
+DROP POLICY IF EXISTS "Admins can view roles" ON public.user_roles;
+CREATE POLICY "Admins can view roles" ON public.user_roles FOR SELECT TO authenticated USING (public.has_role(auth.uid(), 'admin'::public.app_role));
+
+DROP POLICY IF EXISTS "Admins can manage user category access" ON public.user_category_access;
+CREATE POLICY "Admins can manage user category access" ON public.user_category_access FOR ALL TO authenticated USING (public.has_role(auth.uid(), 'admin'::public.app_role)) WITH CHECK (public.has_role(auth.uid(), 'admin'::public.app_role));
+DROP POLICY IF EXISTS "Users can view own category access" ON public.user_category_access;
+CREATE POLICY "Users can view own category access" ON public.user_category_access FOR SELECT TO authenticated USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Admins can view all favorites" ON public.user_favorites;
+CREATE POLICY "Admins can view all favorites" ON public.user_favorites FOR SELECT TO authenticated USING (public.has_role(auth.uid(), 'admin'::public.app_role));
+DROP POLICY IF EXISTS "Users can view own favorites" ON public.user_favorites;
+CREATE POLICY "Users can view own favorites" ON public.user_favorites FOR SELECT TO authenticated USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can insert own favorites" ON public.user_favorites;
+CREATE POLICY "Users can insert own favorites" ON public.user_favorites FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can update own favorites" ON public.user_favorites;
+CREATE POLICY "Users can update own favorites" ON public.user_favorites FOR UPDATE TO authenticated USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can delete own favorites" ON public.user_favorites;
+CREATE POLICY "Users can delete own favorites" ON public.user_favorites FOR DELETE TO authenticated USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Admins can view all sessions" ON public.user_sessions;
+CREATE POLICY "Admins can view all sessions" ON public.user_sessions FOR SELECT TO authenticated USING (public.has_role(auth.uid(), 'admin'::public.app_role));
+DROP POLICY IF EXISTS "Users can view own sessions" ON public.user_sessions;
+CREATE POLICY "Users can view own sessions" ON public.user_sessions FOR SELECT TO authenticated USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can insert own sessions" ON public.user_sessions;
+CREATE POLICY "Users can insert own sessions" ON public.user_sessions FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can update own sessions" ON public.user_sessions;
+CREATE POLICY "Users can update own sessions" ON public.user_sessions FOR UPDATE TO authenticated USING (auth.uid() = user_id);
+
+`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
