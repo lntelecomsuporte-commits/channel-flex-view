@@ -8,7 +8,7 @@ const config: CapacitorConfig = {
     allowMixedContent: true,
   },
   server: {
-    url: 'https://tv.lntelecom.net',
+    url: 'https://tv2.lntelecom.net',
     cleartext: false,
   },
 };
