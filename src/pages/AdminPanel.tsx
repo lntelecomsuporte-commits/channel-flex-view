@@ -40,6 +40,20 @@ const AdminPanel = () => {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Fetch ALL XML presets (used when epg_type === "all" for global channel search)
+  const { data: allXmlPresets = [] } = useQuery({
+    queryKey: ["epg_url_presets", "all_xml"],
+    enabled: channelForm.epg_type === "all",
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("epg_url_presets")
+        .select("url, epg_type")
+        .in("epg_type", ["iptv_epg_org", "open_epg", "github_xml"]);
+      if (error) throw error;
+      return (data || []) as { url: string; epg_type: string }[];
+    },
+  });
+
   // Fetch category includes
   const { data: categoryIncludes } = useQuery({
     queryKey: ["category-includes"],
@@ -99,6 +113,10 @@ const AdminPanel = () => {
   const handleSaveChannel = async () => {
     if (!channelForm.name || !channelForm.stream_url || !channelForm.channel_number) {
       toast.error("Preencha nome, número e URL do stream");
+      return;
+    }
+    if (channelForm.epg_type === "all") {
+      toast.error('"Todos" é apenas um modo de busca. Escolha um tipo específico de EPG antes de salvar.');
       return;
     }
     setSaving(true);
@@ -328,6 +346,7 @@ const AdminPanel = () => {
                         <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">Nenhum</SelectItem>
+                          <SelectItem value="all">🔍 Todos (somar fontes — só para buscar ID)</SelectItem>
                           <SelectItem value="epg_pw">EPG.PW</SelectItem>
                           <SelectItem value="alt_text">Texto Alternativo</SelectItem>
                           <SelectItem value="iptv_epg_org">IPTV-EPG.org</SelectItem>
@@ -337,6 +356,21 @@ const AdminPanel = () => {
                       </Select>
                     </div>
                   </div>
+
+                  {channelForm.epg_type === "all" && (
+                    <div className="space-y-2 rounded-md border border-dashed border-primary/40 p-3 bg-primary/5">
+                      <p className="text-xs text-muted-foreground">
+                        Modo busca global: pesquisa em <strong>{allXmlPresets.length}</strong> URL{allXmlPresets.length !== 1 ? "s" : ""} salva{allXmlPresets.length !== 1 ? "s" : ""} (todos os tipos XML). Use para descobrir o ID do canal e depois troque para o tipo específico antes de salvar.
+                      </p>
+                      <Label>ID do Canal (busca em todas as fontes)</Label>
+                      <EpgChannelPicker
+                        value={channelForm.epg_channel_id}
+                        onChange={(v) => setChannelForm((f) => ({ ...f, epg_channel_id: v }))}
+                        xmlUrl=""
+                        extraUrls={allXmlPresets.map((p) => normalizeGithub(p.url))}
+                      />
+                    </div>
+                  )}
 
                   {channelForm.epg_type === "epg_pw" && (
                     <div className="space-y-2">
