@@ -1,6 +1,3 @@
-# Memory: index.md
-Updated: today
-
 # Project Memory
 
 ## Core
@@ -8,10 +5,11 @@ PWA for Smart TVs/Mobile. Tech: Supabase, Capacitor, Flussonic.
 Brand: "LN TV", dark mode, primary red #dc2626.
 Player: 100vw/100vh, object-contain. HLS/MP4 only.
 Auth: No public sign-up. Global session revocation on block.
-**Production = self-hosted at tv2.lntelecom.net.** Cloud (tv.lntelecom.net) is ONLY the AI edit workspace; user pulls changes to local. After every change, give sync procedure. NEVER make self-hosted fetch URLs/.env/secrets from Cloud — see [self-hosted deployment](mem://deployment/self-hosted).
+Domain: Cloud=tv.lntelecom.net (dev only), Production=tv2.lntelecom.net (self-hosted).
+ALWAYS end every change with the self-hosted sync commands (see deployment/self-hosted). Never skip.
 
 ## Memories
-- [Self-hosted deployment](mem://deployment/self-hosted) — tv2 sync procedure, exceptions (URL/.env/kong/DB)
+- [Self-hosted deployment](mem://deployment/self-hosted) — Sync procedure for tv2.lntelecom.net after every Cloud change
 - [Player & Navigation](mem://features/player) — Remote/touch controls, autoplay rules, Airplay support
 - [Hubsoft Integration](mem://features/hubsoft-integration) — Webhooks, TVLN filtering, CPF login generation, blocking logic
 - [Auth & Users](mem://features/auth-users) — Plaintext passwords for ERP, REST API for Auth, user_roles
