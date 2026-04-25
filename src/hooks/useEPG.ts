@@ -112,7 +112,7 @@ export async function fetchXmltvBundle(url: string): Promise<XmltvBundle> {
 
   const programmes = doc.getElementsByTagName("programme");
   const total = programmes.length;
-  const CHUNK = 500;
+  const CHUNK = IS_NATIVE ? 100 : 500;
 
   for (let i = 0; i < total; i++) {
     const prog = programmes[i];
