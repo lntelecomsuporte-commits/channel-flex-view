@@ -14,11 +14,28 @@ const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
+const isLocalProxyHost = (host: string) => {
+  const hostname = host.split(":")[0]?.toLowerCase() ?? "";
+  return ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(hostname) || hostname.endsWith(".local");
+};
+
+const getForwardedProtocol = (request: Request, requestUrl: URL) => {
+  const forwardedValues = request.headers
+    .get("x-forwarded-proto")
+    ?.split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean) ?? [];
+
+  if (forwardedValues.includes("https")) return "https";
+  if (forwardedValues.includes("http")) return "http";
+  return requestUrl.protocol.replace(":", "");
+};
+
 const getProxyEndpoint = (request: Request, requestUrl: URL) => {
-  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
   const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
-  const protocol = forwardedProto || requestUrl.protocol.replace(":", "");
   const host = forwardedHost || request.headers.get("host") || requestUrl.host;
+  const forwardedProtocol = getForwardedProtocol(request, requestUrl);
+  const protocol = forwardedProtocol === "http" && !isLocalProxyHost(host) ? "https" : forwardedProtocol;
   return `${protocol}://${host}/functions/v1/hls-proxy`;
 };
 

@@ -1,10 +1,27 @@
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
 
+const isLocalHostname = (hostname: string) =>
+  ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(hostname) || hostname.endsWith(".local");
+
 const getProxyBaseUrl = () => {
   const backendUrl = import.meta.env.VITE_SUPABASE_URL;
   if (!backendUrl) return null;
-  return `${backendUrl}/functions/v1/hls-proxy`;
+
+  try {
+    const url = new URL(backendUrl);
+    if (
+      typeof window !== "undefined" &&
+      window.location.protocol === "https:" &&
+      url.protocol === "http:" &&
+      !isLocalHostname(url.hostname)
+    ) {
+      url.protocol = "https:";
+    }
+    return `${url.origin}/functions/v1/hls-proxy`;
+  } catch {
+    return `${backendUrl.replace(/\/$/, "")}/functions/v1/hls-proxy`;
+  }
 };
 
 /**
