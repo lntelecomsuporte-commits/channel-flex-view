@@ -65,6 +65,23 @@ const useActiveSessions = () =>
     refetchInterval: 10_000,
   });
 
+// Canais cujo stream_url é HTTPS direto — NÃO passam pelo hls-proxy.
+// Usado para excluir esses canais da lista "Ativos no proxy".
+const useNonProxiedChannelNames = () =>
+  useQuery({
+    queryKey: ["non-proxied-channel-names"],
+    queryFn: async () => {
+      const { data } = await supabase.from("channels").select("name, stream_url");
+      const names = new Set<string>();
+      (data ?? []).forEach((c) => {
+        const url = (c.stream_url ?? "").trim().toLowerCase();
+        if (url.startsWith("https://")) names.add(c.name);
+      });
+      return names;
+    },
+    refetchInterval: 60_000,
+  });
+
 // Últimas sessões (30d) — usadas para enriquecer o histórico do proxy
 // com o IPv4/IPv6/UA reais do cliente (o IP gravado no proxy_access_log
 // é o do nginx interno, ex.: 172.18.0.1).
@@ -115,6 +132,7 @@ const ProxyMonitoring = () => {
   const { data: profiles } = useProfilesMap();
   const { data: sessions } = useActiveSessions();
   const { data: recentSessions } = useRecentSessionsByUser();
+  const { data: nonProxiedChannels } = useNonProxiedChannelNames();
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -176,7 +194,9 @@ const ProxyMonitoring = () => {
   );
   const activeList = onlineUsers
     .filter((s) => s.is_watching && s.channel_name)
-    .filter((s) => proxyActiveKeys.has(`${s.user_id}|${s.channel_name}`));
+    .filter((s) => proxyActiveKeys.has(`${s.user_id}|${s.channel_name}`))
+    // Exclui canais que NÃO usam o hls-proxy (stream HTTPS direto)
+    .filter((s) => !nonProxiedChannels?.has(s.channel_name as string));
 
   // Agrega histórico (30d) por usuário+canal
   const since30d = now - 30 * 24 * 60 * 60 * 1000;
