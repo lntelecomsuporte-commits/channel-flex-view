@@ -6,7 +6,7 @@ Brand: "LN TV", dark mode, primary red #dc2626.
 Player: 100vw/100vh, object-contain. HLS/MP4 only.
 Auth: No public sign-up. Global session revocation on block.
 Domain: Cloud=tv.lntelecom.net (dev only), Production=tv2.lntelecom.net (self-hosted).
-ALWAYS end every change with the self-hosted sync commands (see deployment/self-hosted). Never skip.
+ALWAYS end every change with the self-hosted sync commands displayed on screen. Never skip. Commands: cd /opt/lntv-frontend && git fetch origin && git reset --hard origin/main && npm run build:local
 
 ## Memories
 - [Self-hosted deployment](mem://deployment/self-hosted) — Sync procedure for tv2.lntelecom.net after every Cloud change
