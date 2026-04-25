@@ -64,23 +64,26 @@ const PlayerPage = () => {
   // Lembra o canal atual pelo ID — sobrevive a refetch da lista (focus, reconnect)
   // e a falhas de stream, evitando o "volta pro canal 0" quando o array é substituído.
   const currentChannelIdRef = useRef<string | null>(null);
+  // Quando a lista de canais é refetchada (focus, reconnect), reposiciona o índice
+  // para o canal lembrado pelo ID. NÃO depende de currentIndex para evitar loop
+  // que sobrescreve a troca manual feita pelo usuário.
   useEffect(() => {
     if (!channels?.length) return;
     const rememberedId = currentChannelIdRef.current;
     if (!rememberedId) {
-      currentChannelIdRef.current = channels[currentIndex]?.id ?? channels[0]?.id ?? null;
+      currentChannelIdRef.current = channels[0]?.id ?? null;
       return;
     }
     const newIdx = channels.findIndex((c) => c.id === rememberedId);
-    if (newIdx >= 0 && newIdx !== currentIndex) {
-      setCurrentIndex(newIdx);
-    } else if (newIdx < 0) {
-      // Canal foi removido — fica no índice atual (clampeado)
-      const safeIdx = Math.min(currentIndex, channels.length - 1);
-      currentChannelIdRef.current = channels[safeIdx]?.id ?? null;
-      if (safeIdx !== currentIndex) setCurrentIndex(safeIdx);
+    if (newIdx >= 0) {
+      setCurrentIndex((prev) => (prev === newIdx ? prev : newIdx));
+    } else {
+      // Canal removido — vai pro primeiro
+      currentChannelIdRef.current = channels[0]?.id ?? null;
+      setCurrentIndex(0);
     }
-  }, [channels, currentIndex]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channels]);
 
   const [showOSD, setShowOSD] = useState(true);
   const [showFavoritesBar, setShowFavoritesBar] = useState(false);
