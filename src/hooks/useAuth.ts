@@ -53,11 +53,13 @@ export function useAuth() {
         setUser(currentUser);
 
         if (currentUser) {
+          setLoading(true);
           setTimeout(async () => {
-            const { data } = await supabase.rpc("has_role", {
+            const { data, error } = await supabase.rpc("has_role", {
               _user_id: currentUser.id,
               _role: "admin",
             });
+            if (error) console.warn("[useAuth] has_role error:", error.message);
             setIsAdmin(!!data);
             setLoading(false);
           }, 0);
