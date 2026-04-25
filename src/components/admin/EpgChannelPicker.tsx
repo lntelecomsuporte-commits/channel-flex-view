@@ -55,6 +55,7 @@ export default function EpgChannelPicker({ value, onChange, xmlUrl }: EpgChannel
     }
   };
 
+  const MAX_VISIBLE = 200;
   const filtered = useMemo(() => {
     if (!search.trim()) return channels;
     const q = search.toLowerCase();
@@ -62,6 +63,7 @@ export default function EpgChannelPicker({ value, onChange, xmlUrl }: EpgChannel
       (ch) => ch.name.toLowerCase().includes(q) || ch.id.toLowerCase().includes(q)
     );
   }, [channels, search]);
+  const visible = useMemo(() => filtered.slice(0, MAX_VISIBLE), [filtered]);
 
   return (
     <div className="flex gap-2">
