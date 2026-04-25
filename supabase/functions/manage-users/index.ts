@@ -19,6 +19,29 @@ async function adminAuthFetch(supabaseUrl: string, serviceRoleKey: string, path:
   return { ok: res.ok, status: res.status, data };
 }
 
+async function serviceRestFetch(supabaseUrl: string, serviceRoleKey: string, path: string, method: string, body?: unknown) {
+  const res = await fetch(`${supabaseUrl}/rest/v1/${path}`, {
+    method,
+    headers: {
+      "Authorization": `Bearer ${serviceRoleKey}`,
+      "apikey": serviceRoleKey,
+      "Content-Type": "application/json",
+      "Prefer": "return=representation",
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  const data = await res.json().catch(() => null);
+  return { ok: res.ok, status: res.status, data };
+}
+
+async function cleanupPublicUserData(supabaseUrl: string, serviceRoleKey: string, userId: string) {
+  const tables = ["user_category_access", "user_roles", "user_sessions", "user_favorites", "profiles"];
+  for (const table of tables) {
+    const res = await serviceRestFetch(supabaseUrl, serviceRoleKey, `${table}?user_id=eq.${encodeURIComponent(userId)}`, "DELETE");
+    if (!res.ok) console.error(`cleanup ${table} failed:`, res.status, res.data);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -47,15 +70,26 @@ Deno.serve(async (req) => {
     }
 
     const { action, email, password, display_name, user_id } = await req.json();
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
 
     if (action === "create") {
-      if (!email || !password) return json({ error: "Email e senha são obrigatórios" }, 400);
+      if (!normalizedEmail || !password) return json({ error: "Email e senha são obrigatórios" }, 400);
+
+      const existingProfile = await serviceRestFetch(
+        supabaseUrl,
+        serviceRoleKey,
+        `profiles?username=eq.${encodeURIComponent(normalizedEmail)}&select=user_id&limit=1`,
+        "GET",
+      );
+      if (existingProfile.ok && Array.isArray(existingProfile.data) && existingProfile.data.length > 0) {
+        return json({ error: "Já existe um usuário cadastrado com este email" }, 409);
+      }
 
       const { ok, data, status } = await adminAuthFetch(supabaseUrl, serviceRoleKey, "users", "POST", {
-        email,
+        email: normalizedEmail,
         password,
         email_confirm: true,
-        user_metadata: { display_name: display_name || email },
+        user_metadata: { display_name: display_name || normalizedEmail },
       });
 
       if (!ok) {
