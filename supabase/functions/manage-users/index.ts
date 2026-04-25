@@ -51,15 +51,42 @@ Deno.serve(async (req) => {
     if (action === "create") {
       if (!email || !password) return json({ error: "Email e senha são obrigatórios" }, 400);
 
-      const { ok, data } = await adminAuthFetch(supabaseUrl, serviceRoleKey, "users", "POST", {
+      const { ok, data, status } = await adminAuthFetch(supabaseUrl, serviceRoleKey, "users", "POST", {
         email,
         password,
         email_confirm: true,
         user_metadata: { display_name: display_name || email },
       });
 
-      if (!ok) return json({ error: data.msg || data.message || "Erro ao criar usuário" }, 400);
-      return json({ success: true, user_id: data.id });
+      if (!ok) {
+        console.error("auth.admin.createUser failed:", status, data);
+        return json({ error: data.msg || data.message || data.error_description || `Auth error ${status}` }, 400);
+      }
+
+      const newUserId = data.id;
+
+      // Garante o profile (caso a trigger handle_new_user não exista no self-hosted)
+      const profileRes = await fetch(`${supabaseUrl}/rest/v1/profiles`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${serviceRoleKey}`,
+          "apikey": serviceRoleKey,
+          "Content-Type": "application/json",
+          "Prefer": "resolution=ignore-duplicates,return=minimal",
+        },
+        body: JSON.stringify({
+          user_id: newUserId,
+          username: email,
+          display_name: display_name || email,
+        }),
+      });
+      if (!profileRes.ok && profileRes.status !== 409) {
+        const errText = await profileRes.text();
+        console.error("profile insert failed:", profileRes.status, errText);
+        // Não falha o request — usuário foi criado no auth
+      }
+
+      return json({ success: true, user_id: newUserId });
     }
 
     if (action === "update") {
