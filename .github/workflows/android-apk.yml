@@ -38,19 +38,26 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Generate Android icons & splash from resources/
-        run: |
-          if [ -f resources/icon.png ]; then
-            npx capacitor-assets generate --android || echo "asset generation skipped"
-          else
-            echo "No resources/icon.png found, skipping icon generation"
-          fi
-
       - name: Build web (dist/)
         run: npm run build
 
+      - name: Add Android platform if missing
+        run: |
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
+
       - name: Capacitor sync
         run: npx cap sync android
+
+      - name: Generate Android icons & splash from resources/
+        run: |
+          if [ -f resources/icon.png ]; then
+            npm install --no-save @capacitor/assets
+            npx @capacitor/assets generate --android --assetPath resources || echo "asset generation failed, continuing"
+          else
+            echo "No resources/icon.png found, skipping icon generation"
+          fi
 
       - name: Grant execute permission to gradlew
         run: chmod +x android/gradlew
