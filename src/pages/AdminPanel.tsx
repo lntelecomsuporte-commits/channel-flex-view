@@ -378,7 +378,7 @@ const AdminPanel = () => {
                               epg_type: match.epg_type,
                               epg_url: match.url,
                             }));
-                            toast({ title: "Tipo definido automaticamente", description: `${match.epg_type} · ${match.url}` });
+                            toast.success("Tipo definido automaticamente", { description: `${match.epg_type} · ${match.url}` });
                           }
                         }}
                       />
