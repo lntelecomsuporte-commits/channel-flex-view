@@ -42,6 +42,16 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
+      - name: Create .env.production for self-hosted backend
+        run: |
+          cat > .env.production <<EOF
+          VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY=${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_PROJECT_ID=default
+          EOF
+          echo "Backend target:"
+          grep VITE_SUPABASE_URL .env.production
+
       - name: Build web (dist/)
         run: npm run build
 
