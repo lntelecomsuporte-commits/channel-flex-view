@@ -136,6 +136,33 @@ export type Database = {
           },
         ]
       }
+      epg_url_presets: {
+        Row: {
+          created_at: string
+          epg_type: string
+          id: string
+          name: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          epg_type: string
+          id?: string
+          name: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          epg_type?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: []
+      }
       hubsoft_config: {
         Row: {
           api_key: string

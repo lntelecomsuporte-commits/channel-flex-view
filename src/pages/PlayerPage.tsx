@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useEPG, type EPGProgram } from "@/hooks/useEPG";
 import { useMultiEPG } from "@/hooks/useMultiEPG";
 import { useNativeBackButton } from "@/hooks/useNativeBackButton";
+import { useBackgroundPlayback } from "@/hooks/useBackgroundPlayback";
 import VideoPlayer, { type VideoPlayerHandle } from "@/components/player/VideoPlayer";
 import ChannelOSD from "@/components/player/ChannelOSD";
 import ChannelPreview from "@/components/player/ChannelPreview";
@@ -35,6 +36,9 @@ const PlayerPage = () => {
     document.body.classList.add("player-mode");
     return () => document.body.classList.remove("player-mode");
   }, []);
+
+  // Mantém o vídeo tocando mesmo com a aba em segundo plano
+  useBackgroundPlayback(true);
 
   // Boas-vindas ao abrir o app
   const welcomedRef = useRef(false);

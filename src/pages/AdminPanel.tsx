@@ -19,6 +19,7 @@ import UserManagement from "@/components/admin/UserManagement";
 import HubsoftIntegration from "@/components/admin/HubsoftIntegration";
 import ProxyMonitoring from "@/components/admin/ProxyMonitoring";
 import EpgChannelPicker from "@/components/admin/EpgChannelPicker";
+import EpgUrlPresetSelector from "@/components/admin/EpgUrlPresetSelector";
 
 const emptyChannelForm = {
   name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true,
@@ -338,6 +339,11 @@ const AdminPanel = () => {
 
                   {channelForm.epg_type === "epg_pw" && (
                     <div className="space-y-2">
+                      <EpgUrlPresetSelector
+                        epgType="epg_pw"
+                        currentUrl={channelForm.epg_url}
+                        onSelect={(url) => setChannelForm((f) => ({ ...f, epg_url: url }))}
+                      />
                       <Label>URL do EPG.PW</Label>
                       <Input value={channelForm.epg_url} onChange={(e) => setChannelForm((f) => ({ ...f, epg_url: e.target.value }))} placeholder="https://epg.pw/api/epg.json?channel_id=..." />
                     </div>
@@ -353,6 +359,11 @@ const AdminPanel = () => {
                   {(channelForm.epg_type === "iptv_epg_org" || channelForm.epg_type === "open_epg" || channelForm.epg_type === "github_xml") && (
                     <div className="space-y-4">
                       <div className="space-y-2">
+                        <EpgUrlPresetSelector
+                          epgType={channelForm.epg_type}
+                          currentUrl={channelForm.epg_url}
+                          onSelect={(url) => setChannelForm((f) => ({ ...f, epg_url: url }))}
+                        />
                         <Label>URL do XML {channelForm.epg_type === "github_xml" && <span className="text-xs text-muted-foreground">(URL raw do GitHub — link com /blob/ é convertido automaticamente)</span>}</Label>
                         <Input
                           value={channelForm.epg_url || (channelForm.epg_type === "open_epg" ? "https://www.open-epg.com/files/brazil1.xml" : (channelForm.epg_type === "github_xml" ? "" : "https://iptv-epg.org/files/epg-br.xml"))}
