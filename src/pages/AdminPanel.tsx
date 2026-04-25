@@ -359,6 +359,11 @@ const AdminPanel = () => {
                   {(channelForm.epg_type === "iptv_epg_org" || channelForm.epg_type === "open_epg" || channelForm.epg_type === "github_xml") && (
                     <div className="space-y-4">
                       <div className="space-y-2">
+                        <EpgUrlPresetSelector
+                          epgType={channelForm.epg_type}
+                          currentUrl={channelForm.epg_url}
+                          onSelect={(url) => setChannelForm((f) => ({ ...f, epg_url: url }))}
+                        />
                         <Label>URL do XML {channelForm.epg_type === "github_xml" && <span className="text-xs text-muted-foreground">(URL raw do GitHub — link com /blob/ é convertido automaticamente)</span>}</Label>
                         <Input
                           value={channelForm.epg_url || (channelForm.epg_type === "open_epg" ? "https://www.open-epg.com/files/brazil1.xml" : (channelForm.epg_type === "github_xml" ? "" : "https://iptv-epg.org/files/epg-br.xml"))}
