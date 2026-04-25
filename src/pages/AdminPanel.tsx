@@ -344,6 +344,7 @@ const AdminPanel = () => {
                         epgType="epg_pw"
                         currentUrl={channelForm.epg_url}
                         onSelect={(url) => setChannelForm((f) => ({ ...f, epg_url: url }))}
+                        onUrlsChange={setExtraEpgUrls}
                       />
                       <Label>URL do EPG.PW</Label>
                       <Input value={channelForm.epg_url} onChange={(e) => setChannelForm((f) => ({ ...f, epg_url: e.target.value }))} placeholder="https://epg.pw/api/epg.json?channel_id=..." />
