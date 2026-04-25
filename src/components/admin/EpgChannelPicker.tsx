@@ -130,6 +130,7 @@ export default function EpgChannelPicker({ value, onChange, xmlUrl, extraUrls = 
                     value={ch.id}
                     onSelect={() => {
                       onChange(ch.id);
+                      if (onResolve && ch.source) onResolve(ch.id, ch.source);
                       setOpen(false);
                     }}
                     className={cn("cursor-pointer", value === ch.id && "bg-accent")}
