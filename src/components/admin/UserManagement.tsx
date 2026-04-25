@@ -47,6 +47,7 @@ const UserManagement = () => {
   const [editForm, setEditForm] = useState({ password: "", display_name: "" });
   const [editCategories, setEditCategories] = useState<string[]>([]);
   const [updating, setUpdating] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
   // Load user categories when editing
   useEffect(() => {
@@ -84,6 +85,7 @@ const UserManagement = () => {
   };
 
   const handleCreate = async () => {
+    if (saving) return;
     if (!form.email || !form.password) {
       toast.error("Preencha email e senha");
       return;
@@ -152,9 +154,12 @@ const UserManagement = () => {
   };
 
   const handleDelete = async (profileId: string, userId: string) => {
+    if (deletingUserId) return;
+    setDeletingUserId(userId);
     const { data, error } = await supabase.functions.invoke("manage-users", {
       body: { action: "delete", user_id: userId },
     });
+    setDeletingUserId(null);
     if (error || data?.error) {
       toast.error("Erro: " + (data?.error || error?.message));
     } else {
@@ -244,7 +249,7 @@ const UserManagement = () => {
                     <Button variant="ghost" size="sm" onClick={() => handleToggleBlock(p.id, p.is_blocked)} title={p.is_blocked ? "Desbloquear" : "Bloquear"}>
                       {p.is_blocked ? <ShieldCheck className="h-4 w-4 text-primary" /> : <ShieldOff className="h-4 w-4 text-destructive" />}
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDelete(p.id, p.user_id)}>
+                    <Button variant="ghost" size="sm" onClick={() => handleDelete(p.id, p.user_id)} disabled={deletingUserId === p.user_id}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
