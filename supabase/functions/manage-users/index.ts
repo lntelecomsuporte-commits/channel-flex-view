@@ -99,25 +99,27 @@ Deno.serve(async (req) => {
 
       const newUserId = data.id;
 
-      // Garante o profile (caso a trigger handle_new_user não exista no self-hosted)
-      const profileRes = await fetch(`${supabaseUrl}/rest/v1/profiles`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${serviceRoleKey}`,
-          "apikey": serviceRoleKey,
-          "Content-Type": "application/json",
-          "Prefer": "resolution=ignore-duplicates,return=minimal",
-        },
-        body: JSON.stringify({
+      // Garante o profile só se a trigger handle_new_user não tiver criado automaticamente
+      const createdProfile = await serviceRestFetch(
+        supabaseUrl,
+        serviceRoleKey,
+        `profiles?user_id=eq.${encodeURIComponent(newUserId)}&select=id&limit=1`,
+        "GET",
+      );
+      if (createdProfile.ok && Array.isArray(createdProfile.data) && createdProfile.data.length === 0) {
+        const profileRes = await serviceRestFetch(supabaseUrl, serviceRoleKey, "profiles", "POST", {
           user_id: newUserId,
           username: normalizedEmail,
           display_name: display_name || normalizedEmail,
-        }),
-      });
-      if (!profileRes.ok && profileRes.status !== 409) {
-        const errText = await profileRes.text();
-        console.error("profile insert failed:", profileRes.status, errText);
-        // Não falha o request — usuário foi criado no auth
+        });
+        if (!profileRes.ok && profileRes.status === 409) {
+          await adminAuthFetch(supabaseUrl, serviceRoleKey, `users/${newUserId}`, "DELETE");
+          return json({ error: "Já existe um usuário cadastrado com este email" }, 409);
+        }
+        if (!profileRes.ok) {
+          console.error("profile insert failed:", profileRes.status, profileRes.data);
+          // Não falha o request — usuário foi criado no auth
+        }
       }
 
       return json({ success: true, user_id: newUserId });
