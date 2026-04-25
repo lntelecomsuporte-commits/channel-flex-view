@@ -45,14 +45,40 @@ export const getPlayableStreamUrl = (streamUrl: string): string => {
   }
 };
 
-let cachedToken: string | null = null;
+// Lê o token DIRETAMENTE do localStorage de forma síncrona.
+// O supabase-js v2 persiste a sessão em uma chave `sb-<ref>-auth-token`.
+// Como HLS.js carrega segmentos sem await, precisamos do token disponível
+// já no primeiro frame — não dá pra esperar getSession() resolver.
+const readTokenFromStorage = (): string | null => {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith("sb-") || !key.endsWith("-auth-token")) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      const token = parsed?.access_token ?? parsed?.currentSession?.access_token ?? null;
+      if (typeof token === "string" && token.length > 0) return token;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+};
 
-const getCurrentAccessTokenSync = (): string | null => cachedToken;
+let cachedToken: string | null = readTokenFromStorage();
 
-// Mantém token em cache sincrono via listener
+const getCurrentAccessTokenSync = (): string | null => {
+  // Sempre re-tenta o storage caso o cache esteja vazio (ex.: login recém-feito)
+  if (!cachedToken) cachedToken = readTokenFromStorage();
+  return cachedToken;
+};
+
+// Mantém o cache atualizado quando a sessão muda
 supabase.auth.getSession().then(({ data }) => {
-  cachedToken = data.session?.access_token ?? null;
+  if (data.session?.access_token) cachedToken = data.session.access_token;
 });
 supabase.auth.onAuthStateChange((_event, session) => {
-  cachedToken = session?.access_token ?? null;
+  cachedToken = session?.access_token ?? readTokenFromStorage();
 });
