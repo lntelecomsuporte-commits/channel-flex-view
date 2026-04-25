@@ -258,86 +258,99 @@ Deno.serve(async (req) => {
 
     // Handle "suspender" / "bloquear"
     if (["suspender", "suspensao", "bloquear", "inadimplente", "suspend", "block", "desabilitar", "disable"].includes(normalizedTipo)) {
-      const profile = await findProfile();
-      if (!profile) {
+      const profiles = await findProfiles();
+      if (profiles.length === 0) {
         return new Response(JSON.stringify({ success: false, action: "blocked", message: "profile not found", idCliente, codigoCliente, cpf }), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      await revokeCategoryAccess(profile.user_id);
-
-      const { data: remainingAccess } = await supabaseAdmin
-        .from("user_category_access")
-        .select("id")
-        .eq("user_id", profile.user_id)
-        .limit(1);
-
-      if (!remainingAccess || remainingAccess.length === 0) {
-        await supabaseAdmin.from("profiles").update({ is_blocked: true }).eq("user_id", profile.user_id);
+      const blocked: string[] = [];
+      for (const profile of profiles) {
+        await revokeCategoryAccess(profile.user_id);
+        const { data: remainingAccess } = await supabaseAdmin
+          .from("user_category_access")
+          .select("id")
+          .eq("user_id", profile.user_id)
+          .limit(1);
+        if (!remainingAccess || remainingAccess.length === 0) {
+          await supabaseAdmin.from("profiles").update({ is_blocked: true }).eq("user_id", profile.user_id);
+          blocked.push(profile.user_id);
+        }
       }
 
-      return new Response(JSON.stringify({ success: true, action: "blocked", user_id: profile.user_id }), {
+      return new Response(JSON.stringify({ success: true, action: "blocked", count: profiles.length, blocked }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Handle "habilitar" / "reativar"
     if (["habilitar", "habilitacao", "reativar", "adimplente", "desbloquear", "enable", "unblock", "liberar"].includes(normalizedTipo)) {
-      const profile = await findProfile();
-      if (!profile) {
+      const profiles = await findProfiles();
+      if (profiles.length === 0) {
         return new Response(JSON.stringify({ success: false, action: "unblocked", message: "profile not found", idCliente, codigoCliente, cpf }), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      await supabaseAdmin.from("profiles").update({ is_blocked: false, is_active: true }).eq("user_id", profile.user_id);
-      // Backfill hubsoft_client_id when missing
-      if (idCliente) {
-        await supabaseAdmin.from("profiles").update({ hubsoft_client_id: idCliente }).eq("user_id", profile.user_id);
+      for (const profile of profiles) {
+        await supabaseAdmin.from("profiles").update({ is_blocked: false, is_active: true }).eq("user_id", profile.user_id);
+        if (idCliente) {
+          await supabaseAdmin.from("profiles").update({ hubsoft_client_id: idCliente }).eq("user_id", profile.user_id);
+        }
+        await grantCategoryAccess(profile.user_id);
       }
-      await grantCategoryAccess(profile.user_id);
 
-      return new Response(JSON.stringify({ success: true, action: "unblocked", user_id: profile.user_id }), {
+      return new Response(JSON.stringify({ success: true, action: "unblocked", count: profiles.length }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Handle "cancelar" / "excluir" / "remover"
     if (["cancelar", "excluir", "remover", "remocao", "delete", "cancel", "remove"].includes(normalizedTipo)) {
-      const profile = await findProfile();
-      if (!profile) {
+      const profiles = await findProfiles();
+      if (profiles.length === 0) {
         return new Response(JSON.stringify({ success: false, action: "deleted", message: "profile not found", idCliente, codigoCliente, cpf }), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      await revokeCategoryAccess(profile.user_id);
+      const deleted: string[] = [];
+      const kept: string[] = [];
+      const errors: { user_id: string; error: string }[] = [];
 
-      const { data: remainingAccess } = await supabaseAdmin
-        .from("user_category_access")
-        .select("id")
-        .eq("user_id", profile.user_id)
-        .limit(1);
+      for (const profile of profiles) {
+        await revokeCategoryAccess(profile.user_id);
+        const { data: remainingAccess } = await supabaseAdmin
+          .from("user_category_access")
+          .select("id")
+          .eq("user_id", profile.user_id)
+          .limit(1);
 
-      if (!remainingAccess || remainingAccess.length === 0) {
-        const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(profile.user_id);
-        if (delErr) {
-          console.error("deleteUser error:", delErr);
-          return new Response(JSON.stringify({ success: false, action: "deleted", error: delErr.message, user_id: profile.user_id }), {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+        if (!remainingAccess || remainingAccess.length === 0) {
+          const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(profile.user_id);
+          if (delErr) {
+            console.error("deleteUser error:", profile.user_id, delErr);
+            errors.push({ user_id: profile.user_id, error: delErr.message });
+          } else {
+            console.log("User deleted:", profile.user_id);
+            deleted.push(profile.user_id);
+          }
+        } else {
+          console.log("User kept (still has access from other configs):", profile.user_id);
+          kept.push(profile.user_id);
         }
-        console.log("User deleted:", profile.user_id);
-      } else {
-        console.log("User kept (still has access from other configs):", profile.user_id);
       }
 
-      return new Response(JSON.stringify({ success: true, action: "deleted", user_id: profile.user_id }), {
+      return new Response(JSON.stringify({
+        success: errors.length === 0,
+        action: "deleted",
+        count: profiles.length,
+        deleted, kept, errors,
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
