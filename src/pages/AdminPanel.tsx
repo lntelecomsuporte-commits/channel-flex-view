@@ -19,6 +19,7 @@ import UserManagement from "@/components/admin/UserManagement";
 import HubsoftIntegration from "@/components/admin/HubsoftIntegration";
 import ProxyMonitoring from "@/components/admin/ProxyMonitoring";
 import EpgChannelPicker from "@/components/admin/EpgChannelPicker";
+import EpgUrlPresetSelector from "@/components/admin/EpgUrlPresetSelector";
 
 const emptyChannelForm = {
   name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true,
