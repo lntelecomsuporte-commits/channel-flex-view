@@ -91,8 +91,8 @@ export default function EpgChannelPicker({ value, onChange, xmlUrl }: EpgChannel
               <CommandEmpty>
                 {loading ? "Carregando canais do XML..." : "Nenhum canal encontrado"}
               </CommandEmpty>
-              <CommandGroup heading={`${filtered.length} canais encontrados`}>
-                {filtered.map((ch) => (
+              <CommandGroup heading={`${filtered.length} canais ${filtered.length > MAX_VISIBLE ? `(mostrando ${MAX_VISIBLE} — refine a busca)` : "encontrados"}`}>
+                {visible.map((ch) => (
                   <CommandItem
                     key={ch.id}
                     value={ch.id}
