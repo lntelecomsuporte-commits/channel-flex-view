@@ -236,7 +236,7 @@ Deno.serve(async (request) => {
   });
 
   const contentType = upstreamResponse.headers.get("content-type")?.toLowerCase() ?? "";
-  const proxyEndpoint = getProxyEndpoint();
+  const proxyEndpoint = getProxyEndpoint(request, requestUrl);
   const ip = getClientIp(request);
   const contentLength = parseInt(upstreamResponse.headers.get("content-length") ?? "0", 10) || 0;
 
