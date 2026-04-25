@@ -132,6 +132,7 @@ const ProxyMonitoring = () => {
   const { data: profiles } = useProfilesMap();
   const { data: sessions } = useActiveSessions();
   const { data: recentSessions } = useRecentSessionsByUser();
+  const { data: nonProxiedChannels } = useNonProxiedChannelNames();
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
