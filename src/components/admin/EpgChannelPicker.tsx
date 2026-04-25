@@ -19,9 +19,11 @@ interface EpgChannelPickerProps {
   xmlUrl: string;
   /** Optional extra URLs to merge results from */
   extraUrls?: string[];
+  /** Called when user picks a channel — receives id and the source URL where it was found */
+  onResolve?: (id: string, sourceUrl: string) => void;
 }
 
-export default function EpgChannelPicker({ value, onChange, xmlUrl, extraUrls = [] }: EpgChannelPickerProps) {
+export default function EpgChannelPicker({ value, onChange, xmlUrl, extraUrls = [], onResolve }: EpgChannelPickerProps) {
   const [open, setOpen] = useState(false);
   const [channels, setChannels] = useState<XmlChannel[]>([]);
   const [loading, setLoading] = useState(false);
@@ -128,6 +130,7 @@ export default function EpgChannelPicker({ value, onChange, xmlUrl, extraUrls = 
                     value={ch.id}
                     onSelect={() => {
                       onChange(ch.id);
+                      if (onResolve && ch.source) onResolve(ch.id, ch.source);
                       setOpen(false);
                     }}
                     className={cn("cursor-pointer", value === ch.id && "bg-accent")}

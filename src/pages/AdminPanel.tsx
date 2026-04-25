@@ -368,6 +368,19 @@ const AdminPanel = () => {
                         onChange={(v) => setChannelForm((f) => ({ ...f, epg_channel_id: v }))}
                         xmlUrl=""
                         extraUrls={allXmlPresets.map((p) => normalizeGithub(p.url))}
+                        onResolve={(id, sourceUrl) => {
+                          const normalized = normalizeGithub(sourceUrl);
+                          const match = allXmlPresets.find((p) => normalizeGithub(p.url) === normalized);
+                          if (match) {
+                            setChannelForm((f) => ({
+                              ...f,
+                              epg_channel_id: id,
+                              epg_type: match.epg_type,
+                              epg_url: match.url,
+                            }));
+                            toast.success("Tipo definido automaticamente", { description: `${match.epg_type} · ${match.url}` });
+                          }
+                        }}
                       />
                     </div>
                   )}
