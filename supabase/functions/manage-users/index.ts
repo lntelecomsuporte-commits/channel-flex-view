@@ -112,7 +112,11 @@ Deno.serve(async (req) => {
           username: normalizedEmail,
           display_name: display_name || normalizedEmail,
         });
-        if (!profileRes.ok && profileRes.status !== 409) {
+        if (!profileRes.ok && profileRes.status === 409) {
+          await adminAuthFetch(supabaseUrl, serviceRoleKey, `users/${newUserId}`, "DELETE");
+          return json({ error: "Já existe um usuário cadastrado com este email" }, 409);
+        }
+        if (!profileRes.ok) {
           console.error("profile insert failed:", profileRes.status, profileRes.data);
           // Não falha o request — usuário foi criado no auth
         }
