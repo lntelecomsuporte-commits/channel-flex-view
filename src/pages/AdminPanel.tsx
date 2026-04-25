@@ -115,6 +115,10 @@ const AdminPanel = () => {
       toast.error("Preencha nome, número e URL do stream");
       return;
     }
+    if (channelForm.epg_type === "all") {
+      toast.error('"Todos" é apenas um modo de busca. Escolha um tipo específico de EPG antes de salvar.');
+      return;
+    }
     setSaving(true);
 
     // If epg_grab_logo is checked, fetch logo from EPG XML
