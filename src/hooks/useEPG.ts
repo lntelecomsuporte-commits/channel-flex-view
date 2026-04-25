@@ -67,12 +67,17 @@ function parseXmltvDateToIso(str: string): string | null {
   return parsed ? parsed.toISOString() : null;
 }
 
+const IS_NATIVE = typeof window !== "undefined" && !!(window as any).Capacitor?.isNativePlatform?.();
+
 const yieldToMain = () =>
   new Promise<void>((resolve) => {
     // @ts-ignore scheduler é suportado em Chromium moderno / WebView recente
     if (typeof scheduler !== "undefined" && scheduler.yield) {
       // @ts-ignore
       scheduler.yield().then(resolve);
+    } else if (typeof requestIdleCallback !== "undefined") {
+      // No APK preferimos idle callback para não competir com o vídeo
+      requestIdleCallback(() => resolve(), { timeout: 200 });
     } else {
       setTimeout(resolve, 0);
     }
