@@ -125,8 +125,11 @@ Deno.serve(async (req) => {
     if (action === "delete") {
       if (!user_id) return json({ error: "user_id é obrigatório" }, 400);
 
-      const { ok, data } = await adminAuthFetch(supabaseUrl, serviceRoleKey, `users/${user_id}`, "DELETE");
-      if (!ok) return json({ error: data.msg || data.message || "Erro ao excluir" }, 400);
+      const { ok, data, status } = await adminAuthFetch(supabaseUrl, serviceRoleKey, `users/${user_id}`, "DELETE");
+      if (!ok) {
+        console.error("auth.admin.deleteUser failed:", status, data);
+        return json({ error: data.msg || data.message || data.error_description || `Auth error ${status}` }, 400);
+      }
       return json({ success: true });
     }
 
