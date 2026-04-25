@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react";
 import Hls from "hls.js";
-import { getPlayableStreamUrl } from "@/lib/stream";
+import { getPlayableStreamUrl, getProxiedStreamUrl } from "@/lib/stream";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 import YouTubePlayer from "./YouTubePlayer";
 
@@ -18,13 +18,22 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [muted, setMuted] = useState(true);
+  const [useProxyFallback, setUseProxyFallback] = useState(false);
   const youTubeVideoId = extractYouTubeVideoId(streamUrl);
-  const playableStreamUrl = youTubeVideoId ? "" : getPlayableStreamUrl(streamUrl);
+  const playableStreamUrl = youTubeVideoId
+    ? ""
+    : useProxyFallback
+      ? getProxiedStreamUrl(streamUrl)
+      : getPlayableStreamUrl(streamUrl);
 
   useImperativeHandle(ref, () => ({
     getVideoElement: () => videoRef.current,
     getHls: () => hlsRef.current,
   }), []);
+
+  useEffect(() => {
+    setUseProxyFallback(false);
+  }, [streamUrl]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -38,6 +47,19 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
+
+    const forcedProxyUrl = getProxiedStreamUrl(streamUrl);
+    const canFallbackToProxy = !useProxyFallback && forcedProxyUrl !== streamUrl && forcedProxyUrl !== playableStreamUrl;
+    const fallbackToProxy = () => {
+      if (!canFallbackToProxy) return false;
+      console.warn("[HLS] Stream direto falhou — tentando via proxy");
+      setUseProxyFallback(true);
+      return true;
+    };
+    const handleVideoError = () => {
+      fallbackToProxy();
+    };
+    video.addEventListener("error", handleVideoError);
 
     // On iOS/Safari, prefer native HLS for better AirPlay support
     const isAppleDevice = /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent) &&
@@ -84,6 +106,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         if (!data.fatal) return;
         switch (data.type) {
           case Hls.ErrorTypes.NETWORK_ERROR:
+            if (fallbackToProxy()) return;
             console.warn("[HLS] Erro de rede fatal — tentando retomar:", data.details);
             hls.startLoad();
             break;
@@ -114,12 +137,13 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     }
 
     return () => {
+      video.removeEventListener("error", handleVideoError);
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
     };
-  }, [playableStreamUrl, autoPlay]);
+  }, [playableStreamUrl, autoPlay, streamUrl, useProxyFallback]);
 
   // Unmute after first user interaction
   useEffect(() => {

@@ -24,22 +24,33 @@ const getProxyBaseUrl = () => {
   }
 };
 
-const isHlsPlaylistUrl = (streamUrl: string) => {
-  try {
-    return new URL(streamUrl).pathname.toLowerCase().endsWith(".m3u8");
-  } catch {
-    return streamUrl.toLowerCase().split("?")[0].endsWith(".m3u8");
+/**
+ * Monta a URL do hls-proxy somente quando for explicitamente necessário.
+ * Mantém o token JWT no query param porque o player/HLS carrega segmentos sem await.
+ */
+const buildProxyStreamUrl = (streamUrl: string): string | null => {
+  const proxyBaseUrl = getProxyBaseUrl();
+  if (!proxyBaseUrl) return null;
+
+  const token = getCurrentAccessTokenSync();
+  if (!token) {
+    console.warn("[stream] Sem token JWT — proxy exigirá login");
+    return null;
   }
+
+  const proxyUrl = new URL(proxyBaseUrl);
+  proxyUrl.searchParams.set("url", streamUrl);
+  proxyUrl.searchParams.set("token", token);
+  return proxyUrl.toString();
 };
 
 /**
- * Versão SÍNCRONA: usa o token JWT atual em memória.
- * Necessária porque HLS.js carrega segmentos sem await.
+ * URL inicial do player.
+ * - HTTP em página HTTPS: usa proxy imediatamente para evitar Mixed Content.
+ * - HTTPS: toca direto; se falhar, o VideoPlayer aciona fallback para o proxy.
  */
 export const getPlayableStreamUrl = (streamUrl: string): string => {
   if (!streamUrl) return streamUrl;
-
-  // Em apps nativos, NUNCA proxiar.
   if (Capacitor.isNativePlatform()) return streamUrl;
 
   try {
@@ -48,33 +59,19 @@ export const getPlayableStreamUrl = (streamUrl: string): string => {
       typeof window !== "undefined" &&
       window.location.protocol === "https:" &&
       parsedUrl.protocol === "http:";
-    const shouldProxyHlsPlaylist =
-      typeof window !== "undefined" &&
-      window.location.protocol === "https:" &&
-      isHlsPlaylistUrl(streamUrl);
 
-    // Mesmo quando a URL inicial é HTTPS, algumas playlists HLS apontam para
-    // sub-playlists/segmentos HTTP. No browser isso vira Mixed Content; passando
-    // a playlist pelo proxy, o backend reescreve todos os links internos para HTTPS.
-    if (!isBlockedMixedContent && !shouldProxyHlsPlaylist) return streamUrl;
-
-    const proxyBaseUrl = getProxyBaseUrl();
-    if (!proxyBaseUrl) return streamUrl;
-
-    // Token sincrono do storage do supabase-js
-    const token = getCurrentAccessTokenSync();
-    if (!token) {
-      console.warn("[stream] Sem token JWT — proxy exigirá login");
-      return streamUrl;
-    }
-
-    const proxyUrl = new URL(proxyBaseUrl);
-    proxyUrl.searchParams.set("url", streamUrl);
-    proxyUrl.searchParams.set("token", token);
-    return proxyUrl.toString();
+    if (!isBlockedMixedContent) return streamUrl;
+    return buildProxyStreamUrl(streamUrl) ?? streamUrl;
   } catch {
     return streamUrl;
   }
+};
+
+/** Força proxy apenas como fallback controlado pelo VideoPlayer. */
+export const getProxiedStreamUrl = (streamUrl: string): string => {
+  if (!streamUrl) return streamUrl;
+  if (Capacitor.isNativePlatform()) return streamUrl;
+  return buildProxyStreamUrl(streamUrl) ?? streamUrl;
 };
 
 // Lê o token DIRETAMENTE do localStorage de forma síncrona.
