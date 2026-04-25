@@ -110,8 +110,51 @@ Deno.serve(async (req) => {
     const nome = cliente?.nome_razaosocial || null;
     const cpf = cliente?.cpf_cnpj || null;
     const idCliente = cliente?.id_cliente ? String(cliente.id_cliente) : null;
+    const codigoCliente = cliente?.codigo_cliente ? String(cliente.codigo_cliente) : null;
 
-    console.log("Client data:", { email, nome, cpf, idCliente });
+    console.log("Client data:", { email, nome, cpf, idCliente, codigoCliente });
+
+    // Robust profile lookup: try hubsoft_client_id (id_cliente OR codigo_cliente),
+    // then username = email, then username = cpf@tvln.local
+    async function findProfile(): Promise<{ user_id: string } | null> {
+      const candidates: string[] = [];
+      if (idCliente) candidates.push(idCliente);
+      if (codigoCliente && codigoCliente !== idCliente) candidates.push(codigoCliente);
+
+      for (const candidate of candidates) {
+        const { data } = await supabaseAdmin.from("profiles")
+          .select("user_id")
+          .eq("hubsoft_client_id", candidate)
+          .maybeSingle();
+        if (data) {
+          console.log(`Profile found by hubsoft_client_id=${candidate}`);
+          return data;
+        }
+      }
+      if (email) {
+        const { data } = await supabaseAdmin.from("profiles")
+          .select("user_id")
+          .eq("username", email)
+          .maybeSingle();
+        if (data) {
+          console.log(`Profile found by username=${email}`);
+          return data;
+        }
+      }
+      if (cpf) {
+        const fallbackEmail = `${cpf}@tvln.local`;
+        const { data } = await supabaseAdmin.from("profiles")
+          .select("user_id")
+          .eq("username", fallbackEmail)
+          .maybeSingle();
+        if (data) {
+          console.log(`Profile found by username=${fallbackEmail}`);
+          return data;
+        }
+      }
+      console.warn("No profile found for client", { idCliente, codigoCliente, cpf, email });
+      return null;
+    }
 
     const normalizedTipo = String(tipo).toLowerCase().trim();
 
