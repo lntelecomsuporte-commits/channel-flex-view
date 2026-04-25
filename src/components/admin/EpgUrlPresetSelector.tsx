@@ -4,13 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +18,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronsUpDown, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface Preset {
@@ -32,12 +31,15 @@ interface Preset {
 interface Props {
   epgType: string;
   currentUrl: string;
+  /** Called when the primary URL (used for save) changes */
   onSelect: (url: string) => void;
+  /** Called with the full list of selected URLs (used for multi-source channel search) */
+  onUrlsChange?: (urls: string[]) => void;
 }
 
 const PRESET_TABLE = "epg_url_presets" as const;
 
-export default function EpgUrlPresetSelector({ epgType, currentUrl, onSelect }: Props) {
+export default function EpgUrlPresetSelector({ epgType, currentUrl, onSelect, onUrlsChange }: Props) {
   const qc = useQueryClient();
 
   const { data: presets = [] } = useQuery({
@@ -54,13 +56,41 @@ export default function EpgUrlPresetSelector({ epgType, currentUrl, onSelect }: 
     },
   });
 
+  // Multi-selection state (preset IDs). Resets when epg type changes.
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [popoverOpen, setPopoverOpen] = useState(false);
+
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [epgType]);
+
+  // Notify parent whenever the resolved URLs change
+  useEffect(() => {
+    const urls = selectedIds
+      .map((id) => presets.find((p) => p.id === id)?.url)
+      .filter((u): u is string => !!u);
+    onUrlsChange?.(urls);
+  }, [selectedIds, presets, onUrlsChange]);
+
+  const toggleSelected = (id: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = checked ? [...prev, id] : prev.filter((x) => x !== id);
+      // Set primary URL = first selected (or clear if none)
+      const firstUrl = next.length
+        ? presets.find((p) => p.id === next[0])?.url || ""
+        : "";
+      if (firstUrl) onSelect(firstUrl);
+      return next;
+    });
+  };
+
+  // Dialog (add/edit) state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Preset | null>(null);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Quando abre o dialog: preenche com o que está editando
   useEffect(() => {
     if (!dialogOpen) return;
     if (editing) {
@@ -112,6 +142,7 @@ export default function EpgUrlPresetSelector({ epgType, currentUrl, onSelect }: 
       if (error) throw error;
       toast.success("URL removida");
       qc.invalidateQueries({ queryKey: ["epg_url_presets", epgType] });
+      setSelectedIds((prev) => prev.filter((id) => id !== editing.id));
       setDialogOpen(false);
       setEditing(null);
     } catch (e: any) {
@@ -121,30 +152,55 @@ export default function EpgUrlPresetSelector({ epgType, currentUrl, onSelect }: 
     }
   };
 
-  const selectedPreset = presets.find((p) => p.url === currentUrl) || null;
+  // For the edit button — only enabled when exactly 1 selected
+  const singleSelected = selectedIds.length === 1
+    ? presets.find((p) => p.id === selectedIds[0]) || null
+    : null;
+
+  const buttonLabel = selectedIds.length === 0
+    ? (presets.length ? "Selecionar URLs salvas" : "Nenhuma URL salva")
+    : selectedIds.length === 1
+      ? (presets.find((p) => p.id === selectedIds[0])?.name || "1 URL")
+      : `${selectedIds.length} URLs selecionadas`;
 
   return (
     <div className="flex gap-2 items-end">
       <div className="flex-1 min-w-0">
-        <Label className="text-xs text-muted-foreground mb-1 block">URLs salvas</Label>
-        <Select
-          value={selectedPreset?.id || ""}
-          onValueChange={(id) => {
-            const preset = presets.find((p) => p.id === id);
-            if (preset) onSelect(preset.url);
-          }}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder={presets.length ? "Selecionar URL salva" : "Nenhuma URL salva"} />
-          </SelectTrigger>
-          <SelectContent>
-            {presets.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Label className="text-xs text-muted-foreground mb-1 block">
+          URLs salvas {selectedIds.length > 1 && <span className="text-primary">(buscar canais soma todas)</span>}
+        </Label>
+        <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-between font-normal"
+              disabled={!presets.length}
+            >
+              <span className="truncate">{buttonLabel}</span>
+              <ChevronsUpDown className="h-4 w-4 ml-2 opacity-50 shrink-0" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+            <div className="max-h-[280px] overflow-y-auto p-1">
+              {presets.map((p) => {
+                const checked = selectedIds.includes(p.id);
+                return (
+                  <label
+                    key={p.id}
+                    className="flex items-center gap-2 px-2 py-2 rounded-sm hover:bg-accent cursor-pointer text-sm"
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(v) => toggleSelected(p.id, !!v)}
+                    />
+                    <span className="flex-1 truncate">{p.name}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setEditing(null); }}>
@@ -153,13 +209,13 @@ export default function EpgUrlPresetSelector({ epgType, currentUrl, onSelect }: 
             <Plus className="h-4 w-4" />
           </Button>
         </DialogTrigger>
-        {selectedPreset && (
+        {singleSelected && (
           <Button
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => { setEditing(selectedPreset); setDialogOpen(true); }}
-            title="Editar URL"
+            onClick={() => { setEditing(singleSelected); setDialogOpen(true); }}
+            title="Editar URL selecionada"
           >
             <Pencil className="h-4 w-4" />
           </Button>
