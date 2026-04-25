@@ -194,7 +194,9 @@ const ProxyMonitoring = () => {
   );
   const activeList = onlineUsers
     .filter((s) => s.is_watching && s.channel_name)
-    .filter((s) => proxyActiveKeys.has(`${s.user_id}|${s.channel_name}`));
+    .filter((s) => proxyActiveKeys.has(`${s.user_id}|${s.channel_name}`))
+    // Exclui canais que NÃO usam o hls-proxy (stream HTTPS direto)
+    .filter((s) => !nonProxiedChannels?.has(s.channel_name as string));
 
   // Agrega histórico (30d) por usuário+canal
   const since30d = now - 30 * 24 * 60 * 60 * 1000;
