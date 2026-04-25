@@ -110,8 +110,8 @@ Deno.serve(async (req) => {
         },
         body: JSON.stringify({
           user_id: newUserId,
-          username: email,
-          display_name: display_name || email,
+          username: normalizedEmail,
+          display_name: display_name || normalizedEmail,
         }),
       });
       if (!profileRes.ok && profileRes.status !== 409) {
@@ -158,6 +158,8 @@ Deno.serve(async (req) => {
 
     if (action === "delete") {
       if (!user_id) return json({ error: "user_id é obrigatório" }, 400);
+
+      await cleanupPublicUserData(supabaseUrl, serviceRoleKey, user_id);
 
       const { ok, data, status } = await adminAuthFetch(supabaseUrl, serviceRoleKey, `users/${user_id}`, "DELETE");
       if (!ok) {
