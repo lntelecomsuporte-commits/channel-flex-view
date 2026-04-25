@@ -19,6 +19,9 @@ const isLocalProxyHost = (host: string) => {
   return ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(hostname) || hostname.endsWith(".local");
 };
 
+// Permite forçar a base pública via env (ex.: PUBLIC_PROXY_BASE_URL=https://tv2.lntelecom.net)
+const PUBLIC_PROXY_BASE = Deno.env.get("PUBLIC_PROXY_BASE_URL")?.replace(/\/$/, "") ?? "";
+
 const getForwardedProtocol = (request: Request, requestUrl: URL) => {
   const forwardedValues = request.headers
     .get("x-forwarded-proto")
@@ -32,10 +35,15 @@ const getForwardedProtocol = (request: Request, requestUrl: URL) => {
 };
 
 const getProxyEndpoint = (request: Request, requestUrl: URL) => {
+  // 1) Override explícito por env tem prioridade máxima
+  if (PUBLIC_PROXY_BASE) return `${PUBLIC_PROXY_BASE}/functions/v1/hls-proxy`;
+
   const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
   const host = forwardedHost || request.headers.get("host") || requestUrl.host;
   const forwardedProtocol = getForwardedProtocol(request, requestUrl);
-  const protocol = forwardedProtocol === "http" && !isLocalProxyHost(host) ? "https" : forwardedProtocol;
+  // Se o host NÃO é local, sempre força HTTPS (evita mixed content quando o
+  // proxy reverso não envia x-forwarded-proto)
+  const protocol = !isLocalProxyHost(host) ? "https" : forwardedProtocol;
   return `${protocol}://${host}/functions/v1/hls-proxy`;
 };
 
