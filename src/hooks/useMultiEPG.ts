@@ -25,23 +25,35 @@ function parseXmltvDate(str: string): string | null {
  */
 export function useMultiEPG(channels: ChannelEPGInput[], enabled: boolean = true) {
   // Group by unique source so each EPG file is fetched/parsed ONCE
-  const sourcesKey = channels.map((c) => `${c.epg_type}|${c.epg_url}`).join("~");
+  const sourcesKey = channels.map((c) => `${c.epg_type}|${c.epg_url}|${c.epg_channel_id ?? ""}`).join("~");
 
   const sources = useMemo(() => {
-    const map = new Map<string, { kind: "xmltv" | "epgpw"; url: string }>();
+    const map = new Map<string, { kind: "xmltv" | "epgpw"; url: string; channelIds: Set<string> }>();
     for (const ch of channels) {
       const source = getEpgSource(ch);
       if (!source) continue;
       const key = `${source.kind}::${source.url}`;
-      if (!map.has(key)) map.set(key, source);
+      let entry = map.get(key);
+      if (!entry) {
+        entry = { kind: source.kind, url: source.url, channelIds: new Set<string>() };
+        map.set(key, entry);
+      }
+      if (source.kind === "xmltv" && ch.epg_channel_id) {
+        entry.channelIds.add(ch.epg_channel_id);
+      }
     }
-    return Array.from(map.entries()).map(([key, v]) => ({ key, ...v }));
+    return Array.from(map.entries()).map(([key, v]) => ({
+      key,
+      kind: v.kind,
+      url: v.url,
+      channelIds: Array.from(v.channelIds).sort(),
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourcesKey]);
 
   const queries = useQueries({
     queries: sources.map((src) => ({
-      queryKey: ["epg-bundle", src.kind, src.url],
+      queryKey: ["epg-bundle", src.kind, src.url, src.channelIds.join(",")],
       enabled,
       // Cache agressivo — EPG não muda toda hora
       staleTime: 5 * 60_000, // 5 min
@@ -49,7 +61,10 @@ export function useMultiEPG(channels: ChannelEPGInput[], enabled: boolean = true
       refetchInterval: 10 * 60_000, // refresh em segundo plano a cada 10 min
       refetchOnWindowFocus: false,
       refetchOnMount: false,
-      queryFn: () => (src.kind === "xmltv" ? fetchXmltvBundle(src.url) : fetchEpgPw(src.url)),
+      queryFn: () =>
+        src.kind === "xmltv"
+          ? fetchXmltvBundle(src.url, src.channelIds.length > 0 ? src.channelIds : undefined)
+          : fetchEpgPw(src.url),
     })),
   });
 

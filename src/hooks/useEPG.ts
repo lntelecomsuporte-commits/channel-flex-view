@@ -98,8 +98,14 @@ export function getEpgSource(channel: {
   };
 }
 
-export async function fetchXmltvBundle(url: string): Promise<XmltvBundle> {
-  const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/epg-proxy?url=${encodeURIComponent(normalizeGithubUrl(url))}`;
+export async function fetchXmltvBundle(url: string, channelIds?: string[]): Promise<XmltvBundle> {
+  let proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/epg-proxy?url=${encodeURIComponent(normalizeGithubUrl(url))}`;
+  if (channelIds && channelIds.length > 0) {
+    // Pede ao servidor para filtrar — devolve apenas <programme> dos canais usados.
+    // Reduz drasticamente o tamanho do download e o parsing no aparelho.
+    const unique = Array.from(new Set(channelIds.filter(Boolean))).sort();
+    proxyUrl += `&channels=${encodeURIComponent(unique.join(","))}`;
+  }
   const res = await fetch(proxyUrl);
   const byChannel = new Map<string, EPGProgram[]>();
   if (!res.ok) return { kind: "xmltv", byChannel };
@@ -181,7 +187,7 @@ export function useEPG(channel: {
   const source = getEpgSource(channel);
 
   const bundleQuery = useQuery<Bundle>({
-    queryKey: ["epg-bundle", source?.kind ?? "none", source?.url ?? ""],
+    queryKey: ["epg-bundle", source?.kind ?? "none", source?.url ?? "", channel.epg_channel_id ?? ""],
     enabled: enabled && !!source,
     staleTime: 5 * 60_000,
     gcTime: 30 * 60_000,
@@ -190,7 +196,9 @@ export function useEPG(channel: {
     refetchOnMount: false,
     queryFn: () => {
       if (!source) return Promise.resolve({ kind: "epgpw", programs: [] } as Bundle);
-      return source.kind === "xmltv" ? fetchXmltvBundle(source.url) : fetchEpgPw(source.url);
+      return source.kind === "xmltv"
+        ? fetchXmltvBundle(source.url, channel.epg_channel_id ? [channel.epg_channel_id] : undefined)
+        : fetchEpgPw(source.url);
     },
   });
 

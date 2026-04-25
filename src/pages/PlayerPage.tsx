@@ -65,31 +65,36 @@ const PlayerPage = () => {
 
   const { data: channels, isLoading } = useChannels();
   const [currentIndex, setCurrentIndex] = useState(0);
-  // Lembra o canal atual pelo ID — sobrevive a refetch da lista (focus, reconnect),
-  // a falhas de stream, e até a remontagens do componente / reload da aba
-  // (persistido em localStorage). Evita o "volta pro canal 0".
-  const LAST_CHANNEL_KEY = "lntv:lastChannelId";
-  const currentChannelIdRef = useRef<string | null>(
-    typeof window !== "undefined" ? window.localStorage.getItem(LAST_CHANNEL_KEY) : null
-  );
-  // Quando a lista de canais é refetchada (focus, reconnect), reposiciona o índice
-  // para o canal lembrado pelo ID. NÃO depende de currentIndex para evitar loop
-  // que sobrescreve a troca manual feita pelo usuário.
+  // SEMPRE inicia no canal de menor número (geralmente 000) ao abrir o app.
+  // Decisão de produto: o canal 000 tem propaganda do provedor, então é o ponto
+  // de entrada padrão. Mantemos o ID atual em memória apenas para sobreviver a
+  // refetches da lista (focus/reconnect) — sem persistência entre sessões.
+  const currentChannelIdRef = useRef<string | null>(null);
+  const initializedRef = useRef(false);
+
   useEffect(() => {
     if (!channels?.length) return;
+
+    // Primeira inicialização nesta sessão: força o primeiro canal (menor número)
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      currentChannelIdRef.current = channels[0]?.id ?? null;
+      setCurrentIndex(0);
+      return;
+    }
+
+    // Refetches subsequentes: mantém o canal atual pelo ID
     const rememberedId = currentChannelIdRef.current;
     if (!rememberedId) {
       currentChannelIdRef.current = channels[0]?.id ?? null;
-      try { window.localStorage.setItem(LAST_CHANNEL_KEY, channels[0]?.id ?? ""); } catch {}
+      setCurrentIndex(0);
       return;
     }
     const newIdx = channels.findIndex((c) => c.id === rememberedId);
     if (newIdx >= 0) {
       setCurrentIndex((prev) => (prev === newIdx ? prev : newIdx));
     } else {
-      // Canal lembrado não está mais disponível — vai pro primeiro
       currentChannelIdRef.current = channels[0]?.id ?? null;
-      try { window.localStorage.setItem(LAST_CHANNEL_KEY, channels[0]?.id ?? ""); } catch {}
       setCurrentIndex(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -119,12 +124,10 @@ const PlayerPage = () => {
   const previewChannel: Channel | null = previewIndex !== null ? channels?.[previewIndex] ?? null : null;
   const focusedChannel: Channel | null = previewChannel ?? currentChannel;
 
-  // Sincroniza ID lembrado (em memória + localStorage) quando o usuário troca de canal.
-  // Persistir garante que minimizar/recarregar a aba não volte pro canal 0.
+  // Mantém ID lembrado em memória quando o usuário troca de canal (não persiste).
   useEffect(() => {
     if (!currentChannel?.id) return;
     currentChannelIdRef.current = currentChannel.id;
-    try { window.localStorage.setItem(LAST_CHANNEL_KEY, currentChannel.id); } catch {}
   }, [currentChannel?.id]);
 
   // Mantém sessão viva no banco (admin enxerga online/canal atual)
