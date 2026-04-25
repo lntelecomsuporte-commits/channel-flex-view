@@ -162,11 +162,11 @@ Deno.serve(async (req) => {
       await cleanupPublicUserData(supabaseUrl, serviceRoleKey, user_id);
 
       const { ok, data, status } = await adminAuthFetch(supabaseUrl, serviceRoleKey, `users/${user_id}`, "DELETE");
-      if (!ok) {
+      if (!ok && status !== 404) {
         console.error("auth.admin.deleteUser failed:", status, data);
         return json({ error: data.msg || data.message || data.error_description || `Auth error ${status}` }, 400);
       }
-      return json({ success: true });
+      return json({ success: true, auth_deleted: ok, was_orphan: status === 404 });
     }
 
     return json({ error: "Ação inválida" }, 400);
