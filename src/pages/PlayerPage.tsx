@@ -21,7 +21,10 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 const LONG_PRESS_MS = 450;
-const EPG_IDLE_MS = 12000;
+// No APK (Android nativo) o EPG é pesado para o WebView de receptores fracos:
+// só dispara depois de 5 min sem interação. No browser web mantemos 12s.
+const IS_NATIVE_APK = typeof window !== "undefined" && !!(window as any).Capacitor?.isNativePlatform?.();
+const EPG_IDLE_MS = IS_NATIVE_APK ? 5 * 60 * 1000 : 12000;
 
 const PlayerPage = () => {
   const { user, signOut } = useAuth();

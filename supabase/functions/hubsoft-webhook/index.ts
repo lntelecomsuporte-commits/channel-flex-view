@@ -110,8 +110,51 @@ Deno.serve(async (req) => {
     const nome = cliente?.nome_razaosocial || null;
     const cpf = cliente?.cpf_cnpj || null;
     const idCliente = cliente?.id_cliente ? String(cliente.id_cliente) : null;
+    const codigoCliente = cliente?.codigo_cliente ? String(cliente.codigo_cliente) : null;
 
-    console.log("Client data:", { email, nome, cpf, idCliente });
+    console.log("Client data:", { email, nome, cpf, idCliente, codigoCliente });
+
+    // Robust profile lookup: try hubsoft_client_id (id_cliente OR codigo_cliente),
+    // then username = email, then username = cpf@tvln.local
+    async function findProfile(): Promise<{ user_id: string } | null> {
+      const candidates: string[] = [];
+      if (idCliente) candidates.push(idCliente);
+      if (codigoCliente && codigoCliente !== idCliente) candidates.push(codigoCliente);
+
+      for (const candidate of candidates) {
+        const { data } = await supabaseAdmin.from("profiles")
+          .select("user_id")
+          .eq("hubsoft_client_id", candidate)
+          .maybeSingle();
+        if (data) {
+          console.log(`Profile found by hubsoft_client_id=${candidate}`);
+          return data;
+        }
+      }
+      if (email) {
+        const { data } = await supabaseAdmin.from("profiles")
+          .select("user_id")
+          .eq("username", email)
+          .maybeSingle();
+        if (data) {
+          console.log(`Profile found by username=${email}`);
+          return data;
+        }
+      }
+      if (cpf) {
+        const fallbackEmail = `${cpf}@tvln.local`;
+        const { data } = await supabaseAdmin.from("profiles")
+          .select("user_id")
+          .eq("username", fallbackEmail)
+          .maybeSingle();
+        if (data) {
+          console.log(`Profile found by username=${fallbackEmail}`);
+          return data;
+        }
+      }
+      console.warn("No profile found for client", { idCliente, codigoCliente, cpf, email });
+      return null;
+    }
 
     const normalizedTipo = String(tipo).toLowerCase().trim();
 
@@ -204,97 +247,86 @@ Deno.serve(async (req) => {
 
     // Handle "suspender" / "bloquear"
     if (["suspender", "suspensao", "bloquear", "inadimplente", "suspend", "block", "desabilitar", "disable"].includes(normalizedTipo)) {
-      if (!idCliente) {
-        return new Response(JSON.stringify({ error: "client identifier is required" }), {
-          status: 400,
+      const profile = await findProfile();
+      if (!profile) {
+        return new Response(JSON.stringify({ success: false, action: "blocked", message: "profile not found", idCliente, codigoCliente, cpf }), {
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      const { data: profile } = await supabaseAdmin.from("profiles")
-        .select("user_id")
-        .eq("hubsoft_client_id", idCliente)
-        .single();
+      await revokeCategoryAccess(profile.user_id);
 
-      if (profile) {
-        // Revoke category access from this config
-        await revokeCategoryAccess(profile.user_id);
+      const { data: remainingAccess } = await supabaseAdmin
+        .from("user_category_access")
+        .select("id")
+        .eq("user_id", profile.user_id)
+        .limit(1);
 
-        // Check if user still has any active category access
-        const { data: remainingAccess } = await supabaseAdmin
-          .from("user_category_access")
-          .select("id")
-          .eq("user_id", profile.user_id)
-          .limit(1);
-
-        // If no more access, block the user
-        if (!remainingAccess || remainingAccess.length === 0) {
-          await supabaseAdmin.from("profiles").update({ is_blocked: true }).eq("hubsoft_client_id", idCliente);
-        }
+      if (!remainingAccess || remainingAccess.length === 0) {
+        await supabaseAdmin.from("profiles").update({ is_blocked: true }).eq("user_id", profile.user_id);
       }
 
-      return new Response(JSON.stringify({ success: true, action: "blocked" }), {
+      return new Response(JSON.stringify({ success: true, action: "blocked", user_id: profile.user_id }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Handle "habilitar" / "reativar"
     if (["habilitar", "habilitacao", "reativar", "adimplente", "desbloquear", "enable", "unblock", "liberar"].includes(normalizedTipo)) {
-      if (!idCliente) {
-        return new Response(JSON.stringify({ error: "client identifier is required" }), {
-          status: 400,
+      const profile = await findProfile();
+      if (!profile) {
+        return new Response(JSON.stringify({ success: false, action: "unblocked", message: "profile not found", idCliente, codigoCliente, cpf }), {
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      const { data: profile } = await supabaseAdmin.from("profiles")
-        .select("user_id")
-        .eq("hubsoft_client_id", idCliente)
-        .single();
-
-      if (profile) {
-        await supabaseAdmin.from("profiles").update({ is_blocked: false, is_active: true }).eq("hubsoft_client_id", idCliente);
-        await grantCategoryAccess(profile.user_id);
+      await supabaseAdmin.from("profiles").update({ is_blocked: false, is_active: true }).eq("user_id", profile.user_id);
+      // Backfill hubsoft_client_id when missing
+      if (idCliente) {
+        await supabaseAdmin.from("profiles").update({ hubsoft_client_id: idCliente }).eq("user_id", profile.user_id);
       }
+      await grantCategoryAccess(profile.user_id);
 
-      return new Response(JSON.stringify({ success: true, action: "unblocked" }), {
+      return new Response(JSON.stringify({ success: true, action: "unblocked", user_id: profile.user_id }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Handle "cancelar" / "excluir" / "remover"
     if (["cancelar", "excluir", "remover", "remocao", "delete", "cancel", "remove"].includes(normalizedTipo)) {
-      if (!idCliente) {
-        return new Response(JSON.stringify({ error: "client identifier is required" }), {
-          status: 400,
+      const profile = await findProfile();
+      if (!profile) {
+        return new Response(JSON.stringify({ success: false, action: "deleted", message: "profile not found", idCliente, codigoCliente, cpf }), {
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      const { data: profile } = await supabaseAdmin
-        .from("profiles")
-        .select("user_id")
-        .eq("hubsoft_client_id", idCliente)
-        .single();
+      await revokeCategoryAccess(profile.user_id);
 
-      if (profile) {
-        // Revoke this config's access
-        await revokeCategoryAccess(profile.user_id);
+      const { data: remainingAccess } = await supabaseAdmin
+        .from("user_category_access")
+        .select("id")
+        .eq("user_id", profile.user_id)
+        .limit(1);
 
-        // Check remaining access
-        const { data: remainingAccess } = await supabaseAdmin
-          .from("user_category_access")
-          .select("id")
-          .eq("user_id", profile.user_id)
-          .limit(1);
-
-        // Only delete user if no remaining access from other integrations
-        if (!remainingAccess || remainingAccess.length === 0) {
-          await supabaseAdmin.auth.admin.deleteUser(profile.user_id);
+      if (!remainingAccess || remainingAccess.length === 0) {
+        const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(profile.user_id);
+        if (delErr) {
+          console.error("deleteUser error:", delErr);
+          return new Response(JSON.stringify({ success: false, action: "deleted", error: delErr.message, user_id: profile.user_id }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
+        console.log("User deleted:", profile.user_id);
+      } else {
+        console.log("User kept (still has access from other configs):", profile.user_id);
       }
 
-      return new Response(JSON.stringify({ success: true, action: "deleted" }), {
+      return new Response(JSON.stringify({ success: true, action: "deleted", user_id: profile.user_id }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
