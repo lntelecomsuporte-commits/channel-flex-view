@@ -187,7 +187,7 @@ export function useEPG(channel: {
   const source = getEpgSource(channel);
 
   const bundleQuery = useQuery<Bundle>({
-    queryKey: ["epg-bundle", source?.kind ?? "none", source?.url ?? ""],
+    queryKey: ["epg-bundle", source?.kind ?? "none", source?.url ?? "", channel.epg_channel_id ?? ""],
     enabled: enabled && !!source,
     staleTime: 5 * 60_000,
     gcTime: 30 * 60_000,
@@ -196,7 +196,9 @@ export function useEPG(channel: {
     refetchOnMount: false,
     queryFn: () => {
       if (!source) return Promise.resolve({ kind: "epgpw", programs: [] } as Bundle);
-      return source.kind === "xmltv" ? fetchXmltvBundle(source.url) : fetchEpgPw(source.url);
+      return source.kind === "xmltv"
+        ? fetchXmltvBundle(source.url, channel.epg_channel_id ? [channel.epg_channel_id] : undefined)
+        : fetchEpgPw(source.url);
     },
   });
 
