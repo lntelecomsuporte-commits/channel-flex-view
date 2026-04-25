@@ -37,6 +37,9 @@ const PlayerPage = () => {
     return () => document.body.classList.remove("player-mode");
   }, []);
 
+  // Mantém o vídeo tocando mesmo com a aba em segundo plano
+  useBackgroundPlayback(true);
+
   // Boas-vindas ao abrir o app
   const welcomedRef = useRef(false);
   useEffect(() => {
