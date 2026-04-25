@@ -9,44 +9,74 @@ import { cn } from "@/lib/utils";
 interface XmlChannel {
   id: string;
   name: string;
+  source?: string;
 }
 
 interface EpgChannelPickerProps {
   value: string;
   onChange: (value: string) => void;
+  /** Single fallback URL (when no extra URLs provided) */
   xmlUrl: string;
+  /** Optional extra URLs to merge results from */
+  extraUrls?: string[];
 }
 
-export default function EpgChannelPicker({ value, onChange, xmlUrl }: EpgChannelPickerProps) {
+export default function EpgChannelPicker({ value, onChange, xmlUrl, extraUrls = [] }: EpgChannelPickerProps) {
   const [open, setOpen] = useState(false);
   const [channels, setChannels] = useState<XmlChannel[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [lastUrl, setLastUrl] = useState("");
+  const [lastKey, setLastKey] = useState("");
   const [search, setSearch] = useState("");
 
+  const allUrls = useMemo(() => {
+    const set = new Set<string>();
+    if (xmlUrl) set.add(xmlUrl);
+    extraUrls.forEach((u) => u && set.add(u));
+    return Array.from(set);
+  }, [xmlUrl, extraUrls]);
+
+  const fetchOne = async (url: string): Promise<XmlChannel[]> => {
+    const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/epg-proxy?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxyUrl);
+    if (!res.ok) throw new Error(`Falha ao carregar XML: ${url}`);
+    const text = await res.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, "text/xml");
+    const channelNodes = doc.querySelectorAll("channel");
+    const list: XmlChannel[] = [];
+    channelNodes.forEach((node) => {
+      const id = node.getAttribute("id") || "";
+      const name = node.querySelector("display-name")?.textContent || id;
+      if (id) list.push({ id, name, source: url });
+    });
+    return list;
+  };
+
   const fetchChannels = async () => {
-    if (!xmlUrl) return;
-    if (loaded && lastUrl === xmlUrl) return;
+    if (!allUrls.length) return;
+    const key = allUrls.join("|");
+    if (loaded && lastKey === key) return;
     setLoading(true);
     try {
-      const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/epg-proxy?url=${encodeURIComponent(xmlUrl)}`;
-      const res = await fetch(proxyUrl);
-      if (!res.ok) throw new Error("Falha ao carregar XML");
-      const text = await res.text();
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(text, "text/xml");
-      const channelNodes = doc.querySelectorAll("channel");
-      const list: XmlChannel[] = [];
-      channelNodes.forEach((node) => {
-        const id = node.getAttribute("id") || "";
-        const name = node.querySelector("display-name")?.textContent || id;
-        if (id) list.push({ id, name });
+      const results = await Promise.allSettled(allUrls.map(fetchOne));
+      const merged: XmlChannel[] = [];
+      const seen = new Set<string>();
+      results.forEach((r) => {
+        if (r.status === "fulfilled") {
+          for (const ch of r.value) {
+            if (seen.has(ch.id)) continue;
+            seen.add(ch.id);
+            merged.push(ch);
+          }
+        } else {
+          console.error("EPG source failed:", r.reason);
+        }
       });
-      list.sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }));
-      setChannels(list);
+      merged.sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }));
+      setChannels(merged);
       setLoaded(true);
-      setLastUrl(xmlUrl);
+      setLastKey(key);
     } catch (e) {
       console.error("Erro ao buscar canais do XML:", e);
       setChannels([]);
@@ -77,7 +107,7 @@ export default function EpgChannelPicker({ value, onChange, xmlUrl }: EpgChannel
         <PopoverTrigger asChild>
           <Button type="button" variant="outline" size="sm" className="shrink-0">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronsUpDown className="h-4 w-4" />}
-            <span className="ml-1">Buscar</span>
+            <span className="ml-1">Buscar{allUrls.length > 1 ? ` (${allUrls.length})` : ""}</span>
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[400px] p-0" align="end">
@@ -91,7 +121,7 @@ export default function EpgChannelPicker({ value, onChange, xmlUrl }: EpgChannel
               <CommandEmpty>
                 {loading ? "Carregando canais do XML..." : "Nenhum canal encontrado"}
               </CommandEmpty>
-              <CommandGroup heading={`${filtered.length} canais ${filtered.length > MAX_VISIBLE ? `(mostrando ${MAX_VISIBLE} — refine a busca)` : "encontrados"}`}>
+              <CommandGroup heading={`${filtered.length} canais ${filtered.length > MAX_VISIBLE ? `(mostrando ${MAX_VISIBLE} — refine a busca)` : "encontrados"}${allUrls.length > 1 ? ` · ${allUrls.length} fontes` : ""}`}>
                 {visible.map((ch) => (
                   <CommandItem
                     key={ch.id}
