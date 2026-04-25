@@ -14,7 +14,13 @@ const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-const getProxyEndpoint = () => `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/hls-proxy`;
+const getProxyEndpoint = (request: Request, requestUrl: URL) => {
+  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const protocol = forwardedProto || requestUrl.protocol.replace(":", "");
+  const host = forwardedHost || request.headers.get("host") || requestUrl.host;
+  return `${protocol}://${host}/functions/v1/hls-proxy`;
+};
 
 const mediaExtensions = [".m3u8", ".m4s", ".ts", ".aac", ".mp3", ".mp4", ".m4a", ".key", ".vtt", ".webvtt", ".jpg", ".jpeg", ".png", ".webp", ".gif"];
 
@@ -230,7 +236,7 @@ Deno.serve(async (request) => {
   });
 
   const contentType = upstreamResponse.headers.get("content-type")?.toLowerCase() ?? "";
-  const proxyEndpoint = getProxyEndpoint();
+  const proxyEndpoint = getProxyEndpoint(request, requestUrl);
   const ip = getClientIp(request);
   const contentLength = parseInt(upstreamResponse.headers.get("content-length") ?? "0", 10) || 0;
 
