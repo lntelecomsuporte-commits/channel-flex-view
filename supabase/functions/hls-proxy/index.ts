@@ -17,8 +17,10 @@ const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 const getProxyEndpoint = (request: Request, requestUrl: URL) => {
   const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
   const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
-  const protocol = forwardedProto || requestUrl.protocol.replace(":", "");
   const host = forwardedHost || request.headers.get("host") || requestUrl.host;
+  // Se o host for um domínio público (não kong/localhost), forçar https
+  const isInternalHost = /^(kong|localhost|127\.|0\.0\.0\.0)/i.test(host);
+  const protocol = forwardedProto || (isInternalHost ? requestUrl.protocol.replace(":", "") : "https");
   return `${protocol}://${host}/functions/v1/hls-proxy`;
 };
 
