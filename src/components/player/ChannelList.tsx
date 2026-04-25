@@ -376,12 +376,38 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
           if (isSelectKey(e)) {
             e.preventDefault();
             e.stopPropagation();
-            if (e.repeat || enterPressLockedRef.current || isUpdatingFavorite) return;
+            if (enterPressLockedRef.current || isUpdatingFavorite) return;
+
+            // Repeat key (held down) → favoritar (long-press detectado pelo próprio repeat)
+            if (e.repeat) {
+              if (!enterLongPressFiredRef.current) {
+                enterLongPressFiredRef.current = true;
+                enterPressLockedRef.current = true;
+                if (enterLongPressTimerRef.current) {
+                  clearTimeout(enterLongPressTimerRef.current);
+                  enterLongPressTimerRef.current = null;
+                }
+                const ch = filteredChannels[focusedIndex];
+                const focusedId = ch?.id ?? "";
+                if (focusedId) setFavorite(focusedId, !isFavorite(focusedId));
+              }
+              return;
+            }
+
+            // Primeiro keydown: seleciona imediatamente (alguns remotos de TV não emitem keyup)
+            // e arma timer para favoritar caso a tecla seja segurada sem repeat.
             if (!enterLongPressTimerRef.current) {
               enterLongPressFiredRef.current = false;
               const ch = filteredChannels[focusedIndex];
               const focusedId = ch?.id ?? "";
               const shouldFavorite = focusedId ? !isFavorite(focusedId) : false;
+
+              // Seleciona o canal e fecha a lista AGORA
+              if (ch) {
+                const realIndex = channels.indexOf(ch);
+                if (realIndex >= 0) onSelect(realIndex);
+              }
+
               enterLongPressTimerRef.current = setTimeout(() => {
                 enterLongPressFiredRef.current = true;
                 enterPressLockedRef.current = true;
@@ -399,16 +425,8 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
         clearTimeout(enterLongPressTimerRef.current);
         enterLongPressTimerRef.current = null;
       }
-      if (enterLongPressFiredRef.current) {
-        enterLongPressFiredRef.current = false;
-        enterPressLockedRef.current = false;
-        return;
-      }
+      enterLongPressFiredRef.current = false;
       enterPressLockedRef.current = false;
-      if (filteredChannels[focusedIndex]) {
-        const realIndex = channels.indexOf(filteredChannels[focusedIndex]);
-        if (realIndex >= 0) onSelect(realIndex);
-      }
     };
 
     window.addEventListener("keydown", handleKeyDown, true);
