@@ -61,6 +61,26 @@ const PlayerPage = () => {
 
   const { data: channels, isLoading } = useChannels();
   const [currentIndex, setCurrentIndex] = useState(0);
+  // Lembra o canal atual pelo ID — sobrevive a refetch da lista (focus, reconnect)
+  // e a falhas de stream, evitando o "volta pro canal 0" quando o array é substituído.
+  const currentChannelIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!channels?.length) return;
+    const rememberedId = currentChannelIdRef.current;
+    if (!rememberedId) {
+      currentChannelIdRef.current = channels[currentIndex]?.id ?? channels[0]?.id ?? null;
+      return;
+    }
+    const newIdx = channels.findIndex((c) => c.id === rememberedId);
+    if (newIdx >= 0 && newIdx !== currentIndex) {
+      setCurrentIndex(newIdx);
+    } else if (newIdx < 0) {
+      // Canal foi removido — fica no índice atual (clampeado)
+      const safeIdx = Math.min(currentIndex, channels.length - 1);
+      currentChannelIdRef.current = channels[safeIdx]?.id ?? null;
+      if (safeIdx !== currentIndex) setCurrentIndex(safeIdx);
+    }
+  }, [channels, currentIndex]);
 
   const [showOSD, setShowOSD] = useState(true);
   const [showFavoritesBar, setShowFavoritesBar] = useState(false);
@@ -85,6 +105,11 @@ const PlayerPage = () => {
   const currentChannel: Channel | null = channels?.[currentIndex] ?? null;
   const previewChannel: Channel | null = previewIndex !== null ? channels?.[previewIndex] ?? null : null;
   const focusedChannel: Channel | null = previewChannel ?? currentChannel;
+
+  // Sincroniza ID lembrado quando o usuário troca de canal
+  useEffect(() => {
+    if (currentChannel?.id) currentChannelIdRef.current = currentChannel.id;
+  }, [currentChannel?.id]);
 
   // Mantém sessão viva no banco (admin enxerga online/canal atual)
   useSessionHeartbeat({
