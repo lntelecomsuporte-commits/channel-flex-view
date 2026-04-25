@@ -116,7 +116,19 @@ Deno.serve(async (req) => {
 
     // Robust profile lookup: try hubsoft_client_id (id_cliente OR codigo_cliente),
     // then username = email, then username = cpf@tvln.local
-    async function findProfile(): Promise<{ user_id: string } | null> {
+    async function findProfiles(): Promise<{ user_id: string }[]> {
+      const seen = new Set<string>();
+      const results: { user_id: string }[] = [];
+      const push = (rows: { user_id: string }[] | null) => {
+        if (!rows) return;
+        for (const r of rows) {
+          if (!seen.has(r.user_id)) {
+            seen.add(r.user_id);
+            results.push(r);
+          }
+        }
+      };
+
       const candidates: string[] = [];
       if (idCliente) candidates.push(idCliente);
       if (codigoCliente && codigoCliente !== idCliente) candidates.push(codigoCliente);
@@ -124,36 +136,35 @@ Deno.serve(async (req) => {
       for (const candidate of candidates) {
         const { data } = await supabaseAdmin.from("profiles")
           .select("user_id")
-          .eq("hubsoft_client_id", candidate)
-          .maybeSingle();
-        if (data) {
-          console.log(`Profile found by hubsoft_client_id=${candidate}`);
-          return data;
-        }
+          .eq("hubsoft_client_id", candidate);
+        if (data?.length) console.log(`Profiles found by hubsoft_client_id=${candidate}: ${data.length}`);
+        push(data);
       }
       if (email) {
         const { data } = await supabaseAdmin.from("profiles")
           .select("user_id")
-          .eq("username", email)
-          .maybeSingle();
-        if (data) {
-          console.log(`Profile found by username=${email}`);
-          return data;
-        }
+          .eq("username", email);
+        if (data?.length) console.log(`Profiles found by username=${email}: ${data.length}`);
+        push(data);
       }
       if (cpf) {
         const fallbackEmail = `${cpf}@tvln.local`;
         const { data } = await supabaseAdmin.from("profiles")
           .select("user_id")
-          .eq("username", fallbackEmail)
-          .maybeSingle();
-        if (data) {
-          console.log(`Profile found by username=${fallbackEmail}`);
-          return data;
-        }
+          .eq("username", fallbackEmail);
+        if (data?.length) console.log(`Profiles found by username=${fallbackEmail}: ${data.length}`);
+        push(data);
       }
-      console.warn("No profile found for client", { idCliente, codigoCliente, cpf, email });
-      return null;
+      if (results.length === 0) {
+        console.warn("No profile found for client", { idCliente, codigoCliente, cpf, email });
+      }
+      return results;
+    }
+
+    // Backward-compat helper (returns first match)
+    async function findProfile(): Promise<{ user_id: string } | null> {
+      const list = await findProfiles();
+      return list[0] ?? null;
     }
 
     const normalizedTipo = String(tipo).toLowerCase().trim();
