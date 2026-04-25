@@ -247,7 +247,7 @@ const AdminPanel = () => {
                 const t = toast.loading("Gerando dump SQL...");
                 try {
                   const { data: { session } } = await supabase.auth.getSession();
-                  const url = `https://oxunkzltmlafatzfiikj.supabase.co/functions/v1/export-database`;
+                  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-database`;
                   const res = await fetch(url, {
                     headers: {
                       Authorization: `Bearer ${session?.access_token}`,
