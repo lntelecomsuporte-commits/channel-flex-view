@@ -61,9 +61,13 @@ const PlayerPage = () => {
 
   const { data: channels, isLoading } = useChannels();
   const [currentIndex, setCurrentIndex] = useState(0);
-  // Lembra o canal atual pelo ID — sobrevive a refetch da lista (focus, reconnect)
-  // e a falhas de stream, evitando o "volta pro canal 0" quando o array é substituído.
-  const currentChannelIdRef = useRef<string | null>(null);
+  // Lembra o canal atual pelo ID — sobrevive a refetch da lista (focus, reconnect),
+  // a falhas de stream, e até a remontagens do componente / reload da aba
+  // (persistido em localStorage). Evita o "volta pro canal 0".
+  const LAST_CHANNEL_KEY = "lntv:lastChannelId";
+  const currentChannelIdRef = useRef<string | null>(
+    typeof window !== "undefined" ? window.localStorage.getItem(LAST_CHANNEL_KEY) : null
+  );
   // Quando a lista de canais é refetchada (focus, reconnect), reposiciona o índice
   // para o canal lembrado pelo ID. NÃO depende de currentIndex para evitar loop
   // que sobrescreve a troca manual feita pelo usuário.
@@ -72,14 +76,16 @@ const PlayerPage = () => {
     const rememberedId = currentChannelIdRef.current;
     if (!rememberedId) {
       currentChannelIdRef.current = channels[0]?.id ?? null;
+      try { window.localStorage.setItem(LAST_CHANNEL_KEY, channels[0]?.id ?? ""); } catch {}
       return;
     }
     const newIdx = channels.findIndex((c) => c.id === rememberedId);
     if (newIdx >= 0) {
       setCurrentIndex((prev) => (prev === newIdx ? prev : newIdx));
     } else {
-      // Canal removido — vai pro primeiro
+      // Canal lembrado não está mais disponível — vai pro primeiro
       currentChannelIdRef.current = channels[0]?.id ?? null;
+      try { window.localStorage.setItem(LAST_CHANNEL_KEY, channels[0]?.id ?? ""); } catch {}
       setCurrentIndex(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -109,9 +115,12 @@ const PlayerPage = () => {
   const previewChannel: Channel | null = previewIndex !== null ? channels?.[previewIndex] ?? null : null;
   const focusedChannel: Channel | null = previewChannel ?? currentChannel;
 
-  // Sincroniza ID lembrado quando o usuário troca de canal
+  // Sincroniza ID lembrado (em memória + localStorage) quando o usuário troca de canal.
+  // Persistir garante que minimizar/recarregar a aba não volte pro canal 0.
   useEffect(() => {
-    if (currentChannel?.id) currentChannelIdRef.current = currentChannel.id;
+    if (!currentChannel?.id) return;
+    currentChannelIdRef.current = currentChannel.id;
+    try { window.localStorage.setItem(LAST_CHANNEL_KEY, currentChannel.id); } catch {}
   }, [currentChannel?.id]);
 
   // Mantém sessão viva no banco (admin enxerga online/canal atual)
