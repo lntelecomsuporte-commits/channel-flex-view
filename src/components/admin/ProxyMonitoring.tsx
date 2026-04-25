@@ -65,6 +65,23 @@ const useActiveSessions = () =>
     refetchInterval: 10_000,
   });
 
+// Canais cujo stream_url é HTTPS direto — NÃO passam pelo hls-proxy.
+// Usado para excluir esses canais da lista "Ativos no proxy".
+const useNonProxiedChannelNames = () =>
+  useQuery({
+    queryKey: ["non-proxied-channel-names"],
+    queryFn: async () => {
+      const { data } = await supabase.from("channels").select("name, stream_url");
+      const names = new Set<string>();
+      (data ?? []).forEach((c) => {
+        const url = (c.stream_url ?? "").trim().toLowerCase();
+        if (url.startsWith("https://")) names.add(c.name);
+      });
+      return names;
+    },
+    refetchInterval: 60_000,
+  });
+
 // Últimas sessões (30d) — usadas para enriquecer o histórico do proxy
 // com o IPv4/IPv6/UA reais do cliente (o IP gravado no proxy_access_log
 // é o do nginx interno, ex.: 172.18.0.1).
