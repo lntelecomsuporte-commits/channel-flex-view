@@ -24,6 +24,14 @@ const getProxyBaseUrl = () => {
   }
 };
 
+const isHlsPlaylistUrl = (streamUrl: string) => {
+  try {
+    return new URL(streamUrl).pathname.toLowerCase().endsWith(".m3u8");
+  } catch {
+    return streamUrl.toLowerCase().split("?")[0].endsWith(".m3u8");
+  }
+};
+
 /**
  * Versão SÍNCRONA: usa o token JWT atual em memória.
  * Necessária porque HLS.js carrega segmentos sem await.
@@ -40,8 +48,15 @@ export const getPlayableStreamUrl = (streamUrl: string): string => {
       typeof window !== "undefined" &&
       window.location.protocol === "https:" &&
       parsedUrl.protocol === "http:";
+    const shouldProxyHlsPlaylist =
+      typeof window !== "undefined" &&
+      window.location.protocol === "https:" &&
+      isHlsPlaylistUrl(streamUrl);
 
-    if (!isBlockedMixedContent) return streamUrl;
+    // Mesmo quando a URL inicial é HTTPS, algumas playlists HLS apontam para
+    // sub-playlists/segmentos HTTP. No browser isso vira Mixed Content; passando
+    // a playlist pelo proxy, o backend reescreve todos os links internos para HTTPS.
+    if (!isBlockedMixedContent && !shouldProxyHlsPlaylist) return streamUrl;
 
     const proxyBaseUrl = getProxyBaseUrl();
     if (!proxyBaseUrl) return streamUrl;
