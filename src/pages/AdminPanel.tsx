@@ -339,6 +339,11 @@ const AdminPanel = () => {
 
                   {channelForm.epg_type === "epg_pw" && (
                     <div className="space-y-2">
+                      <EpgUrlPresetSelector
+                        epgType="epg_pw"
+                        currentUrl={channelForm.epg_url}
+                        onSelect={(url) => setChannelForm((f) => ({ ...f, epg_url: url }))}
+                      />
                       <Label>URL do EPG.PW</Label>
                       <Input value={channelForm.epg_url} onChange={(e) => setChannelForm((f) => ({ ...f, epg_url: e.target.value }))} placeholder="https://epg.pw/api/epg.json?channel_id=..." />
                     </div>
