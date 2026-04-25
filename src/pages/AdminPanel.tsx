@@ -365,6 +365,7 @@ const AdminPanel = () => {
                           epgType={channelForm.epg_type}
                           currentUrl={channelForm.epg_url}
                           onSelect={(url) => setChannelForm((f) => ({ ...f, epg_url: url }))}
+                          onUrlsChange={setExtraEpgUrls}
                         />
                         <Label>URL do XML {channelForm.epg_type === "github_xml" && <span className="text-xs text-muted-foreground">(URL raw do GitHub — link com /blob/ é convertido automaticamente)</span>}</Label>
                         <Input
@@ -379,6 +380,7 @@ const AdminPanel = () => {
                           value={channelForm.epg_channel_id}
                           onChange={(v) => setChannelForm((f) => ({ ...f, epg_channel_id: v }))}
                           xmlUrl={normalizeGithub(channelForm.epg_url || (channelForm.epg_type === "open_epg" ? "https://www.open-epg.com/files/brazil1.xml" : (channelForm.epg_type === "github_xml" ? "" : "https://iptv-epg.org/files/epg-br.xml")))}
+                          extraUrls={extraEpgUrls.map(normalizeGithub)}
                         />
                       </div>
                       <div className="flex items-center gap-2">
