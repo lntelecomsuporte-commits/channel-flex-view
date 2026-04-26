@@ -104,18 +104,13 @@ const AdminPanel = () => {
       toast.error("Preencha nome, número e URL do stream");
       return;
     }
-    if (channelForm.epg_type === "all") {
-      toast.error('"Todos" é apenas um modo de busca. Escolha um tipo específico de EPG antes de salvar.');
-      return;
-    }
     setSaving(true);
 
-    // If epg_grab_logo is checked, fetch logo from EPG XML
+    // Se epg_grab_logo está marcado, busca logo do XML EPG
     let logoUrl = channelForm.logo_url || null;
-    if ((channelForm.epg_type === "iptv_epg_org" || channelForm.epg_type === "open_epg" || channelForm.epg_type === "github_xml") && channelForm.epg_grab_logo && channelForm.epg_channel_id) {
+    if (channelForm.epg_type === "xmltv" && channelForm.epg_grab_logo && channelForm.epg_channel_id && channelForm.epg_url) {
       try {
-        const defaultUrl = channelForm.epg_type === "open_epg" ? "https://www.open-epg.com/files/brazil1.xml" : (channelForm.epg_type === "github_xml" ? "" : "https://iptv-epg.org/files/epg-br.xml");
-        const epgUrl = normalizeGithub(channelForm.epg_url || defaultUrl);
+        const epgUrl = normalizeGithub(channelForm.epg_url);
         const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/epg-proxy?url=${encodeURIComponent(epgUrl)}`;
         const res = await fetch(proxyUrl);
         if (res.ok) {
