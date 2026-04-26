@@ -361,7 +361,7 @@ Deno.serve(async (request) => {
   const contentLength = parseInt(upstreamResponse.headers.get("content-length") ?? "0", 10) || 0;
 
   // Log assíncrono (não bloqueia resposta)
-  logProxyAccess(userId, ip, target, contentLength).catch(() => {});
+  logProxyAccess(userId, ip, resolvedTarget, contentLength).catch(() => {});
 
   if (
     upstreamResponse.url.toLowerCase().includes(".m3u8") ||
