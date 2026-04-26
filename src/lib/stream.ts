@@ -52,14 +52,27 @@ const buildProxyStreamUrl = (streamUrl: string): string | null => {
 /**
  * URL inicial do player.
  * - HTTP em página HTTPS: usa proxy imediatamente para evitar Mixed Content.
+ * - HTTP no APK: também usa proxy. O WebView do Android (mesmo com
+ *   allowMixedContent) frequentemente bloqueia HLS HTTP servido a partir
+ *   de assets HTTPS, e muitos TV Boxes simplesmente recusam HTTP cleartext.
+ *   Roteando pelo hls-proxy (HTTPS) o player recebe sempre HTTPS válido.
  * - HTTPS: toca direto; se falhar, o VideoPlayer aciona fallback para o proxy.
  */
 export const getPlayableStreamUrl = (streamUrl: string): string => {
   if (!streamUrl) return streamUrl;
-  if (Capacitor.isNativePlatform()) return streamUrl;
 
   try {
     const parsedUrl = new URL(streamUrl);
+
+    if (Capacitor.isNativePlatform()) {
+      // No APK só roteamos pelo proxy quando a stream é HTTP.
+      // HTTPS continua direto pra evitar overhead desnecessário.
+      if (parsedUrl.protocol === "http:") {
+        return buildProxyStreamUrl(streamUrl) ?? streamUrl;
+      }
+      return streamUrl;
+    }
+
     const isBlockedMixedContent =
       typeof window !== "undefined" &&
       window.location.protocol === "https:" &&
@@ -72,10 +85,9 @@ export const getPlayableStreamUrl = (streamUrl: string): string => {
   }
 };
 
-/** Força proxy apenas como fallback controlado pelo VideoPlayer. */
+/** Força proxy como fallback controlado pelo VideoPlayer (web e APK). */
 export const getProxiedStreamUrl = (streamUrl: string): string => {
   if (!streamUrl) return streamUrl;
-  if (Capacitor.isNativePlatform()) return streamUrl;
   return buildProxyStreamUrl(streamUrl) ?? streamUrl;
 };
 
