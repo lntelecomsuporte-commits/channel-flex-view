@@ -28,9 +28,18 @@ export const VirtualKeyboard = ({
   onFieldUp,
   onFieldDown,
   mode = "text",
+  autoFocus = false,
 }: VirtualKeyboardProps) => {
   const [shift, setShift] = useState(false);
   const rows = shift ? ROWS_UPPER : ROWS_LOWER;
+  const firstKeyRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (autoFocus) {
+      const t = setTimeout(() => firstKeyRef.current?.focus(), 100);
+      return () => clearTimeout(t);
+    }
+  }, [autoFocus]);
 
   const press = (k: string) => {
     onKeyPress(k);
@@ -41,9 +50,10 @@ export const VirtualKeyboard = ({
     <div className="bg-muted/40 border border-border rounded-md p-2 space-y-1.5 select-none">
       {rows.map((row, i) => (
         <div key={i} className="flex gap-1 justify-center">
-          {row.map((k) => (
+          {row.map((k, kIdx) => (
             <Button
               key={k}
+              ref={i === 0 && kIdx === 0 ? firstKeyRef : undefined}
               type="button"
               variant="secondary"
               size="sm"
