@@ -1,5 +1,6 @@
 import { useEffect, useState, type ImgHTMLAttributes } from "react";
 import { getCachedLogo, subscribeLogo } from "@/lib/logoCache";
+import { resolveLogoUrl } from "@/lib/logoUrl";
 
 interface CachedLogoProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> {
   src: string | null | undefined;
@@ -14,22 +15,27 @@ interface CachedLogoProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src
  *   by primeLogoVersions() when the channel list loads.
  */
 export function CachedLogo({ src, alt, ...rest }: CachedLogoProps) {
+  // Sempre normaliza para URL absoluta (no APK Capacitor o origin é localhost,
+  // então caminhos relativos como "/logos/5.png" precisam ser reescritos para
+  // https://tv2.lntelecom.net/logos/5.png).
+  const resolvedSrc = resolveLogoUrl(src);
+
   const [resolved, setResolved] = useState<string | null>(() =>
-    src ? getCachedLogo(src) ?? src : null
+    resolvedSrc ? getCachedLogo(resolvedSrc) ?? resolvedSrc : null
   );
 
   useEffect(() => {
-    if (!src) {
+    if (!resolvedSrc) {
       setResolved(null);
       return;
     }
-    setResolved(getCachedLogo(src) ?? src);
+    setResolved(getCachedLogo(resolvedSrc) ?? resolvedSrc);
 
     const unsub = subscribeLogo((url, dataUrl) => {
-      if (url === src) setResolved(dataUrl);
+      if (url === resolvedSrc) setResolved(dataUrl);
     });
     return unsub;
-  }, [src]);
+  }, [resolvedSrc]);
 
   if (!resolved) return null;
   return <img src={resolved} alt={alt} {...rest} />;

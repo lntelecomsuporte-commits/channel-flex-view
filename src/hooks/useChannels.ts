@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { supabase } from "@/lib/supabaseLocal";
 import type { Tables } from "@/integrations/supabase/types";
 import { primeLogoVersions } from "@/lib/logoCache";
+import { resolveLogoUrl } from "@/lib/logoUrl";
 
 export type Channel = Tables<"channels">;
 export type Category = Tables<"categories">;
@@ -60,7 +61,7 @@ export function useChannels() {
   useEffect(() => {
     if (!query.data) return;
     primeLogoVersions(
-      query.data.map((c) => ({ url: c.logo_url, version: c.updated_at }))
+      query.data.map((c) => ({ url: resolveLogoUrl(c.logo_url), version: c.updated_at }))
     );
   }, [query.data]);
 
