@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { getLocalFunctionUrl } from "@/lib/localBackend";
 
 export interface EPGProgram {
   title: string;
@@ -100,7 +101,7 @@ export function getEpgSource(channel: {
 }
 
 export async function fetchXmltvBundle(url: string, channelIds?: string[]): Promise<XmltvBundle> {
-  let proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/epg-proxy?url=${encodeURIComponent(normalizeGithubUrl(url))}`;
+  let proxyUrl = `${getLocalFunctionUrl("epg-proxy")}?url=${encodeURIComponent(normalizeGithubUrl(url))}`;
   if (channelIds && channelIds.length > 0) {
     // Pede ao servidor para filtrar — devolve apenas <programme> dos canais usados.
     // Reduz drasticamente o tamanho do download e o parsing no aparelho.
