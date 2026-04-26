@@ -324,9 +324,13 @@ Deno.serve(async (request) => {
     authCtx = { jwt: token };
   }
 
+  if (!target) {
+    return new Response("Missing url parameter", { status: 400, headers: corsHeaders });
+  }
+  const resolvedTarget: string = target;
   let upstreamUrl: URL;
   try {
-    upstreamUrl = new URL(target);
+    upstreamUrl = new URL(resolvedTarget);
   } catch {
     return new Response("Invalid url parameter", { status: 400, headers: corsHeaders });
   }
