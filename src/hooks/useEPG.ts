@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Capacitor } from "@capacitor/core";
 import { getLocalFunctionUrl } from "@/lib/localBackend";
-import { getConsolidatedEpgUrl, getLocalSourceUrl } from "@/lib/epgCache";
+import { getConsolidatedEpgUrl, getConsolidatedEpgJsonUrl, getLocalSourceUrl } from "@/lib/epgCache";
 
 export interface EPGProgram {
   title: string;
