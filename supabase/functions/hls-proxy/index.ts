@@ -158,40 +158,52 @@ interface AuthCtx {
   };
 }
 
-const buildProxyUrl = (targetUrl: string, proxyEndpoint: string, ctx: AuthCtx) => {
+const buildProxyUrl = async (targetUrl: string, proxyEndpoint: string, ctx: AuthCtx): Promise<string> => {
   const proxyUrl = new URL(proxyEndpoint);
-  proxyUrl.searchParams.set("url", targetUrl);
   if (ctx.signed) {
+    // Modo "Ocultar URL": cifra a URL real com AES-GCM (chave derivada do secret).
+    // Cliente nunca vê plaintext da URL upstream.
+    const cipher = await encryptUrl(targetUrl);
+    proxyUrl.searchParams.set("u", cipher);
     proxyUrl.searchParams.set("st", ctx.signed.st);
     proxyUrl.searchParams.set("uid", ctx.signed.uid);
     proxyUrl.searchParams.set("ch", ctx.signed.ch);
     proxyUrl.searchParams.set("exp", String(ctx.signed.exp));
-  } else if (ctx.jwt) {
-    proxyUrl.searchParams.set("token", ctx.jwt);
+  } else {
+    proxyUrl.searchParams.set("url", targetUrl);
+    if (ctx.jwt) proxyUrl.searchParams.set("token", ctx.jwt);
   }
   return proxyUrl.toString();
 };
 
-const rewriteTagUris = (line: string, baseUrl: string, proxyEndpoint: string, ctx: AuthCtx) => {
-  return line.replace(/URI="([^"]+)"/g, (_, uri: string) => {
-    const absoluteUrl = new URL(uri, baseUrl).toString();
-    return `URI="${buildProxyUrl(absoluteUrl, proxyEndpoint, ctx)}"`;
-  });
+const rewriteTagUris = async (line: string, baseUrl: string, proxyEndpoint: string, ctx: AuthCtx) => {
+  const matches = [...line.matchAll(/URI="([^"]+)"/g)];
+  let result = line;
+  for (const m of matches) {
+    const absoluteUrl = new URL(m[1], baseUrl).toString();
+    const replacement = `URI="${await buildProxyUrl(absoluteUrl, proxyEndpoint, ctx)}"`;
+    result = result.replace(`URI="${m[1]}"`, replacement);
+  }
+  return result;
 };
 
-const rewritePlaylist = (playlist: string, baseUrl: string, proxyEndpoint: string, ctx: AuthCtx) => {
-  return playlist
-    .split(/\r?\n/)
-    .map((line) => {
-      const trimmedLine = line.trim();
-      if (!trimmedLine) return line;
-      if (trimmedLine.startsWith("#")) {
-        return trimmedLine.includes('URI="') ? rewriteTagUris(line, baseUrl, proxyEndpoint, ctx) : line;
-      }
-      const absoluteUrl = new URL(trimmedLine, baseUrl).toString();
-      return buildProxyUrl(absoluteUrl, proxyEndpoint, ctx);
-    })
-    .join("\n");
+const rewritePlaylist = async (playlist: string, baseUrl: string, proxyEndpoint: string, ctx: AuthCtx): Promise<string> => {
+  const lines = playlist.split(/\r?\n/);
+  const out: string[] = [];
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    if (!trimmedLine) {
+      out.push(line);
+      continue;
+    }
+    if (trimmedLine.startsWith("#")) {
+      out.push(trimmedLine.includes('URI="') ? await rewriteTagUris(line, baseUrl, proxyEndpoint, ctx) : line);
+      continue;
+    }
+    const absoluteUrl = new URL(trimmedLine, baseUrl).toString();
+    out.push(await buildProxyUrl(absoluteUrl, proxyEndpoint, ctx));
+  }
+  return out.join("\n");
 };
 
 const getClientIp = (request: Request): string => {
