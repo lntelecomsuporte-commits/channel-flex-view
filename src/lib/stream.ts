@@ -50,18 +50,28 @@ const buildProxyStreamUrl = (streamUrl: string): string | null => {
 
 /**
  * URL inicial do player.
- * REGRA: TODO stream (HTTP ou HTTPS) passa pelo hls-proxy LOCAL.
- * Motivo: garantir que nada vaze pra Cloud, manter CORS sob controle e
- * permitir contabilidade/monitoramento de banda no proxy_access_log.
- * Apenas em ambiente nativo (APK) tocamos direto, pois lá não há CORS/Mixed Content.
+ * - HTTP em página HTTPS: usa proxy imediatamente para evitar Mixed Content.
+ * - HTTPS: toca direto; se falhar, o VideoPlayer aciona fallback para o proxy.
  */
 export const getPlayableStreamUrl = (streamUrl: string): string => {
   if (!streamUrl) return streamUrl;
   if (Capacitor.isNativePlatform()) return streamUrl;
-  return buildProxyStreamUrl(streamUrl) ?? streamUrl;
+
+  try {
+    const parsedUrl = new URL(streamUrl);
+    const isBlockedMixedContent =
+      typeof window !== "undefined" &&
+      window.location.protocol === "https:" &&
+      parsedUrl.protocol === "http:";
+
+    if (!isBlockedMixedContent) return streamUrl;
+    return buildProxyStreamUrl(streamUrl) ?? streamUrl;
+  } catch {
+    return streamUrl;
+  }
 };
 
-/** Mesma regra: sempre proxy local no browser, direto no nativo. */
+/** Força proxy apenas como fallback controlado pelo VideoPlayer. */
 export const getProxiedStreamUrl = (streamUrl: string): string => {
   if (!streamUrl) return streamUrl;
   if (Capacitor.isNativePlatform()) return streamUrl;
