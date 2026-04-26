@@ -88,6 +88,16 @@ export const VirtualKeyboard = ({
         <Button type="button" variant="secondary" size="sm" className="h-9 flex-1" onClick={() => press(" ")}>
           <Space className="h-4 w-4" />
         </Button>
+        {onFieldUp && (
+          <Button type="button" variant="secondary" size="sm" className="h-9 px-2" onClick={onFieldUp} aria-label="Campo anterior">
+            <ArrowUp className="h-4 w-4" />
+          </Button>
+        )}
+        {onFieldDown && (
+          <Button type="button" variant="secondary" size="sm" className="h-9 px-2" onClick={onFieldDown} aria-label="Próximo campo">
+            <ArrowDown className="h-4 w-4" />
+          </Button>
+        )}
         <Button type="button" variant="secondary" size="sm" className="h-9 px-3" onClick={onBackspace}>
           <Delete className="h-4 w-4" />
         </Button>
