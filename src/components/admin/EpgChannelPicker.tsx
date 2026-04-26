@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ChevronsUpDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getLocalFunctionUrl } from "@/lib/localBackend";
+import { getLocalSourceUrl } from "@/lib/epgCache";
 
 interface XmlChannel {
   id: string;
@@ -40,10 +41,21 @@ export default function EpgChannelPicker({ value, onChange, xmlUrl, extraUrls = 
   }, [xmlUrl, extraUrls]);
 
   const fetchOne = async (url: string): Promise<XmlChannel[]> => {
-    const proxyUrl = `${getLocalFunctionUrl("epg-proxy")}?url=${encodeURIComponent(url)}&fresh=1`;
-    const res = await fetch(proxyUrl);
-    if (!res.ok) throw new Error(`Falha ao carregar XML: ${url}`);
-    const text = await res.text();
+    // 1) Tenta cache local servido pelo nginx (rápido, sem CORS, sem anti-bot).
+    let text: string | null = null;
+    try {
+      const localRes = await fetch(getLocalSourceUrl(url), { cache: "no-cache" });
+      if (localRes.ok) text = await localRes.text();
+    } catch { /* segue */ }
+
+    // 2) Fallback: edge function epg-proxy (URLs não cacheadas)
+    if (!text || text.length < 100) {
+      const proxyUrl = `${getLocalFunctionUrl("epg-proxy")}?url=${encodeURIComponent(url)}&fresh=1`;
+      const res = await fetch(proxyUrl);
+      if (!res.ok) throw new Error(`Falha ao carregar XML: ${url}`);
+      text = await res.text();
+    }
+
     const parser = new DOMParser();
     const doc = parser.parseFromString(text, "text/xml");
     const channelNodes = doc.querySelectorAll("channel");
