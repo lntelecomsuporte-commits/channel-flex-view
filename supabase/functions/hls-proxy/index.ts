@@ -426,7 +426,7 @@ Deno.serve(async (request) => {
     contentType.includes("audio/mpegurl")
   ) {
     const playlist = await upstreamResponse.text();
-    const rewrittenPlaylist = rewritePlaylist(playlist, upstreamResponse.url, proxyEndpoint, authCtx);
+    const rewrittenPlaylist = await rewritePlaylist(playlist, upstreamResponse.url, proxyEndpoint, authCtx);
 
     return new Response(rewrittenPlaylist, {
       status: upstreamResponse.status,
