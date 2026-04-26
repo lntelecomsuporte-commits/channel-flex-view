@@ -21,6 +21,50 @@ const fromBase64Url = (s: string): Uint8Array => {
   return bytes;
 };
 
+const toBase64Url = (bytes: Uint8Array): string => {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+};
+
+// ===== Cifragem AES-GCM de URLs de segmento (modo "Ocultar URL") =====
+// Deriva uma chave AES de 256 bits a partir do STREAM_TOKEN_SECRET (SHA-256).
+let aesKeyPromise: Promise<CryptoKey> | null = null;
+const getAesKey = (): Promise<CryptoKey> => {
+  if (!aesKeyPromise) {
+    aesKeyPromise = (async () => {
+      const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(STREAM_TOKEN_SECRET));
+      return await crypto.subtle.importKey("raw", hash, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+    })();
+  }
+  return aesKeyPromise;
+};
+
+const encryptUrl = async (plain: string): Promise<string> => {
+  const key = await getAesKey();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(
+    await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(plain)),
+  );
+  const out = new Uint8Array(iv.length + ct.length);
+  out.set(iv, 0);
+  out.set(ct, iv.length);
+  return toBase64Url(out);
+};
+
+const decryptUrl = async (cipher: string): Promise<string | null> => {
+  try {
+    const key = await getAesKey();
+    const data = fromBase64Url(cipher);
+    const iv = data.slice(0, 12);
+    const ct = data.slice(12);
+    const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
+    return new TextDecoder().decode(pt);
+  } catch {
+    return null;
+  }
+};
+
 const verifyStreamToken = async (
   signedToken: string,
   uid: string,
@@ -114,40 +158,52 @@ interface AuthCtx {
   };
 }
 
-const buildProxyUrl = (targetUrl: string, proxyEndpoint: string, ctx: AuthCtx) => {
+const buildProxyUrl = async (targetUrl: string, proxyEndpoint: string, ctx: AuthCtx): Promise<string> => {
   const proxyUrl = new URL(proxyEndpoint);
-  proxyUrl.searchParams.set("url", targetUrl);
   if (ctx.signed) {
+    // Modo "Ocultar URL": cifra a URL real com AES-GCM (chave derivada do secret).
+    // Cliente nunca vê plaintext da URL upstream.
+    const cipher = await encryptUrl(targetUrl);
+    proxyUrl.searchParams.set("u", cipher);
     proxyUrl.searchParams.set("st", ctx.signed.st);
     proxyUrl.searchParams.set("uid", ctx.signed.uid);
     proxyUrl.searchParams.set("ch", ctx.signed.ch);
     proxyUrl.searchParams.set("exp", String(ctx.signed.exp));
-  } else if (ctx.jwt) {
-    proxyUrl.searchParams.set("token", ctx.jwt);
+  } else {
+    proxyUrl.searchParams.set("url", targetUrl);
+    if (ctx.jwt) proxyUrl.searchParams.set("token", ctx.jwt);
   }
   return proxyUrl.toString();
 };
 
-const rewriteTagUris = (line: string, baseUrl: string, proxyEndpoint: string, ctx: AuthCtx) => {
-  return line.replace(/URI="([^"]+)"/g, (_, uri: string) => {
-    const absoluteUrl = new URL(uri, baseUrl).toString();
-    return `URI="${buildProxyUrl(absoluteUrl, proxyEndpoint, ctx)}"`;
-  });
+const rewriteTagUris = async (line: string, baseUrl: string, proxyEndpoint: string, ctx: AuthCtx) => {
+  const matches = [...line.matchAll(/URI="([^"]+)"/g)];
+  let result = line;
+  for (const m of matches) {
+    const absoluteUrl = new URL(m[1], baseUrl).toString();
+    const replacement = `URI="${await buildProxyUrl(absoluteUrl, proxyEndpoint, ctx)}"`;
+    result = result.replace(`URI="${m[1]}"`, replacement);
+  }
+  return result;
 };
 
-const rewritePlaylist = (playlist: string, baseUrl: string, proxyEndpoint: string, ctx: AuthCtx) => {
-  return playlist
-    .split(/\r?\n/)
-    .map((line) => {
-      const trimmedLine = line.trim();
-      if (!trimmedLine) return line;
-      if (trimmedLine.startsWith("#")) {
-        return trimmedLine.includes('URI="') ? rewriteTagUris(line, baseUrl, proxyEndpoint, ctx) : line;
-      }
-      const absoluteUrl = new URL(trimmedLine, baseUrl).toString();
-      return buildProxyUrl(absoluteUrl, proxyEndpoint, ctx);
-    })
-    .join("\n");
+const rewritePlaylist = async (playlist: string, baseUrl: string, proxyEndpoint: string, ctx: AuthCtx): Promise<string> => {
+  const lines = playlist.split(/\r?\n/);
+  const out: string[] = [];
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    if (!trimmedLine) {
+      out.push(line);
+      continue;
+    }
+    if (trimmedLine.startsWith("#")) {
+      out.push(trimmedLine.includes('URI="') ? await rewriteTagUris(line, baseUrl, proxyEndpoint, ctx) : line);
+      continue;
+    }
+    const absoluteUrl = new URL(trimmedLine, baseUrl).toString();
+    out.push(await buildProxyUrl(absoluteUrl, proxyEndpoint, ctx));
+  }
+  return out.join("\n");
 };
 
 const getClientIp = (request: Request): string => {
@@ -274,6 +330,7 @@ Deno.serve(async (request) => {
   const requestUrl = new URL(request.url);
   let target = requestUrl.searchParams.get("url");
   const token = requestUrl.searchParams.get("token");
+  const uCipher = requestUrl.searchParams.get("u"); // URL cifrada (segmentos do modo "Ocultar URL")
 
   // Token assinado (modo "Ocultar URL")
   const st = requestUrl.searchParams.get("st");
@@ -292,6 +349,15 @@ Deno.serve(async (request) => {
     }
     userId = uid;
     authCtx = { signed: { st, uid, ch, exp } };
+
+    // Se veio `u=<cipher>`, decifra e usa como target (segmentos/variantes).
+    if (!target && uCipher) {
+      const decrypted = await decryptUrl(uCipher);
+      if (!decrypted) {
+        return new Response("Invalid encrypted url", { status: 400, headers: corsHeaders });
+      }
+      target = decrypted;
+    }
 
     // Se o cliente não enviou `url=` (modo "Ocultar URL" puro),
     // resolvemos a stream real pelo channel_id assinado no token.
@@ -370,7 +436,7 @@ Deno.serve(async (request) => {
     contentType.includes("audio/mpegurl")
   ) {
     const playlist = await upstreamResponse.text();
-    const rewrittenPlaylist = rewritePlaylist(playlist, upstreamResponse.url, proxyEndpoint, authCtx);
+    const rewrittenPlaylist = await rewritePlaylist(playlist, upstreamResponse.url, proxyEndpoint, authCtx);
 
     return new Response(rewrittenPlaylist, {
       status: upstreamResponse.status,
