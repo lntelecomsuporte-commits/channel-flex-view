@@ -45,16 +45,19 @@ const LoginPage = () => {
 
     (async () => {
       try {
-        const { Keyboard } = await import("@capacitor/keyboard");
+        // @vite-ignore — pacote opcional; pode não existir no build do servidor.
+        const mod = await import(/* @vite-ignore */ "@capacitor/keyboard").catch(() => null);
+        if (!mod?.Keyboard) return;
+        const { Keyboard } = mod;
         const subscriptions = await Promise.all([
           Keyboard.addListener("keyboardWillShow", scrollFocusedInputIntoView),
           Keyboard.addListener("keyboardDidShow", scrollFocusedInputIntoView),
         ]);
         cleanupNative = () => {
-          subscriptions.forEach((subscription) => void subscription.remove());
+          subscriptions.forEach((subscription: { remove: () => void }) => void subscription.remove());
         };
       } catch {
-        // Web/preview: visualViewport já cobre o comportamento.
+        // Web/preview ou pacote indisponível: visualViewport cobre o comportamento.
       }
     })();
 
