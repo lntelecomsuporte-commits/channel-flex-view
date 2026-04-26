@@ -18,7 +18,7 @@ interface ChannelListProps {
   onLogout?: () => void;
 }
 
-const LONG_PRESS_MS = 450;
+const LONG_PRESS_MS = 1500;
 
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
