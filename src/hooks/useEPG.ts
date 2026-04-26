@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getLocalFunctionUrl } from "@/lib/localBackend";
+import { getConsolidatedEpgUrl, getLocalSourceUrl } from "@/lib/epgCache";
 
 export interface EPGProgram {
   title: string;
@@ -100,18 +101,53 @@ export function getEpgSource(channel: {
   };
 }
 
-export async function fetchXmltvBundle(url: string, channelIds?: string[]): Promise<XmltvBundle> {
+async function fetchXmlText(url: string, channelIds?: string[]): Promise<string | null> {
+  // 1) Tenta cache local servido pelo nginx (mesmo domínio, sem CORS, sem anti-bot).
+  //    O servidor (scripts/sync-epg.mjs) baixa as URLs salvas em epg_url_presets
+  //    a cada 3h. Funciona para QUALQUER URL que tenha sido cadastrada no admin.
+  try {
+    const localRes = await fetch(getLocalSourceUrl(url), { cache: "no-cache" });
+    if (localRes.ok) {
+      const text = await localRes.text();
+      if (text && text.length > 100) return text;
+    }
+  } catch { /* segue pro fallback */ }
+
+  // 2) Fallback: proxy remoto (URLs não cacheadas / dev local sem nginx)
   let proxyUrl = `${getLocalFunctionUrl("epg-proxy")}?url=${encodeURIComponent(normalizeGithubUrl(url))}`;
   if (channelIds && channelIds.length > 0) {
-    // Pede ao servidor para filtrar — devolve apenas <programme> dos canais usados.
-    // Reduz drasticamente o tamanho do download e o parsing no aparelho.
     const unique = Array.from(new Set(channelIds.filter(Boolean))).sort();
     proxyUrl += `&channels=${encodeURIComponent(unique.join(","))}`;
   }
-  const res = await fetch(proxyUrl);
+  try {
+    const res = await fetch(proxyUrl);
+    if (!res.ok) return null;
+    return await res.text();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Lê o XML consolidado /epg/lntv.xml (gerado pelo sync-epg.mjs no servidor).
+ * Contém SÓ os nossos canais — geralmente alguns KB. Reduz drasticamente o
+ * trabalho de parsing nos receptores. Quando disponível, dispensa qualquer
+ * fetch das URLs originais.
+ */
+export async function fetchConsolidatedXmltv(): Promise<XmltvBundle | null> {
+  try {
+    const res = await fetch(getConsolidatedEpgUrl(), { cache: "no-cache" });
+    if (!res.ok) return null;
+    const text = await res.text();
+    if (!text || text.length < 50) return null;
+    return await parseXmltvText(text);
+  } catch {
+    return null;
+  }
+}
+
+async function parseXmltvText(text: string): Promise<XmltvBundle> {
   const byChannel = new Map<string, EPGProgram[]>();
-  if (!res.ok) return { kind: "xmltv", byChannel };
-  const text = await res.text();
 
   await yieldToMain();
   const parser = new DOMParser();
