@@ -132,6 +132,7 @@ const LoginPage = () => {
                 onFieldUp={() => setActiveField("email")}
                 onFieldDown={() => setActiveField("password")}
                 mode={activeField === "email" ? "email" : "text"}
+                autoFocus
               />
             )}
           </CardContent>
