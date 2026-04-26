@@ -295,16 +295,9 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
     }
   }, [visible, currentIndex]);
 
-  // Faz o scroll para o item focado SOMENTE depois que a lista virtual
-  // tem dimensões reais. Caso contrário, no APK (WebView lento) a chamada
-  // ocorre antes do ResizeObserver medir a altura e o scroll é ignorado,
-  // deixando a lista no topo (canal 000).
-  useEffect(() => {
-    if (!visible) return;
-    if (listSize.height <= 0) return;
-    listRef.current?.scrollToItem(focusedIndex, "center");
-  }, [visible, focusedIndex, listSize.height]);
-
+  // Mede tamanho do container ANTES de renderizar a lista virtual.
+  // Sem isso, no APK (WebView lento) a lista monta com height=0 e ignora
+  // o scroll inicial, deixando a posição no canal 000.
   useEffect(() => {
     if (!visible) return;
     const el = containerRef.current;
@@ -315,6 +308,23 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
     ro.observe(el);
     return () => ro.disconnect();
   }, [visible]);
+
+  // Faz o scroll para o item focado quando o índice muda durante navegação.
+  // A posição inicial é resolvida via `initialScrollOffset` no FixedSizeList,
+  // garantindo centralização correta já na primeira pintura.
+  useEffect(() => {
+    if (!visible || listSize.height <= 0) return;
+    listRef.current?.scrollToItem(focusedIndex, "smart");
+  }, [focusedIndex, visible, listSize.height]);
+
+  // Calcula offset inicial centralizado no canal atual (usado só na 1ª render
+  // da lista virtual). Deve ser função estável para não recriar a lista.
+  const initialOffset = useMemo(() => {
+    const ITEM = 72;
+    const target = currentIndex * ITEM - Math.max(0, listSize.height / 2 - ITEM / 2);
+    return Math.max(0, target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, currentIndex, listSize.height > 0]);
 
   const setItemRef = (index: number, el: HTMLDivElement | null) => {
     itemRefs.current[index] = el;
@@ -493,6 +503,7 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
             itemSize={72}
             itemData={rowData}
             overscanCount={4}
+            initialScrollOffset={initialOffset}
           >
             {Row}
           </FixedSizeList>

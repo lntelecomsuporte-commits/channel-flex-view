@@ -17,6 +17,17 @@ const rawCache = new Map<string, { text: string; fetchedAt: number }>();
 const FILTERED_TTL_MS = 10 * 60 * 1000;
 const filteredCache = new Map<string, { xml: string; fetchedAt: number }>();
 
+function looksLikeXmltv(text: string): boolean {
+  if (!text || text.length < 20) return false;
+  // Sample only the first KB — XMLTV files podem ter dezenas de MB
+  const head = text.slice(0, 2048).toLowerCase();
+  // Tem que ter <tv ou <channel ou <programme. Rejeita HTML de erro
+  // (<!doctype html>, <span ...>You reached the download limit..., etc).
+  if (head.includes("<!doctype html") || head.includes("<html")) return false;
+  if (/^\s*<span/i.test(text)) return false;
+  return head.includes("<tv") || head.includes("<channel") || head.includes("<programme");
+}
+
 async function getRawXml(url: string): Promise<{ text: string; status: number } | null> {
   const cached = rawCache.get(url);
   if (cached && Date.now() - cached.fetchedAt < RAW_TTL_MS) {
@@ -38,11 +49,21 @@ async function getRawXml(url: string): Promise<{ text: string; status: number } 
 
     if (!res.ok) {
       console.error(`EPG fetch failed: ${res.status} ${res.statusText} for ${url}`);
-      // Se temos um cache antigo, devolve mesmo expirado em vez de erro
+      // Se temos um cache antigo válido, devolve mesmo expirado em vez de erro
       if (cached) return { text: cached.text, status: 200 };
       return null;
     }
     const text = await res.text();
+
+    // Recusa cachear respostas que não são XMLTV (ex.: HTML de "limite atingido"
+    // do open-epg.com). Sem isso, ficamos com lixo cacheado por 10 min e o
+    // filtro devolve <tv></tv> vazio para todos os canais daquela URL.
+    if (!looksLikeXmltv(text)) {
+      console.error(`EPG response is not XMLTV for ${url} — not caching. First 200 chars: ${text.slice(0, 200)}`);
+      if (cached) return { text: cached.text, status: 200 };
+      return null;
+    }
+
     rawCache.set(url, { text, fetchedAt: Date.now() });
     return { text, status: 200 };
   } catch (e) {
@@ -59,20 +80,29 @@ async function getRawXml(url: string): Promise<{ text: string; status: number } 
  * para arquivos grandes) e preserva o XML original dos elementos selecionados.
  */
 function filterXmltv(text: string, wanted: Set<string>): string {
+  // Normaliza para matching tolerante (lowercase). Mantemos também o set original
+  // para match exato, que é mais rápido e cobre 99% dos casos.
+  const wantedLower = new Set<string>();
+  wanted.forEach((id) => wantedLower.add(id.toLowerCase()));
+
+  const matches = (id: string) => {
+    if (wanted.has(id)) return true;
+    return wantedLower.has(id.toLowerCase());
+  };
+
   const out: string[] = ['<?xml version="1.0" encoding="UTF-8"?>', "<tv>"];
 
   // <channel id="..."> ... </channel>
   const channelRe = /<channel\b[^>]*\bid\s*=\s*"([^"]+)"[^>]*>[\s\S]*?<\/channel>/g;
   let m: RegExpExecArray | null;
   while ((m = channelRe.exec(text)) !== null) {
-    if (wanted.has(m[1])) out.push(m[0]);
+    if (matches(m[1])) out.push(m[0]);
   }
 
   // <programme ... channel="..." ...> ... </programme>
-  // Também aceita <programme channel="..." .../> (raro). Cobrimos o caso comum.
   const progRe = /<programme\b[^>]*\bchannel\s*=\s*"([^"]+)"[^>]*>[\s\S]*?<\/programme>/g;
   while ((m = progRe.exec(text)) !== null) {
-    if (wanted.has(m[1])) out.push(m[0]);
+    if (matches(m[1])) out.push(m[0]);
   }
 
   out.push("</tv>");
