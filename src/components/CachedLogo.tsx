@@ -1,5 +1,6 @@
-import { useEffect, useState, type ImgHTMLAttributes } from "react";
+import { useEffect, useMemo, useState, type ImgHTMLAttributes } from "react";
 import { getCachedLogo, subscribeLogo } from "@/lib/logoCache";
+import { resolveLogoUrl } from "@/lib/logoUrl";
 
 interface CachedLogoProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> {
   src: string | null | undefined;
@@ -14,22 +15,23 @@ interface CachedLogoProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src
  *   by primeLogoVersions() when the channel list loads.
  */
 export function CachedLogo({ src, alt, ...rest }: CachedLogoProps) {
+  const normalizedSrc = useMemo(() => resolveLogoUrl(src), [src]);
   const [resolved, setResolved] = useState<string | null>(() =>
-    src ? getCachedLogo(src) ?? src : null
+    normalizedSrc ? getCachedLogo(normalizedSrc) ?? normalizedSrc : null
   );
 
   useEffect(() => {
-    if (!src) {
+    if (!normalizedSrc) {
       setResolved(null);
       return;
     }
-    setResolved(getCachedLogo(src) ?? src);
+    setResolved(getCachedLogo(normalizedSrc) ?? normalizedSrc);
 
     const unsub = subscribeLogo((url, dataUrl) => {
-      if (url === src) setResolved(dataUrl);
+      if (url === normalizedSrc) setResolved(dataUrl);
     });
     return unsub;
-  }, [src]);
+  }, [normalizedSrc]);
 
   if (!resolved) return null;
   return <img src={resolved} alt={alt} {...rest} />;
