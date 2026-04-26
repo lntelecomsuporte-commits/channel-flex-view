@@ -73,12 +73,17 @@ const IS_NATIVE = typeof window !== "undefined" && !!(window as any).Capacitor?.
 
 const yieldToMain = () =>
   new Promise<void>((resolve) => {
-    // @ts-ignore scheduler é suportado em Chromium moderno / WebView recente
+    // No APK NUNCA usar requestIdleCallback — com o vídeo HLS rodando
+    // o thread principal nunca fica idle e o parser trava por minutos.
+    if (IS_NATIVE) {
+      setTimeout(resolve, 0);
+      return;
+    }
+    // @ts-ignore scheduler é suportado em Chromium moderno
     if (typeof scheduler !== "undefined" && scheduler.yield) {
       // @ts-ignore
       scheduler.yield().then(resolve);
     } else if (typeof requestIdleCallback !== "undefined") {
-      // No APK preferimos idle callback para não competir com o vídeo
       requestIdleCallback(() => resolve(), { timeout: 200 });
     } else {
       setTimeout(resolve, 0);
@@ -156,7 +161,9 @@ async function parseXmltvText(text: string): Promise<XmltvBundle> {
 
   const programmes = doc.getElementsByTagName("programme");
   const total = programmes.length;
-  const CHUNK = IS_NATIVE ? 100 : 500;
+  // Chunk grande mesmo no APK — yieldToMain agora usa setTimeout(0)
+  // que devolve controle rapidinho. Chunk pequeno só multiplica overhead.
+  const CHUNK = IS_NATIVE ? 800 : 500;
 
   for (let i = 0; i < total; i++) {
     const prog = programmes[i];
