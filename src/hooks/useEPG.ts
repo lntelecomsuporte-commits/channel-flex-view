@@ -191,7 +191,11 @@ async function parseXmltvText(text: string): Promise<XmltvBundle> {
   return { kind: "xmltv", byChannel };
 }
 
-export async function fetchEpgPw(url: string): Promise<EpgPwBundle> {
+export async function fetchXmltvBundle(url: string, channelIds?: string[]): Promise<XmltvBundle> {
+  const text = await fetchXmlText(url, channelIds);
+  if (!text) return { kind: "xmltv", byChannel: new Map() };
+  return await parseXmltvText(text);
+}
   let resolvedUrl = url;
   if (!resolvedUrl.includes("epg.json")) resolvedUrl = resolvedUrl.replace("epg.xml", "epg.json");
   const res = await fetch(resolvedUrl);
