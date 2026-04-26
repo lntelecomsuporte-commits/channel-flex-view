@@ -29,6 +29,7 @@ const PROJECT_ROOT = join(__dirname, "..");
 const EPG_DIR = join(PROJECT_ROOT, "public", "epg");
 const SOURCES_DIR = join(EPG_DIR, "sources");
 const CONSOLIDATED_PATH = join(EPG_DIR, "lntv.xml");
+const CONSOLIDATED_JSON_PATH = join(EPG_DIR, "lntv.json");
 const FETCH_TIMEOUT_MS = 90_000;
 
 const STACK_DIR = process.env.LNTV_STACK_DIR || "/opt/lntv";
