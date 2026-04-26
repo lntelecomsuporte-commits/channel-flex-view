@@ -1,0 +1,1 @@
+ALTER TABLE public.channels ADD COLUMN use_proxy_token boolean NOT NULL DEFAULT false;
