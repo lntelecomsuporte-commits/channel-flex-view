@@ -141,6 +141,24 @@ async function fetchXmlText(url: string, channelIds?: string[]): Promise<string 
  * fetch das URLs originais.
  */
 export async function fetchConsolidatedXmltv(): Promise<XmltvBundle | null> {
+  // 1) JSON pré-parseado — instantâneo no APK (sem regex em ~1MB de XML)
+  try {
+    const res = await fetch(getConsolidatedEpgJsonUrl(), { cache: "no-cache" });
+    if (res.ok) {
+      const json = await res.json();
+      const byChannelObj = json?.byChannel;
+      if (byChannelObj && typeof byChannelObj === "object") {
+        const byChannel = new Map<string, EPGProgram[]>();
+        for (const id of Object.keys(byChannelObj)) {
+          const arr = byChannelObj[id];
+          if (Array.isArray(arr)) byChannel.set(id, arr as EPGProgram[]);
+        }
+        return { kind: "xmltv", byChannel };
+      }
+    }
+  } catch { /* fallback pro XML */ }
+
+  // 2) Fallback: XML consolidado (parse via regex no cliente)
   try {
     const res = await fetch(getConsolidatedEpgUrl(), { cache: "no-cache" });
     if (!res.ok) return null;
