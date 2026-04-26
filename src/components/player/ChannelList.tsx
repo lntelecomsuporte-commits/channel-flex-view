@@ -383,17 +383,14 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
           if (isSelectKey(e)) {
             e.preventDefault();
             e.stopPropagation();
-            if (enterPressLockedRef.current || isUpdatingFavorite) return;
+            if (isUpdatingFavorite) return;
 
-            // Repeat key (held down) → favoritar (long-press detectado pelo próprio repeat)
+            // Long-press: tecla repetindo por tempo suficiente → favorita
             if (e.repeat) {
-              if (!enterLongPressFiredRef.current) {
-                enterLongPressFiredRef.current = true;
-                enterPressLockedRef.current = true;
-                if (enterLongPressTimerRef.current) {
-                  clearTimeout(enterLongPressTimerRef.current);
-                  enterLongPressTimerRef.current = null;
-                }
+              if (enterFavoriteFiredRef.current) return;
+              const startedAt = enterPressStartRef.current;
+              if (startedAt && performance.now() - startedAt >= LONG_PRESS_MS) {
+                enterFavoriteFiredRef.current = true;
                 const ch = filteredChannels[focusedIndex];
                 const focusedId = ch?.id ?? "";
                 if (focusedId) setFavorite(focusedId, !isFavorite(focusedId));
@@ -401,26 +398,10 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
               return;
             }
 
-            // Primeiro keydown: seleciona imediatamente (alguns remotos de TV não emitem keyup)
-            // e arma timer para favoritar caso a tecla seja segurada sem repeat.
-            if (!enterLongPressTimerRef.current) {
-              enterLongPressFiredRef.current = false;
-              const ch = filteredChannels[focusedIndex];
-              const focusedId = ch?.id ?? "";
-              const shouldFavorite = focusedId ? !isFavorite(focusedId) : false;
-
-              // Seleciona o canal e fecha a lista AGORA
-              if (ch) {
-                const realIndex = channels.indexOf(ch);
-                if (realIndex >= 0) onSelect(realIndex);
-              }
-
-              enterLongPressTimerRef.current = setTimeout(() => {
-                enterLongPressFiredRef.current = true;
-                enterPressLockedRef.current = true;
-                enterLongPressTimerRef.current = null;
-                if (focusedId) setFavorite(focusedId, shouldFavorite);
-              }, LONG_PRESS_MS);
+            // Primeiro keydown: apenas marca o tempo. Ação ocorre no keyup.
+            if (enterPressStartRef.current === null) {
+              enterPressStartRef.current = performance.now();
+              enterFavoriteFiredRef.current = false;
             }
           }
       }
@@ -428,12 +409,28 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (!isSelectKey(e)) return;
-      if (enterLongPressTimerRef.current) {
-        clearTimeout(enterLongPressTimerRef.current);
-        enterLongPressTimerRef.current = null;
+      e.preventDefault();
+      e.stopPropagation();
+      const startedAt = enterPressStartRef.current;
+      const fired = enterFavoriteFiredRef.current;
+      enterPressStartRef.current = null;
+      enterFavoriteFiredRef.current = false;
+
+      if (fired) return; // já favoritou no long-press, não selecionar
+      if (startedAt === null) return;
+
+      const heldMs = performance.now() - startedAt;
+      const ch = filteredChannels[focusedIndex];
+      if (!ch) return;
+
+      if (heldMs >= LONG_PRESS_MS) {
+        // Segurou e soltou: favoritar
+        if (!isUpdatingFavorite) setFavorite(ch.id, !isFavorite(ch.id));
+      } else {
+        // Toque curto: selecionar canal
+        const realIndex = channels.indexOf(ch);
+        if (realIndex >= 0) onSelect(realIndex);
       }
-      enterLongPressFiredRef.current = false;
-      enterPressLockedRef.current = false;
     };
 
     window.addEventListener("keydown", handleKeyDown, true);
