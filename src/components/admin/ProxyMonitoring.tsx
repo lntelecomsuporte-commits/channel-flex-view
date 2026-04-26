@@ -167,16 +167,20 @@ const ProxyMonitoring = () => {
   const onlineUsers = Array.from(onlineUsersMap.values())
     .sort((a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime());
 
-  // Ativos no proxy: cruza sessões assistindo com logs recentes do proxy
+  // Ativos no proxy: qualquer usuário com hit recente no proxy_access_log.
+  // Usamos só user_id (sem channel_name) para tolerar logs onde o
+  // lookupChannel do edge function não conseguiu identificar o canal
+  // (channel_name fica NULL e quebrava o cruzamento por "user_id|channel").
   const proxyRecentSince = now - ACTIVE_WINDOW_MS * 4; // ~3min
-  const proxyActiveKeys = new Set(
+  const proxyActiveUserIds = new Set(
     (logs ?? [])
       .filter((l) => new Date(l.last_seen_at).getTime() >= proxyRecentSince)
-      .map((l) => `${l.user_id ?? "anon"}|${l.channel_name ?? ""}`)
+      .map((l) => l.user_id)
+      .filter((uid): uid is string => !!uid)
   );
   const activeList = onlineUsers
     .filter((s) => s.is_watching && s.channel_name)
-    .filter((s) => proxyActiveKeys.has(`${s.user_id}|${s.channel_name}`));
+    .filter((s) => proxyActiveUserIds.has(s.user_id));
 
   // Agrega histórico (30d) por usuário+canal
   const since30d = now - 30 * 24 * 60 * 60 * 1000;
