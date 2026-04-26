@@ -287,19 +287,23 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
     return channels.filter((ch) => ch.name.toLowerCase().includes(q) || String(ch.channel_number).includes(q));
   }, [channels, searchQuery]);
 
+  // Quando a lista abre, foca o canal atual (não o primeiro da lista).
   useEffect(() => {
     if (visible) {
       setFocusedIndex(currentIndex);
       setSearchQuery("");
-      requestAnimationFrame(() => {
-        listRef.current?.scrollToItem(currentIndex, "center");
-      });
     }
   }, [visible, currentIndex]);
 
+  // Faz o scroll para o item focado SOMENTE depois que a lista virtual
+  // tem dimensões reais. Caso contrário, no APK (WebView lento) a chamada
+  // ocorre antes do ResizeObserver medir a altura e o scroll é ignorado,
+  // deixando a lista no topo (canal 000).
   useEffect(() => {
-    listRef.current?.scrollToItem(focusedIndex, "smart");
-  }, [focusedIndex]);
+    if (!visible) return;
+    if (listSize.height <= 0) return;
+    listRef.current?.scrollToItem(focusedIndex, "center");
+  }, [visible, focusedIndex, listSize.height]);
 
   useEffect(() => {
     if (!visible) return;
