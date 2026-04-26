@@ -41,7 +41,7 @@ const verifyStreamToken = async (
     return await crypto.subtle.verify(
       "HMAC",
       key,
-      fromBase64Url(signedToken),
+      fromBase64Url(signedToken).buffer as ArrayBuffer,
       new TextEncoder().encode(payload),
     );
   } catch {
@@ -275,18 +275,36 @@ Deno.serve(async (request) => {
   const target = requestUrl.searchParams.get("url");
   const token = requestUrl.searchParams.get("token");
 
+  // Token assinado (modo "Ocultar URL")
+  const st = requestUrl.searchParams.get("st");
+  const uid = requestUrl.searchParams.get("uid");
+  const ch = requestUrl.searchParams.get("ch");
+  const expRaw = requestUrl.searchParams.get("exp");
+
   if (!target) {
     return new Response("Missing url parameter", { status: 400, headers: corsHeaders });
   }
 
-  // ===== JWT obrigatório =====
-  if (!token) {
-    return new Response("Missing token parameter", { status: 401, headers: corsHeaders });
-  }
+  let userId: string | null = null;
+  let authCtx: AuthCtx;
 
-  const userId = await validateToken(token);
-  if (!userId) {
-    return new Response("Invalid or expired token", { status: 401, headers: corsHeaders });
+  if (st && uid && ch && expRaw) {
+    const exp = parseInt(expRaw, 10);
+    const ok = await verifyStreamToken(st, uid, ch, exp);
+    if (!ok) {
+      return new Response("Invalid or expired stream token", { status: 401, headers: corsHeaders });
+    }
+    userId = uid;
+    authCtx = { signed: { st, uid, ch, exp } };
+  } else {
+    if (!token) {
+      return new Response("Missing token parameter", { status: 401, headers: corsHeaders });
+    }
+    userId = await validateToken(token);
+    if (!userId) {
+      return new Response("Invalid or expired token", { status: 401, headers: corsHeaders });
+    }
+    authCtx = { jwt: token };
   }
 
   let upstreamUrl: URL;
@@ -331,7 +349,7 @@ Deno.serve(async (request) => {
     contentType.includes("audio/mpegurl")
   ) {
     const playlist = await upstreamResponse.text();
-    const rewrittenPlaylist = rewritePlaylist(playlist, upstreamResponse.url, proxyEndpoint, token);
+    const rewrittenPlaylist = rewritePlaylist(playlist, upstreamResponse.url, proxyEndpoint, authCtx);
 
     return new Response(rewrittenPlaylist, {
       status: upstreamResponse.status,
