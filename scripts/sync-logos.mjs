@@ -1,24 +1,31 @@
 #!/usr/bin/env node
 /**
- * sync-logos.mjs (v2 — via edge function, sem service-role)
+ * sync-logos.mjs (v3 — direto no Postgres self-hosted, sem Cloud)
  *
- * Lê canais ativos chamando a edge function `sync-logos` no Cloud,
- * baixa cada logo externa, redimensiona, salva em public/logos/<n>.png,
- * e pede pra edge function atualizar logo_url -> /logos/<n>.png?v=<epoch>
+ * Lê canais ativos direto do Postgres local (via psql), baixa cada logo externa,
+ * redimensiona, salva em public/logos/<n>.png e atualiza logo_url no banco
+ * para /logos/<n>.png?v=<epoch>.
  *
- * Variáveis necessárias no /opt/lntv-frontend/.env:
- *   VITE_SUPABASE_URL              (ex: https://oxunkzltmlafatzfiikj.supabase.co)
- *   SYNC_LOGOS_SECRET              (qualquer string longa, igual ao secret no Cloud)
+ * Requisitos:
+ *   - psql instalado e acessível
+ *   - Variáveis de conexão no /opt/lntv/.env (POSTGRES_PASSWORD, etc.)
+ *     ou variável DATABASE_URL exportada.
+ *
+ * Por padrão tenta:
+ *   DATABASE_URL  (se setada)
+ *   ou monta: postgres://postgres:$POSTGRES_PASSWORD@localhost:5432/postgres
  *
  * Uso:
  *   node scripts/sync-logos.mjs
  *   node scripts/sync-logos.mjs --force
  *   node scripts/sync-logos.mjs --channel 5
+ *   DATABASE_URL=postgres://... node scripts/sync-logos.mjs
  */
 
 import { mkdir, writeFile, stat } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 import sharp from "sharp";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -29,16 +36,23 @@ const LOGOS_DIR = join(PROJECT_ROOT, "public", "logos");
 const LOGO_SIZE = 200;
 const FETCH_TIMEOUT_MS = 15_000;
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
-const SYNC_SECRET = process.env.SYNC_LOGOS_SECRET;
-
-if (!SUPABASE_URL || !SYNC_SECRET) {
-  console.error("❌ Faltam variáveis: VITE_SUPABASE_URL e SYNC_LOGOS_SECRET");
-  console.error("   Coloque-as no /opt/lntv-frontend/.env");
-  process.exit(1);
+// Monta DATABASE_URL se não foi fornecida
+let DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  const pwd = process.env.POSTGRES_PASSWORD;
+  const host = process.env.POSTGRES_HOST || "localhost";
+  const port = process.env.POSTGRES_PORT || "5432";
+  const db = process.env.POSTGRES_DB || "postgres";
+  const user = process.env.POSTGRES_USER || "postgres";
+  if (!pwd) {
+    console.error("❌ Faltou DATABASE_URL ou POSTGRES_PASSWORD.");
+    console.error("   Carregue o env do stack self-hosted antes de rodar:");
+    console.error("     set -a && . /opt/lntv/.env && set +a");
+    console.error("   E rode de novo: node scripts/sync-logos.mjs");
+    process.exit(1);
+  }
+  DATABASE_URL = `postgres://${user}:${encodeURIComponent(pwd)}@${host}:${port}/${db}`;
 }
-
-const FN_URL = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/sync-logos`;
 
 const args = process.argv.slice(2);
 const FORCE = args.includes("--force");
@@ -47,6 +61,20 @@ const SINGLE_CHANNEL = channelArgIdx >= 0 ? parseInt(args[channelArgIdx + 1], 10
 
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 const isLocalLogo = (url) => !!url && url.startsWith("/logos/");
+
+function psql(sql) {
+  // Executa SQL via psql e retorna stdout como string
+  const out = execFileSync("psql", [DATABASE_URL, "-At", "-F", "\t", "-c", sql], {
+    encoding: "utf8",
+    maxBuffer: 50 * 1024 * 1024,
+  });
+  return out;
+}
+
+function sqlEscape(s) {
+  if (s === null || s === undefined) return "NULL";
+  return `'${String(s).replace(/'/g, "''")}'`;
+}
 
 async function downloadAndResize(url) {
   const ctrl = new AbortController();
@@ -66,52 +94,74 @@ async function downloadAndResize(url) {
 
 async function fileExists(p) { try { await stat(p); return true; } catch { return false; } }
 
-async function fetchChannels() {
-  const res = await fetch(FN_URL, { headers: { "x-sync-secret": SYNC_SECRET } });
-  if (!res.ok) throw new Error(`GET sync-logos falhou: ${res.status} ${await res.text()}`);
-  const json = await res.json();
-  return json.channels ?? [];
+function fetchChannels() {
+  const sql = `
+    SELECT channel_number, name, COALESCE(logo_url, ''),
+           EXTRACT(EPOCH FROM updated_at)::bigint
+    FROM public.channels
+    WHERE is_active = true
+    ORDER BY channel_number ASC
+  `;
+  const raw = psql(sql).trim();
+  if (!raw) return [];
+  return raw.split("\n").map((line) => {
+    const [channel_number, name, logo_url, epoch] = line.split("\t");
+    return {
+      channel_number: parseInt(channel_number, 10),
+      name,
+      logo_url: logo_url || null,
+      updated_at_epoch: parseInt(epoch, 10) * 1000, // ms
+    };
+  });
 }
 
-async function pushUpdates(updates) {
-  if (updates.length === 0) return { updated: 0 };
-  const res = await fetch(FN_URL, {
-    method: "POST",
-    headers: { "x-sync-secret": SYNC_SECRET, "Content-Type": "application/json" },
-    body: JSON.stringify({ updates }),
-  });
-  if (!res.ok) throw new Error(`POST sync-logos falhou: ${res.status} ${await res.text()}`);
-  return await res.json();
+function updateChannelLogo(channel_number, version) {
+  const newUrl = `/logos/${channel_number}.png?v=${version}`;
+  const sql = `UPDATE public.channels SET logo_url = ${sqlEscape(newUrl)} WHERE channel_number = ${channel_number}`;
+  psql(sql);
 }
 
 async function main() {
-  log("🚀 Sync de logos iniciando…");
+  log("🚀 Sync de logos iniciando (modo self-hosted, direto no Postgres)…");
   log(`   Pasta destino: ${LOGOS_DIR}`);
-  log(`   Endpoint: ${FN_URL}`);
   if (FORCE) log("   Modo: --force");
   if (SINGLE_CHANNEL !== null) log(`   Filtro: --channel ${SINGLE_CHANNEL}`);
 
+  // testa conexão
+  try {
+    psql("SELECT 1");
+  } catch (e) {
+    console.error("❌ Falha ao conectar no Postgres:", e.message);
+    process.exit(2);
+  }
+
   await mkdir(LOGOS_DIR, { recursive: true });
 
-  let channels = await fetchChannels();
+  let channels = fetchChannels();
   if (SINGLE_CHANNEL !== null) channels = channels.filter((c) => c.channel_number === SINGLE_CHANNEL);
 
-  const updates = [];
+  log(`   Canais ativos: ${channels.length}`);
+
   const summary = { synced: 0, unchanged: 0, skipped: 0, versionBumped: 0, error: 0 };
 
   for (const ch of channels) {
-    const { channel_number, name, logo_url, updated_at } = ch;
+    const { channel_number, name, logo_url, updated_at_epoch } = ch;
     if (!logo_url) { log(`⏭  #${channel_number} ${name} — sem logo_url`); summary.skipped++; continue; }
 
     const localPath = join(LOGOS_DIR, `${channel_number}.png`);
-    const version = new Date(updated_at).getTime();
+    const version = updated_at_epoch;
     const versionedUrl = `/logos/${channel_number}.png?v=${version}`;
 
     if (!FORCE && isLocalLogo(logo_url) && (await fileExists(localPath))) {
       if (logo_url === versionedUrl) { summary.unchanged++; continue; }
-      updates.push({ channel_number, version });
-      summary.versionBumped++;
-      log(`🔄 #${channel_number} ${name} — version bump`);
+      try {
+        updateChannelLogo(channel_number, version);
+        summary.versionBumped++;
+        log(`🔄 #${channel_number} ${name} — version bump`);
+      } catch (e) {
+        log(`❌ #${channel_number} ${name} — update falhou: ${e.message}`);
+        summary.error++;
+      }
       continue;
     }
 
@@ -126,19 +176,13 @@ async function main() {
       log(`⬇️  #${channel_number} ${name} — baixando ${logo_url}`);
       const buf = await downloadAndResize(logo_url);
       await writeFile(localPath, buf);
-      updates.push({ channel_number, version });
+      updateChannelLogo(channel_number, version);
       summary.synced++;
       log(`✅ #${channel_number} ${name} — salvo`);
     } catch (e) {
       log(`❌ #${channel_number} ${name} — ${e.message}`);
       summary.error++;
     }
-  }
-
-  if (updates.length > 0) {
-    log(`📡 Enviando ${updates.length} updates pro Cloud…`);
-    const r = await pushUpdates(updates);
-    log(`   atualizados no banco: ${r.updated}`, r.errors?.length ? `erros: ${r.errors.join("; ")}` : "");
   }
 
   log("📊 Resumo:", summary);
