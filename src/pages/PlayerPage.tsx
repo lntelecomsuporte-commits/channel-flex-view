@@ -627,7 +627,12 @@ const PlayerPage = () => {
     >
       {currentChannel && (
         <>
-          <VideoPlayer ref={playerRef} streamUrl={currentChannel.stream_url} />
+          <VideoPlayer
+            ref={playerRef}
+            streamUrl={currentChannel.stream_url}
+            channelId={currentChannel.id}
+            useProxyToken={(currentChannel as any).use_proxy_token ?? false}
+          />
           {showStats && (
             <StatsOverlay
               videoEl={playerRef.current?.getVideoElement() ?? null}
