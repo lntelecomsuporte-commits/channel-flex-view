@@ -51,8 +51,15 @@ const LoginPage = () => {
     navigate("/");
   };
 
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    // Garante que o campo focado fique visível acima do teclado virtual (Android/iOS)
+    setTimeout(() => {
+      e.target.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 300);
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="flex min-h-screen items-start justify-center overflow-y-auto bg-background p-4 pt-8 pb-[50vh]">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-2">
@@ -64,11 +71,11 @@ const LoginPage = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="seu@email.com" />
+              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} onFocus={handleFocus} required placeholder="seu@email.com" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Senha</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} onFocus={handleFocus} required />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Entrando..." : "Entrar"}
