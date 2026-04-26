@@ -1,9 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
 
-const isLocalHostname = (hostname: string) =>
-  ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(hostname) || hostname.endsWith(".local");
-
 /**
  * REGRA IMUTÁVEL DESTE PROJETO (LN TV self-hosted):
  * O hls-proxy SEMPRE roda no MESMO domínio que serve o site
