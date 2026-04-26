@@ -149,7 +149,9 @@ export const resolveChannelStreamUrl = async (
   channelId: string | null | undefined,
   useProxyToken: boolean,
 ): Promise<string> => {
-  if (useProxyToken && channelId) {
+  // "Ocultar URL" só faz sentido no browser (onde dá pra inspecionar via F12).
+  // No APK não há DevTools, então tocamos direto pra economizar latência/banda do proxy.
+  if (useProxyToken && channelId && !Capacitor.isNativePlatform()) {
     const signed = await buildSignedProxyStreamUrl(streamUrl, channelId);
     if (signed) return signed;
     // Fallback: melhor tocar pelo proxy normal do que falhar
