@@ -21,6 +21,50 @@ const fromBase64Url = (s: string): Uint8Array => {
   return bytes;
 };
 
+const toBase64Url = (bytes: Uint8Array): string => {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+};
+
+// ===== Cifragem AES-GCM de URLs de segmento (modo "Ocultar URL") =====
+// Deriva uma chave AES de 256 bits a partir do STREAM_TOKEN_SECRET (SHA-256).
+let aesKeyPromise: Promise<CryptoKey> | null = null;
+const getAesKey = (): Promise<CryptoKey> => {
+  if (!aesKeyPromise) {
+    aesKeyPromise = (async () => {
+      const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(STREAM_TOKEN_SECRET));
+      return await crypto.subtle.importKey("raw", hash, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+    })();
+  }
+  return aesKeyPromise;
+};
+
+const encryptUrl = async (plain: string): Promise<string> => {
+  const key = await getAesKey();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(
+    await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(plain)),
+  );
+  const out = new Uint8Array(iv.length + ct.length);
+  out.set(iv, 0);
+  out.set(ct, iv.length);
+  return toBase64Url(out);
+};
+
+const decryptUrl = async (cipher: string): Promise<string | null> => {
+  try {
+    const key = await getAesKey();
+    const data = fromBase64Url(cipher);
+    const iv = data.slice(0, 12);
+    const ct = data.slice(12);
+    const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
+    return new TextDecoder().decode(pt);
+  } catch {
+    return null;
+  }
+};
+
 const verifyStreamToken = async (
   signedToken: string,
   uid: string,
