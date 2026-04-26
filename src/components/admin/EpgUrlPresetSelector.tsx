@@ -75,11 +75,15 @@ export default function EpgUrlPresetSelector({ epgType, currentUrl, onSelect, on
   const toggleSelected = (id: string, checked: boolean) => {
     setSelectedIds((prev) => {
       const next = checked ? [...prev, id] : prev.filter((x) => x !== id);
-      // Set primary URL = first selected (or clear if none)
-      const firstUrl = next.length
-        ? presets.find((p) => p.id === next[0])?.url || ""
-        : "";
-      if (firstUrl) onSelect(firstUrl);
+      // Apenas preenche o campo "URL do XML" quando há EXATAMENTE 1 URL selecionada.
+      // Com múltiplas selecionadas, deixa o campo vazio — o usuário usa a busca,
+      // e a URL correta é preenchida via onResolve ao clicar no canal encontrado.
+      if (next.length === 1) {
+        const onlyUrl = presets.find((p) => p.id === next[0])?.url || "";
+        if (onlyUrl) onSelect(onlyUrl);
+      } else {
+        onSelect("");
+      }
       return next;
     });
   };
@@ -167,7 +171,7 @@ export default function EpgUrlPresetSelector({ epgType, currentUrl, onSelect, on
     <div className="flex gap-2 items-end">
       <div className="flex-1 min-w-0">
         <Label className="text-xs text-muted-foreground mb-1 block">
-          URLs salvas {selectedIds.length > 1 && <span className="text-primary">(buscar canais soma todas)</span>}
+          URLs salvas {selectedIds.length > 1 && <span className="text-primary">(use a busca — a URL será preenchida ao escolher o canal)</span>}
         </Label>
         <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
           <PopoverTrigger asChild>
