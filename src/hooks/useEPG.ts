@@ -87,13 +87,14 @@ export function getEpgSource(channel: {
   epg_type?: string | null;
   epg_url?: string | null;
 }) {
-  const effectiveType = channel.epg_type || (channel.epg_url ? "epg_pw" : null);
+  const effectiveType = channel.epg_type || (channel.epg_url ? "xmltv" : null);
   if (!effectiveType || effectiveType === "none" || effectiveType === "alt_text" || !channel.epg_url) {
     return null;
   }
-  const isXmltv = effectiveType === "iptv_epg_org" || effectiveType === "open_epg" || effectiveType === "github_xml";
+  // Legacy values (iptv_epg_org, open_epg, github_xml, epg_pw) all treated as xmltv now.
+  const isEpgPw = effectiveType === "epg_pw";
   return {
-    kind: (isXmltv ? "xmltv" : "epgpw") as "xmltv" | "epgpw",
+    kind: (isEpgPw ? "epgpw" : "xmltv") as "xmltv" | "epgpw",
     url: channel.epg_url,
   };
 }
