@@ -1,6 +1,6 @@
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { fetchEpgPw, fetchXmltvBundle, getEpgSource, type Bundle, type EPGProgram } from "./useEPG";
+import { fetchConsolidatedXmltv, fetchEpgPw, fetchXmltvBundle, getEpgSource, type Bundle, type EPGProgram } from "./useEPG";
 
 interface ChannelEPGInput {
   id: string;
@@ -27,11 +27,34 @@ export function useMultiEPG(channels: ChannelEPGInput[], enabled: boolean = true
   // Group by unique source so each EPG file is fetched/parsed ONCE
   const sourcesKey = channels.map((c) => `${c.epg_type}|${c.epg_url}|${c.epg_channel_id ?? ""}`).join("~");
 
+  // 1) PRIMEIRA escolha: XML consolidado (/epg/lntv.xml) — gerado pelo
+  //    sync-epg.mjs no servidor. Já vem só com nossos canais, super leve.
+  const consolidated = useQuery({
+    queryKey: ["epg-consolidated"],
+    enabled,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    refetchInterval: 10 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    queryFn: fetchConsolidatedXmltv,
+  });
+
+  // 2) Fallback: para canais que NÃO foram cobertos pelo consolidado
+  //    (ex: epg_url solta que não está em epg_url_presets) caímos no
+  //    fluxo antigo de baixar/filtrar por fonte.
   const sources = useMemo(() => {
+    const consolidatedIds = new Set<string>();
+    if (consolidated.data?.kind === "xmltv") {
+      consolidated.data.byChannel.forEach((_, id) => consolidatedIds.add(id));
+    }
+
     const map = new Map<string, { kind: "xmltv" | "epgpw"; url: string; channelIds: Set<string> }>();
     for (const ch of channels) {
       const source = getEpgSource(ch);
       if (!source) continue;
+      // Se o consolidado já cobre esse canal, pula
+      if (source.kind === "xmltv" && ch.epg_channel_id && consolidatedIds.has(ch.epg_channel_id)) continue;
       const key = `${source.kind}::${source.url}`;
       let entry = map.get(key);
       if (!entry) {
@@ -49,7 +72,7 @@ export function useMultiEPG(channels: ChannelEPGInput[], enabled: boolean = true
       channelIds: Array.from(v.channelIds).sort(),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourcesKey]);
+  }, [sourcesKey, consolidated.data]);
 
   const queries = useQueries({
     queries: sources.map((src) => ({
@@ -68,17 +91,29 @@ export function useMultiEPG(channels: ChannelEPGInput[], enabled: boolean = true
     })),
   });
 
-  const dataSig = queries.map((q) => (q.data ? "1" : "0")).join("");
+  const dataSig = queries.map((q) => (q.data ? "1" : "0")).join("") + (consolidated.data ? "C" : "_");
 
   const epgMap = useMemo(() => {
+    const result = new Map<string, EPGProgram[]>();
+
+    // 1) Aplica primeiro o consolidado (cobre a maioria dos canais)
+    if (consolidated.data?.kind === "xmltv") {
+      for (const ch of channels) {
+        if (!ch.epg_channel_id) continue;
+        const arr = consolidated.data.byChannel.get(ch.epg_channel_id);
+        if (arr) result.set(ch.id, arr);
+      }
+    }
+
+    // 2) Preenche os canais faltantes via fallback
     const bundleByKey = new Map<string, Bundle>();
     sources.forEach((src, i) => {
       const data = queries[i]?.data;
       if (data) bundleByKey.set(src.key, data);
     });
 
-    const result = new Map<string, EPGProgram[]>();
     for (const ch of channels) {
+      if (result.has(ch.id)) continue;
       const source = getEpgSource(ch);
       if (!source) continue;
       const key = `${source.kind}::${source.url}`;
