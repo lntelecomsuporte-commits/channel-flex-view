@@ -129,6 +129,8 @@ const LoginPage = () => {
                 onKeyPress={handleKeyPress}
                 onBackspace={handleBackspace}
                 onEnter={handleEnter}
+                onFieldUp={() => setActiveField("email")}
+                onFieldDown={() => setActiveField("password")}
                 mode={activeField === "email" ? "email" : "text"}
               />
             )}
