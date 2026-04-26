@@ -20,7 +20,7 @@
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
-            android:windowSoftInputMode="adjustPan|stateHidden"
+            android:windowSoftInputMode="adjustResize|stateHidden"
             android:icon="@drawable/ic_launcher_tv"
             android:logo="@drawable/tv_launcher_logo"
             android:banner="@drawable/tv_banner"
