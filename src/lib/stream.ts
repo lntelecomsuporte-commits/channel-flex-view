@@ -18,6 +18,14 @@ const PRODUCTION_HOST = "https://tv2.lntelecom.net";
 
 const getProxyBaseUrl = () => {
   let origin = PRODUCTION_HOST;
+
+  // No APK (Capacitor) window.location.origin aponta pra um host interno
+  // (ex.: http://localhost ou capacitor://localhost) — NUNCA usar isso.
+  // Sempre forçar o domínio de produção real.
+  if (Capacitor.isNativePlatform()) {
+    return `${PRODUCTION_HOST}/functions/v1/hls-proxy`;
+  }
+
   if (typeof window !== "undefined" && window.location?.origin) {
     const winOrigin = window.location.origin;
     // Se estiver rodando dentro do preview do Lovable (*.lovable.app/.dev),
