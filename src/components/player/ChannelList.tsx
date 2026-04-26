@@ -503,6 +503,7 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
             itemSize={72}
             itemData={rowData}
             overscanCount={4}
+            initialScrollOffset={initialOffset}
           >
             {Row}
           </FixedSizeList>
