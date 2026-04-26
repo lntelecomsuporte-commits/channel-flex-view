@@ -9,13 +9,9 @@ const config: CapacitorConfig = {
   },
   plugins: {
     Keyboard: {
-      resize: 'native',
-      resizeOnFullScreen: true,
+      resize: 'none',
+      resizeOnFullScreen: false,
     },
-  },
-  server: {
-    url: 'https://tv2.lntelecom.net',
-    cleartext: false,
   },
 };
 
