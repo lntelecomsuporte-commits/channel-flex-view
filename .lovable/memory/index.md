@@ -1,18 +1,18 @@
-# Memory: index.md
-Updated: now
-
 # Project Memory
 
 ## Core
-PWA for Smart TVs/Mobile. Tech: Supabase, Capacitor, Flussonic.
+PWA for Smart TVs/Mobile. 100% self-hosted (Supabase em /opt/lntv, frontend /opt/lntv-frontend → /var/www/lntv, nginx tv2.lntelecom.net).
+PROIBIDO apontar pro Supabase Cloud (*.supabase.co) — proxies SEMPRE no origin do site, fallback hardcoded https://tv2.lntelecom.net (PRODUCTION_HOST em src/lib/stream.ts).
 Brand: "LN TV", dark mode, primary red #dc2626.
 Player: 100vw/100vh, object-contain. HLS/MP4 only.
 Auth: No public sign-up. Global session revocation on block.
-Domain: tv.lntelecom.net
-SELF-HOSTED SYNC: After EVERY change (frontend, edge function, OR DB migration), ALWAYS print the exact deploy commands DIRECTLY IN THE CHAT REPLY (inside a ```bash block at the END of the response, never omit, never assume the user has them). For frontend: `cd /opt/lntv-frontend && git pull && npm run build && rsync -a --delete --exclude logos dist/ /var/www/lntv/`. For DB migrations: include full SQL via `docker exec supabase-db psql` + restart of supabase-rest. For edge functions: include redeploy step. THE USER CANNOT SEE ANY OTHER OUTPUT — only what is written in the chat message itself.
+Logos: nginx serve /logos/ → /opt/lntv-frontend/public/logos/. Cron sync-logos a cada 5min.
+Build prod: cd /opt/lntv-frontend && npm run build && rsync -a --delete --exclude logos dist/ /var/www/lntv/
+SEMPRE ao final de QUALQUER mudança (frontend, edge function, migration), incluir bloco bash com os comandos exatos pro user rodar no servidor self-hosted. Nunca omitir. Ver mem://deployment/self-hosted.
 
 ## Memories
-- [Self-hosted deployment](mem://deployment/self-hosted) — Sync procedure for tv2.lntelecom.net (frontend, edge functions, DB migrations, kong)
+- [Self-hosted deployment](mem://deployment/self-hosted) — Procedimento de sync obrigatório após cada mudança
+- [No Cloud constraint](mem://constraints/no-cloud) — Tudo local, proxies no mesmo domínio, regras de build
 - [Player & Navigation](mem://features/player) — Remote/touch controls, autoplay rules, Airplay support
 - [Hubsoft Integration](mem://features/hubsoft-integration) — Webhooks, TVLN filtering, CPF login generation, blocking logic
 - [Auth & Users](mem://features/auth-users) — Plaintext passwords for ERP, REST API for Auth, user_roles
