@@ -80,20 +80,29 @@ async function getRawXml(url: string): Promise<{ text: string; status: number } 
  * para arquivos grandes) e preserva o XML original dos elementos selecionados.
  */
 function filterXmltv(text: string, wanted: Set<string>): string {
+  // Normaliza para matching tolerante (lowercase). Mantemos também o set original
+  // para match exato, que é mais rápido e cobre 99% dos casos.
+  const wantedLower = new Set<string>();
+  wanted.forEach((id) => wantedLower.add(id.toLowerCase()));
+
+  const matches = (id: string) => {
+    if (wanted.has(id)) return true;
+    return wantedLower.has(id.toLowerCase());
+  };
+
   const out: string[] = ['<?xml version="1.0" encoding="UTF-8"?>', "<tv>"];
 
   // <channel id="..."> ... </channel>
   const channelRe = /<channel\b[^>]*\bid\s*=\s*"([^"]+)"[^>]*>[\s\S]*?<\/channel>/g;
   let m: RegExpExecArray | null;
   while ((m = channelRe.exec(text)) !== null) {
-    if (wanted.has(m[1])) out.push(m[0]);
+    if (matches(m[1])) out.push(m[0]);
   }
 
   // <programme ... channel="..." ...> ... </programme>
-  // Também aceita <programme channel="..." .../> (raro). Cobrimos o caso comum.
   const progRe = /<programme\b[^>]*\bchannel\s*=\s*"([^"]+)"[^>]*>[\s\S]*?<\/programme>/g;
   while ((m = progRe.exec(text)) !== null) {
-    if (wanted.has(m[1])) out.push(m[0]);
+    if (matches(m[1])) out.push(m[0]);
   }
 
   out.push("</tv>");
