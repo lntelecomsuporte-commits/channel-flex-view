@@ -24,6 +24,8 @@ export const VirtualKeyboard = ({
   onKeyPress,
   onBackspace,
   onEnter,
+  onFieldUp,
+  onFieldDown,
   mode = "text",
 }: VirtualKeyboardProps) => {
   const [shift, setShift] = useState(false);
