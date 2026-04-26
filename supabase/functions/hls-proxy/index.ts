@@ -272,7 +272,7 @@ Deno.serve(async (request) => {
   }
 
   const requestUrl = new URL(request.url);
-  const target = requestUrl.searchParams.get("url");
+  let target = requestUrl.searchParams.get("url");
   const token = requestUrl.searchParams.get("token");
 
   // Token assinado (modo "Ocultar URL")
@@ -280,10 +280,6 @@ Deno.serve(async (request) => {
   const uid = requestUrl.searchParams.get("uid");
   const ch = requestUrl.searchParams.get("ch");
   const expRaw = requestUrl.searchParams.get("exp");
-
-  if (!target) {
-    return new Response("Missing url parameter", { status: 400, headers: corsHeaders });
-  }
 
   let userId: string | null = null;
   let authCtx: AuthCtx;
@@ -296,7 +292,28 @@ Deno.serve(async (request) => {
     }
     userId = uid;
     authCtx = { signed: { st, uid, ch, exp } };
+
+    // Se o cliente não enviou `url=` (modo "Ocultar URL" puro),
+    // resolvemos a stream real pelo channel_id assinado no token.
+    if (!target) {
+      try {
+        const { data, error } = await adminClient
+          .from("channels")
+          .select("stream_url, is_active")
+          .eq("id", ch)
+          .maybeSingle();
+        if (error || !data?.stream_url || data.is_active === false) {
+          return new Response("Channel not found", { status: 404, headers: corsHeaders });
+        }
+        target = data.stream_url;
+      } catch {
+        return new Response("Channel lookup failed", { status: 500, headers: corsHeaders });
+      }
+    }
   } else {
+    if (!target) {
+      return new Response("Missing url parameter", { status: 400, headers: corsHeaders });
+    }
     if (!token) {
       return new Response("Missing token parameter", { status: 401, headers: corsHeaders });
     }
