@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Delete, ArrowBigUp, CornerDownLeft, Space, ArrowUp, ArrowDown } from "lucide-react";
 
@@ -9,6 +9,7 @@ interface VirtualKeyboardProps {
   onFieldUp?: () => void;
   onFieldDown?: () => void;
   mode?: "email" | "text";
+  autoFocus?: boolean;
 }
 
 const ROWS_LOWER = [
