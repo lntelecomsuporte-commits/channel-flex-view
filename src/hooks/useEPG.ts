@@ -198,6 +198,7 @@ export async function fetchXmltvBundle(url: string, channelIds?: string[]): Prom
 }
 
 export async function fetchEpgPw(url: string): Promise<EpgPwBundle> {
+  let resolvedUrl = url;
   if (!resolvedUrl.includes("epg.json")) resolvedUrl = resolvedUrl.replace("epg.xml", "epg.json");
   const res = await fetch(resolvedUrl);
   if (!res.ok) return { kind: "epgpw", programs: [] };
