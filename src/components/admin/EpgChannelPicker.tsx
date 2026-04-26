@@ -5,6 +5,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ChevronsUpDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getLocalFunctionUrl } from "@/lib/localBackend";
 
 interface XmlChannel {
   id: string;
@@ -39,7 +40,7 @@ export default function EpgChannelPicker({ value, onChange, xmlUrl, extraUrls = 
   }, [xmlUrl, extraUrls]);
 
   const fetchOne = async (url: string): Promise<XmlChannel[]> => {
-    const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/epg-proxy?url=${encodeURIComponent(url)}`;
+    const proxyUrl = `${getLocalFunctionUrl("epg-proxy")}?url=${encodeURIComponent(url)}`;
     const res = await fetch(proxyUrl);
     if (!res.ok) throw new Error(`Falha ao carregar XML: ${url}`);
     const text = await res.text();

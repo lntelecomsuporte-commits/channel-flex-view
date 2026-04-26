@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabaseLocal";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Save, Copy, RefreshCw, Plus, Trash2, Edit2, X } from "lucide-react";
 import { useCategories } from "@/hooks/useChannels";
+import { getLocalFunctionUrl } from "@/lib/localBackend";
 
 function useHubsoftConfigs() {
   return useQuery({
@@ -48,7 +49,7 @@ function generateApiKey() {
 }
 
 function buildCallbackUrl(apiKey: string) {
-  const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/hubsoft-webhook`;
+  const baseUrl = getLocalFunctionUrl("hubsoft-webhook");
   const encodedApiKey = apiKey ? encodeURIComponent(apiKey) : "sem-chave";
   return `${baseUrl}/${encodedApiKey}`;
 }
