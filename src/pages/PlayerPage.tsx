@@ -685,7 +685,10 @@ const PlayerPage = () => {
           )}
 
           {isMobile && (
-            <div className="absolute right-3 bottom-20 z-20 flex flex-col items-center gap-2 animate-fade-in">
+            <div
+              className="absolute right-3 z-20 flex flex-col items-center gap-2 animate-fade-in"
+              style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 6rem)" }}
+            >
               <button
                 onClick={(e) => {
                   e.stopPropagation();
