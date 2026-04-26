@@ -160,7 +160,7 @@ serve(async (req) => {
         });
       }
 
-      const raw = await getRawXml(xmlUrl);
+      const raw = await getRawXml(xmlUrl, fresh);
       if (!raw) {
         return new Response(emptyXml, {
           status: 200,
