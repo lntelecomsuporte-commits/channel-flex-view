@@ -31,35 +31,42 @@ function looksLikeXmltv(text: string): boolean {
 async function getRawXml(url: string): Promise<{ text: string; status: number } | null> {
   const cached = rawCache.get(url);
   if (cached && Date.now() - cached.fetchedAt < RAW_TTL_MS) {
+    console.log(`[epg-proxy] cache HIT for ${url} (${cached.text.length} bytes)`);
     return { text: cached.text, status: 200 };
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 25000);
+  // Arquivos EPG podem ter dezenas de MB e open-epg.com costuma ser lento
+  const timeout = setTimeout(() => controller.abort(), 55000);
+  const t0 = Date.now();
   try {
+    console.log(`[epg-proxy] fetching ${url}`);
     const res = await fetch(url, {
       signal: controller.signal,
       headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; LNTV-EPG/1.0)",
-        Accept: "application/xml, text/xml, */*",
+        // UA de browser real — open-epg bloqueia UAs genéricos com HTML de limite
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        Accept: "application/xml, text/xml, */*;q=0.8",
+        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
       },
       redirect: "follow",
     });
     clearTimeout(timeout);
 
     if (!res.ok) {
-      console.error(`EPG fetch failed: ${res.status} ${res.statusText} for ${url}`);
-      // Se temos um cache antigo válido, devolve mesmo expirado em vez de erro
+      console.error(`[epg-proxy] HTTP ${res.status} ${res.statusText} for ${url}`);
       if (cached) return { text: cached.text, status: 200 };
       return null;
     }
     const text = await res.text();
+    const dt = Date.now() - t0;
+    console.log(`[epg-proxy] fetched ${url} — ${text.length} bytes in ${dt}ms`);
 
-    // Recusa cachear respostas que não são XMLTV (ex.: HTML de "limite atingido"
-    // do open-epg.com). Sem isso, ficamos com lixo cacheado por 10 min e o
-    // filtro devolve <tv></tv> vazio para todos os canais daquela URL.
     if (!looksLikeXmltv(text)) {
-      console.error(`EPG response is not XMLTV for ${url} — not caching. First 200 chars: ${text.slice(0, 200)}`);
+      console.error(
+        `[epg-proxy] response is NOT XMLTV for ${url} — first 300 chars: ${text.slice(0, 300)}`,
+      );
       if (cached) return { text: cached.text, status: 200 };
       return null;
     }
@@ -68,7 +75,8 @@ async function getRawXml(url: string): Promise<{ text: string; status: number } 
     return { text, status: 200 };
   } catch (e) {
     clearTimeout(timeout);
-    console.error("EPG fetch error:", e);
+    const dt = Date.now() - t0;
+    console.error(`[epg-proxy] fetch error after ${dt}ms for ${url}:`, e);
     if (cached) return { text: cached.text, status: 200 };
     return null;
   }
