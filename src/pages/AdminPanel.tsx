@@ -171,7 +171,12 @@ const AdminPanel = () => {
     setChannelForm({
       name: ch.name, channel_number: String(ch.channel_number), stream_url: ch.stream_url,
       logo_url: ch.logo_url ?? "", category_id: ch.category_id ?? "", is_active: ch.is_active,
-      epg_type: (ch as any).epg_type ?? "",
+      epg_type: (() => {
+        const t = (ch as any).epg_type ?? "";
+        // Migra valores legados para o novo "xmltv"
+        if (["iptv_epg_org", "open_epg", "github_xml", "epg_pw"].includes(t)) return "xmltv";
+        return t;
+      })(),
       epg_url: (ch as any).epg_url ?? "",
       epg_alt_text: (ch as any).epg_alt_text ?? "",
       epg_channel_id: (ch as any).epg_channel_id ?? "",
