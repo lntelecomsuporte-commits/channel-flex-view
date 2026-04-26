@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Delete, ArrowBigUp, CornerDownLeft, Space } from "lucide-react";
+import { Delete, ArrowBigUp, CornerDownLeft, Space, ArrowUp, ArrowDown } from "lucide-react";
 
 interface VirtualKeyboardProps {
   onKeyPress: (key: string) => void;
   onBackspace: () => void;
   onEnter: () => void;
+  onFieldUp?: () => void;
+  onFieldDown?: () => void;
   mode?: "email" | "text";
 }
 
