@@ -330,6 +330,7 @@ Deno.serve(async (request) => {
   const requestUrl = new URL(request.url);
   let target = requestUrl.searchParams.get("url");
   const token = requestUrl.searchParams.get("token");
+  const uCipher = requestUrl.searchParams.get("u"); // URL cifrada (segmentos do modo "Ocultar URL")
 
   // Token assinado (modo "Ocultar URL")
   const st = requestUrl.searchParams.get("st");
@@ -348,6 +349,15 @@ Deno.serve(async (request) => {
     }
     userId = uid;
     authCtx = { signed: { st, uid, ch, exp } };
+
+    // Se veio `u=<cipher>`, decifra e usa como target (segmentos/variantes).
+    if (!target && uCipher) {
+      const decrypted = await decryptUrl(uCipher);
+      if (!decrypted) {
+        return new Response("Invalid encrypted url", { status: 400, headers: corsHeaders });
+      }
+      target = decrypted;
+    }
 
     // Se o cliente não enviou `url=` (modo "Ocultar URL" puro),
     // resolvemos a stream real pelo channel_id assinado no token.
