@@ -20,6 +20,7 @@ import HubsoftIntegration from "@/components/admin/HubsoftIntegration";
 import ProxyMonitoring from "@/components/admin/ProxyMonitoring";
 import EpgChannelPicker from "@/components/admin/EpgChannelPicker";
 import EpgUrlPresetSelector from "@/components/admin/EpgUrlPresetSelector";
+import { getLocalFunctionUrl, LOCAL_SUPABASE_PUBLISHABLE_KEY } from "@/lib/localBackend";
 
 const emptyChannelForm = {
   name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true,
@@ -111,7 +112,7 @@ const AdminPanel = () => {
     if (channelForm.epg_type === "xmltv" && channelForm.epg_grab_logo && channelForm.epg_channel_id && channelForm.epg_url) {
       try {
         const epgUrl = normalizeGithub(channelForm.epg_url);
-        const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/epg-proxy?url=${encodeURIComponent(epgUrl)}`;
+        const proxyUrl = `${getLocalFunctionUrl("epg-proxy")}?url=${encodeURIComponent(epgUrl)}`;
         const res = await fetch(proxyUrl);
         if (res.ok) {
           const text = await res.text();
@@ -257,11 +258,11 @@ const AdminPanel = () => {
                 const t = toast.loading("Gerando dump SQL...");
                 try {
                   const { data: { session } } = await supabase.auth.getSession();
-                  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-database`;
+                  const url = getLocalFunctionUrl("export-database");
                   const res = await fetch(url, {
                     headers: {
                       Authorization: `Bearer ${session?.access_token}`,
-                      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                      apikey: LOCAL_SUPABASE_PUBLISHABLE_KEY,
                     },
                   });
                   if (!res.ok) throw new Error(await res.text());
