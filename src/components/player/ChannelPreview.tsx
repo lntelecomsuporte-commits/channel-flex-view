@@ -1,5 +1,6 @@
 import type { Channel } from "@/hooks/useChannels";
 import { useEPG } from "@/hooks/useEPG";
+import { CachedLogo } from "@/components/CachedLogo";
 
 interface ChannelPreviewProps {
   channel: Channel | null;
@@ -47,7 +48,7 @@ const ChannelPreview = ({ channel, visible, direction, epgEnabled = true }: Chan
         {/* Logo */}
         {channel.logo_url && (
           <div className="flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 rounded-lg overflow-hidden bg-white/10 flex items-center justify-center">
-            <img
+            <CachedLogo
               src={channel.logo_url}
               alt={channel.name}
               className="w-full h-full object-contain p-1"
