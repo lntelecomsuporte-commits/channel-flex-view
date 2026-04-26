@@ -176,7 +176,9 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       // @ts-ignore - AirPlay attributes
       x-webkit-airplay="allow"
       webkit-playsinline="true"
-      crossOrigin="anonymous"
+      // NOTE: crossOrigin removido de propósito. Quando setado, streams HTTPS
+      // sem header CORS (ex.: flussonic.lntelecom.net) disparam erro no <video>
+      // e caem no fallbackToProxy, fazendo TODO HTTPS passar pelo hls-proxy.
     />
   );
 });
