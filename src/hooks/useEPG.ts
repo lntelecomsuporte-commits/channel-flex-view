@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Capacitor } from "@capacitor/core";
 import { getLocalFunctionUrl } from "@/lib/localBackend";
 import { getConsolidatedEpgUrl, getLocalSourceUrl } from "@/lib/epgCache";
 
@@ -69,7 +70,7 @@ function parseXmltvDateToIso(str: string): string | null {
   return parsed ? parsed.toISOString() : null;
 }
 
-const IS_NATIVE = typeof window !== "undefined" && !!(window as any).Capacitor?.isNativePlatform?.();
+const IS_NATIVE = Capacitor.isNativePlatform();
 
 const yieldToMain = () =>
   new Promise<void>((resolve) => {
