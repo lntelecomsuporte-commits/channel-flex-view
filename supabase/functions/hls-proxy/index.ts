@@ -9,6 +9,45 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+const STREAM_TOKEN_SECRET = Deno.env.get("STREAM_TOKEN_SECRET") ?? "";
+
+// ===== Validação de token assinado (HMAC) — opção "Ocultar URL" =====
+const fromBase64Url = (s: string): Uint8Array => {
+  const pad = s.length % 4 === 0 ? "" : "=".repeat(4 - (s.length % 4));
+  const b64 = s.replace(/-/g, "+").replace(/_/g, "/") + pad;
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+};
+
+const verifyStreamToken = async (
+  signedToken: string,
+  uid: string,
+  ch: string,
+  exp: number,
+): Promise<boolean> => {
+  if (!STREAM_TOKEN_SECRET) return false;
+  if (!Number.isFinite(exp) || exp * 1000 < Date.now()) return false;
+  try {
+    const payload = `${uid}.${ch}.${exp}`;
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(STREAM_TOKEN_SECRET),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["verify"],
+    );
+    return await crypto.subtle.verify(
+      "HMAC",
+      key,
+      fromBase64Url(signedToken),
+      new TextEncoder().encode(payload),
+    );
+  } catch {
+    return false;
+  }
+};
 
 const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -65,31 +104,48 @@ const isMediaRequest = (pathname: string) => {
   return mediaExtensions.some((ext) => lowerPath.endsWith(ext));
 };
 
-const buildProxyUrl = (targetUrl: string, proxyEndpoint: string, token: string) => {
+interface AuthCtx {
+  jwt?: string;          // JWT do usuário (modo legado)
+  signed?: {             // Token assinado (modo "Ocultar URL")
+    st: string;          // signature
+    uid: string;
+    ch: string;
+    exp: number;
+  };
+}
+
+const buildProxyUrl = (targetUrl: string, proxyEndpoint: string, ctx: AuthCtx) => {
   const proxyUrl = new URL(proxyEndpoint);
   proxyUrl.searchParams.set("url", targetUrl);
-  proxyUrl.searchParams.set("token", token);
+  if (ctx.signed) {
+    proxyUrl.searchParams.set("st", ctx.signed.st);
+    proxyUrl.searchParams.set("uid", ctx.signed.uid);
+    proxyUrl.searchParams.set("ch", ctx.signed.ch);
+    proxyUrl.searchParams.set("exp", String(ctx.signed.exp));
+  } else if (ctx.jwt) {
+    proxyUrl.searchParams.set("token", ctx.jwt);
+  }
   return proxyUrl.toString();
 };
 
-const rewriteTagUris = (line: string, baseUrl: string, proxyEndpoint: string, token: string) => {
+const rewriteTagUris = (line: string, baseUrl: string, proxyEndpoint: string, ctx: AuthCtx) => {
   return line.replace(/URI="([^"]+)"/g, (_, uri: string) => {
     const absoluteUrl = new URL(uri, baseUrl).toString();
-    return `URI="${buildProxyUrl(absoluteUrl, proxyEndpoint, token)}"`;
+    return `URI="${buildProxyUrl(absoluteUrl, proxyEndpoint, ctx)}"`;
   });
 };
 
-const rewritePlaylist = (playlist: string, baseUrl: string, proxyEndpoint: string, token: string) => {
+const rewritePlaylist = (playlist: string, baseUrl: string, proxyEndpoint: string, ctx: AuthCtx) => {
   return playlist
     .split(/\r?\n/)
     .map((line) => {
       const trimmedLine = line.trim();
       if (!trimmedLine) return line;
       if (trimmedLine.startsWith("#")) {
-        return trimmedLine.includes('URI="') ? rewriteTagUris(line, baseUrl, proxyEndpoint, token) : line;
+        return trimmedLine.includes('URI="') ? rewriteTagUris(line, baseUrl, proxyEndpoint, ctx) : line;
       }
       const absoluteUrl = new URL(trimmedLine, baseUrl).toString();
-      return buildProxyUrl(absoluteUrl, proxyEndpoint, token);
+      return buildProxyUrl(absoluteUrl, proxyEndpoint, ctx);
     })
     .join("\n");
 };
