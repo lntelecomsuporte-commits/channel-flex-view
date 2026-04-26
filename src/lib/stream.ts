@@ -90,7 +90,8 @@ const buildSignedProxyStreamUrl = async (
     }
     const { token, exp, uid, ch } = await res.json();
     const proxyUrl = new URL(proxyBaseUrl);
-    proxyUrl.searchParams.set("url", streamUrl);
+    // NÃO incluímos `url=` — o hls-proxy resolve a stream real pelo `ch` no banco.
+    // Isso garante que a URL original do flussonic NUNCA apareça na query.
     proxyUrl.searchParams.set("st", token);
     proxyUrl.searchParams.set("uid", uid);
     proxyUrl.searchParams.set("ch", ch);
