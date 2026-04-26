@@ -65,17 +65,18 @@ const PlayerPage = () => {
 
   const { data: channels, isLoading } = useChannels();
   const [currentIndex, setCurrentIndex] = useState(0);
-  // SEMPRE inicia no canal de menor número (geralmente 000) ao abrir o app.
-  // Decisão de produto: o canal 000 tem propaganda do provedor, então é o ponto
-  // de entrada padrão. Mantemos o ID atual em memória apenas para sobreviver a
-  // refetches da lista (focus/reconnect) — sem persistência entre sessões.
+  // Inicia no canal de menor número APENAS na primeira carga da sessão.
+  // Em qualquer refetch (focus/reconnect/staleTime) NUNCA voltamos pro 0 —
+  // mantemos o canal atual. Se o ID atual sumiu (ex: canal desativado),
+  // mantemos o currentIndex (clamped ao tamanho da lista) em vez de saltar
+  // pro primeiro. Isso evita o bug "está assistindo e do nada volta pro 000".
   const currentChannelIdRef = useRef<string | null>(null);
   const initializedRef = useRef(false);
 
   useEffect(() => {
     if (!channels?.length) return;
 
-    // Primeira inicialização nesta sessão: força o primeiro canal (menor número)
+    // Primeira inicialização nesta sessão: vai pro primeiro canal.
     if (!initializedRef.current) {
       initializedRef.current = true;
       currentChannelIdRef.current = channels[0]?.id ?? null;
@@ -83,20 +84,22 @@ const PlayerPage = () => {
       return;
     }
 
-    // Refetches subsequentes: mantém o canal atual pelo ID
+    // Refetches subsequentes: tenta achar o canal pelo ID guardado.
     const rememberedId = currentChannelIdRef.current;
-    if (!rememberedId) {
-      currentChannelIdRef.current = channels[0]?.id ?? null;
-      setCurrentIndex(0);
-      return;
+    if (rememberedId) {
+      const newIdx = channels.findIndex((c) => c.id === rememberedId);
+      if (newIdx >= 0) {
+        setCurrentIndex((prev) => (prev === newIdx ? prev : newIdx));
+        return;
+      }
     }
-    const newIdx = channels.findIndex((c) => c.id === rememberedId);
-    if (newIdx >= 0) {
-      setCurrentIndex((prev) => (prev === newIdx ? prev : newIdx));
-    } else {
-      currentChannelIdRef.current = channels[0]?.id ?? null;
-      setCurrentIndex(0);
-    }
+    // Canal desapareceu da lista: mantém o índice atual clamped (não volta pro 0).
+    setCurrentIndex((prev) => {
+      const clamped = Math.min(prev, channels.length - 1);
+      const ch = channels[clamped];
+      if (ch) currentChannelIdRef.current = ch.id;
+      return clamped;
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channels]);
 
