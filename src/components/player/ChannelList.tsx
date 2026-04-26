@@ -268,9 +268,8 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
   const { favorites, isFavorite, setFavorite, isUpdatingFavorite } = useFavorites();
   const favoriteIds = useMemo(() => new Set(favorites.map((f) => f.channel_id)), [favorites]);
 
-  const enterLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const enterLongPressFiredRef = useRef(false);
-  const enterPressLockedRef = useRef(false);
+  const enterPressStartRef = useRef<number | null>(null);
+  const enterFavoriteFiredRef = useRef(false);
 
   const epgMap = useMultiEPG(
     channels.map((ch) => ({
