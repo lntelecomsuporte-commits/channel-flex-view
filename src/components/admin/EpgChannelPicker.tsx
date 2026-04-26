@@ -40,7 +40,7 @@ export default function EpgChannelPicker({ value, onChange, xmlUrl, extraUrls = 
   }, [xmlUrl, extraUrls]);
 
   const fetchOne = async (url: string): Promise<XmlChannel[]> => {
-    const proxyUrl = `${getLocalFunctionUrl("epg-proxy")}?url=${encodeURIComponent(url)}`;
+    const proxyUrl = `${getLocalFunctionUrl("epg-proxy")}?url=${encodeURIComponent(url)}&fresh=1`;
     const res = await fetch(proxyUrl);
     if (!res.ok) throw new Error(`Falha ao carregar XML: ${url}`);
     const text = await res.text();
@@ -53,6 +53,7 @@ export default function EpgChannelPicker({ value, onChange, xmlUrl, extraUrls = 
       const name = node.querySelector("display-name")?.textContent || id;
       if (id) list.push({ id, name, source: url });
     });
+    if (list.length === 0) console.warn(`[EpgChannelPicker] 0 canais em ${url} (resposta ${text.length} bytes)`);
     return list;
   };
 
