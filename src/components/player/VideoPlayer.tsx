@@ -1,12 +1,16 @@
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react";
 import Hls from "hls.js";
-import { getPlayableStreamUrl, getProxiedStreamUrl } from "@/lib/stream";
+import { getPlayableStreamUrl, getProxiedStreamUrl, resolveChannelStreamUrl } from "@/lib/stream";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 import YouTubePlayer from "./YouTubePlayer";
 
 interface VideoPlayerProps {
   streamUrl: string;
   autoPlay?: boolean;
+  /** Quando setado junto com `useProxyToken`, força o stream pelo hls-proxy
+   *  com token assinado (esconde a URL real do provedor no F12). */
+  channelId?: string | null;
+  useProxyToken?: boolean;
 }
 
 export interface VideoPlayerHandle {
@@ -14,26 +18,46 @@ export interface VideoPlayerHandle {
   getHls: () => Hls | null;
 }
 
-const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true }, ref) => {
+const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [muted, setMuted] = useState(true);
   const [useProxyFallback, setUseProxyFallback] = useState(false);
+  const [resolvedUrl, setResolvedUrl] = useState<string>("");
   const youTubeVideoId = extractYouTubeVideoId(streamUrl);
-  const playableStreamUrl = youTubeVideoId
-    ? ""
-    : useProxyFallback
-      ? getProxiedStreamUrl(streamUrl)
-      : getPlayableStreamUrl(streamUrl);
 
   useImperativeHandle(ref, () => ({
     getVideoElement: () => videoRef.current,
     getHls: () => hlsRef.current,
   }), []);
 
+  // Resolve a URL de stream — pode ser async se canal usar token assinado.
+  useEffect(() => {
+    if (youTubeVideoId) {
+      setResolvedUrl("");
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      let url: string;
+      if (useProxyFallback) {
+        url = getProxiedStreamUrl(streamUrl);
+      } else if (useProxyToken && channelId) {
+        url = await resolveChannelStreamUrl(streamUrl, channelId, true);
+      } else {
+        url = getPlayableStreamUrl(streamUrl);
+      }
+      if (!cancelled) setResolvedUrl(url);
+    })();
+    return () => { cancelled = true; };
+  }, [streamUrl, useProxyFallback, useProxyToken, channelId, youTubeVideoId]);
+
+  const playableStreamUrl = resolvedUrl;
+
   useEffect(() => {
     setUseProxyFallback(false);
   }, [streamUrl]);
+
 
   useEffect(() => {
     const video = videoRef.current;

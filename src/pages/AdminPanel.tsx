@@ -25,6 +25,7 @@ import { getLocalFunctionUrl, LOCAL_SUPABASE_PUBLISHABLE_KEY } from "@/lib/local
 const emptyChannelForm = {
   name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true,
   epg_type: "", epg_url: "", epg_alt_text: "", epg_channel_id: "", epg_grab_logo: false, epg_show_synopsis: false,
+  use_proxy_token: false,
 };
 
 const AdminPanel = () => {
@@ -142,6 +143,7 @@ const AdminPanel = () => {
       epg_channel_id: isXmltv ? (channelForm.epg_channel_id || null) : null,
       epg_grab_logo: isXmltv ? channelForm.epg_grab_logo : false,
       epg_show_synopsis: channelForm.epg_show_synopsis,
+      use_proxy_token: channelForm.use_proxy_token,
     };
     let error;
     if (editingChannelId) {
@@ -183,6 +185,7 @@ const AdminPanel = () => {
       epg_channel_id: (ch as any).epg_channel_id ?? "",
       epg_grab_logo: (ch as any).epg_grab_logo ?? false,
       epg_show_synopsis: (ch as any).epg_show_synopsis ?? false,
+      use_proxy_token: (ch as any).use_proxy_token ?? false,
     });
   };
 
@@ -399,6 +402,19 @@ const AdminPanel = () => {
                 <div className="flex items-center gap-2">
                   <Switch checked={channelForm.is_active} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, is_active: v }))} />
                   <Label>Ativo</Label>
+                </div>
+                <div className="flex items-start gap-2 rounded-md border border-border bg-muted/30 p-3">
+                  <Switch
+                    checked={channelForm.use_proxy_token}
+                    onCheckedChange={(v) => setChannelForm((f) => ({ ...f, use_proxy_token: v }))}
+                  />
+                  <div className="space-y-1">
+                    <Label className="cursor-pointer">🔒 Ocultar URL do canal (proxy + token)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Força o stream pelo proxy local com URL temporária assinada (válida por 60s).
+                      A URL real do provedor não aparece no F12. Aumenta o uso de banda do servidor.
+                    </p>
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <Button onClick={handleSaveChannel} disabled={saving}>

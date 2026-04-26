@@ -1,6 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/lib/supabaseLocal";
-import { LOCAL_AUTH_STORAGE_KEY } from "@/lib/localBackend";
+import { LOCAL_AUTH_STORAGE_KEY, getLocalFunctionUrl } from "@/lib/localBackend";
 
 /**
  * REGRA IMUTÁVEL DESTE PROJETO (LN TV self-hosted):
@@ -58,6 +58,51 @@ const buildProxyStreamUrl = (streamUrl: string): string | null => {
 };
 
 /**
+ * Monta a URL do hls-proxy usando token assinado (HMAC) que esconde a URL real.
+ * Token expira em 60s — HLS.js renova ao recarregar o m3u8 (precisa chamar de novo).
+ * Retorna null em caso de falha (cliente cai pra fluxo normal).
+ */
+const buildSignedProxyStreamUrl = async (
+  streamUrl: string,
+  channelId: string,
+): Promise<string | null> => {
+  const proxyBaseUrl = getProxyBaseUrl();
+  if (!proxyBaseUrl) return null;
+
+  const jwt = getCurrentAccessTokenSync();
+  if (!jwt) {
+    console.warn("[stream] Sem JWT para solicitar token assinado");
+    return null;
+  }
+
+  try {
+    const res = await fetch(getLocalFunctionUrl("sign-stream-token"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${jwt}`,
+      },
+      body: JSON.stringify({ channel_id: channelId }),
+    });
+    if (!res.ok) {
+      console.warn("[stream] sign-stream-token falhou", res.status);
+      return null;
+    }
+    const { token, exp, uid, ch } = await res.json();
+    const proxyUrl = new URL(proxyBaseUrl);
+    proxyUrl.searchParams.set("url", streamUrl);
+    proxyUrl.searchParams.set("st", token);
+    proxyUrl.searchParams.set("uid", uid);
+    proxyUrl.searchParams.set("ch", ch);
+    proxyUrl.searchParams.set("exp", String(exp));
+    return proxyUrl.toString();
+  } catch (e) {
+    console.warn("[stream] Erro ao assinar token de stream:", e);
+    return null;
+  }
+};
+
+/**
  * URL inicial do player.
  * - HTTP em página HTTPS: usa proxy imediatamente para evitar Mixed Content.
  * - HTTP no APK: também usa proxy. O WebView do Android (mesmo com
@@ -91,6 +136,25 @@ export const getPlayableStreamUrl = (streamUrl: string): string => {
   } catch {
     return streamUrl;
   }
+};
+
+/**
+ * Resolve a URL final pro player considerando a flag `use_proxy_token` do canal.
+ * Quando ativada, força o stream pelo hls-proxy com token assinado (esconde URL real).
+ * Quando desativada, comportamento padrão (`getPlayableStreamUrl`).
+ */
+export const resolveChannelStreamUrl = async (
+  streamUrl: string,
+  channelId: string | null | undefined,
+  useProxyToken: boolean,
+): Promise<string> => {
+  if (useProxyToken && channelId) {
+    const signed = await buildSignedProxyStreamUrl(streamUrl, channelId);
+    if (signed) return signed;
+    // Fallback: melhor tocar pelo proxy normal do que falhar
+    return buildProxyStreamUrl(streamUrl) ?? getPlayableStreamUrl(streamUrl);
+  }
+  return getPlayableStreamUrl(streamUrl);
 };
 
 /** Força proxy como fallback controlado pelo VideoPlayer (web e APK). */

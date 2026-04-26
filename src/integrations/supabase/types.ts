@@ -91,6 +91,7 @@ export type Database = {
           name: string
           stream_url: string
           updated_at: string
+          use_proxy_token: boolean
         }
         Insert: {
           category_id?: string | null
@@ -108,6 +109,7 @@ export type Database = {
           name: string
           stream_url: string
           updated_at?: string
+          use_proxy_token?: boolean
         }
         Update: {
           category_id?: string | null
@@ -125,6 +127,7 @@ export type Database = {
           name?: string
           stream_url?: string
           updated_at?: string
+          use_proxy_token?: boolean
         }
         Relationships: [
           {
