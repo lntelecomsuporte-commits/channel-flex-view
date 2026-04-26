@@ -326,6 +326,7 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
       epgMap,
       favoriteIds,
       onSelect,
+      onFocus: (i: number) => setFocusedIndex(i),
       onSynopsis: (p: EPGProgram) => setSynopsisProgram(p),
       setItemRef,
     }),
