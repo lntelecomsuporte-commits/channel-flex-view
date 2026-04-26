@@ -18,7 +18,7 @@ interface ChannelListProps {
   onLogout?: () => void;
 }
 
-const LONG_PRESS_MS = 450;
+const LONG_PRESS_MS = 1500;
 
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
@@ -197,12 +197,13 @@ interface RowData {
   epgMap: Map<string, EPGProgram[]>;
   favoriteIds: Set<string>;
   onSelect: (index: number) => void;
+  onFocus: (index: number) => void;
   onSynopsis: (p: EPGProgram) => void;
   setItemRef: (index: number, el: HTMLDivElement | null) => void;
 }
 
 const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
-  const { filteredChannels, channels, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect, onSynopsis, setItemRef } = data;
+  const { filteredChannels, channels, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect, onFocus, onSynopsis, setItemRef } = data;
   const channel = filteredChannels[index];
   const ch = channel as any;
   const programs = epgMap.get(channel.id) || [];
@@ -217,13 +218,19 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
     <div style={style}>
       <div
         ref={(el) => setItemRef(index, el)}
-        onClick={() => onSelect(realIndex)}
+        onPointerEnter={(e) => {
+          if (e.pointerType === "mouse") onFocus(index);
+        }}
+        onClick={() => {
+          onFocus(index);
+          onSelect(realIndex);
+        }}
         className={`flex items-center gap-3 px-3 sm:px-4 h-full cursor-pointer transition-colors border-b border-border/20 ${
           isFocused
             ? "bg-primary/15 ring-1 ring-inset ring-primary/40"
             : isActive
               ? "bg-accent/20"
-              : "hover:bg-accent/10"
+              : ""
         }`}
       >
         <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-md overflow-hidden bg-white/10 flex items-center justify-center relative">
@@ -261,9 +268,8 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
   const { favorites, isFavorite, setFavorite, isUpdatingFavorite } = useFavorites();
   const favoriteIds = useMemo(() => new Set(favorites.map((f) => f.channel_id)), [favorites]);
 
-  const enterLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const enterLongPressFiredRef = useRef(false);
-  const enterPressLockedRef = useRef(false);
+  const enterPressStartRef = useRef<number | null>(null);
+  const enterFavoriteFiredRef = useRef(false);
 
   const epgMap = useMultiEPG(
     channels.map((ch) => ({
@@ -319,6 +325,7 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
       epgMap,
       favoriteIds,
       onSelect,
+      onFocus: (i: number) => setFocusedIndex(i),
       onSynopsis: (p: EPGProgram) => setSynopsisProgram(p),
       setItemRef,
     }),
@@ -376,17 +383,14 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
           if (isSelectKey(e)) {
             e.preventDefault();
             e.stopPropagation();
-            if (enterPressLockedRef.current || isUpdatingFavorite) return;
+            if (isUpdatingFavorite) return;
 
-            // Repeat key (held down) → favoritar (long-press detectado pelo próprio repeat)
+            // Long-press: tecla repetindo por tempo suficiente → favorita
             if (e.repeat) {
-              if (!enterLongPressFiredRef.current) {
-                enterLongPressFiredRef.current = true;
-                enterPressLockedRef.current = true;
-                if (enterLongPressTimerRef.current) {
-                  clearTimeout(enterLongPressTimerRef.current);
-                  enterLongPressTimerRef.current = null;
-                }
+              if (enterFavoriteFiredRef.current) return;
+              const startedAt = enterPressStartRef.current;
+              if (startedAt && performance.now() - startedAt >= LONG_PRESS_MS) {
+                enterFavoriteFiredRef.current = true;
                 const ch = filteredChannels[focusedIndex];
                 const focusedId = ch?.id ?? "";
                 if (focusedId) setFavorite(focusedId, !isFavorite(focusedId));
@@ -394,26 +398,10 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
               return;
             }
 
-            // Primeiro keydown: seleciona imediatamente (alguns remotos de TV não emitem keyup)
-            // e arma timer para favoritar caso a tecla seja segurada sem repeat.
-            if (!enterLongPressTimerRef.current) {
-              enterLongPressFiredRef.current = false;
-              const ch = filteredChannels[focusedIndex];
-              const focusedId = ch?.id ?? "";
-              const shouldFavorite = focusedId ? !isFavorite(focusedId) : false;
-
-              // Seleciona o canal e fecha a lista AGORA
-              if (ch) {
-                const realIndex = channels.indexOf(ch);
-                if (realIndex >= 0) onSelect(realIndex);
-              }
-
-              enterLongPressTimerRef.current = setTimeout(() => {
-                enterLongPressFiredRef.current = true;
-                enterPressLockedRef.current = true;
-                enterLongPressTimerRef.current = null;
-                if (focusedId) setFavorite(focusedId, shouldFavorite);
-              }, LONG_PRESS_MS);
+            // Primeiro keydown: apenas marca o tempo. Ação ocorre no keyup.
+            if (enterPressStartRef.current === null) {
+              enterPressStartRef.current = performance.now();
+              enterFavoriteFiredRef.current = false;
             }
           }
       }
@@ -421,12 +409,28 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (!isSelectKey(e)) return;
-      if (enterLongPressTimerRef.current) {
-        clearTimeout(enterLongPressTimerRef.current);
-        enterLongPressTimerRef.current = null;
+      e.preventDefault();
+      e.stopPropagation();
+      const startedAt = enterPressStartRef.current;
+      const fired = enterFavoriteFiredRef.current;
+      enterPressStartRef.current = null;
+      enterFavoriteFiredRef.current = false;
+
+      if (fired) return; // já favoritou no long-press, não selecionar
+      if (startedAt === null) return;
+
+      const heldMs = performance.now() - startedAt;
+      const ch = filteredChannels[focusedIndex];
+      if (!ch) return;
+
+      if (heldMs >= LONG_PRESS_MS) {
+        // Segurou e soltou: favoritar
+        if (!isUpdatingFavorite) setFavorite(ch.id, !isFavorite(ch.id));
+      } else {
+        // Toque curto: selecionar canal
+        const realIndex = channels.indexOf(ch);
+        if (realIndex >= 0) onSelect(realIndex);
       }
-      enterLongPressFiredRef.current = false;
-      enterPressLockedRef.current = false;
     };
 
     window.addEventListener("keydown", handleKeyDown, true);
