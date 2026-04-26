@@ -171,7 +171,7 @@ export default function EpgUrlPresetSelector({ epgType, currentUrl, onSelect, on
     <div className="flex gap-2 items-end">
       <div className="flex-1 min-w-0">
         <Label className="text-xs text-muted-foreground mb-1 block">
-          URLs salvas {selectedIds.length > 1 && <span className="text-primary">(buscar canais soma todas)</span>}
+          URLs salvas {selectedIds.length > 1 && <span className="text-primary">(use a busca — a URL será preenchida ao escolher o canal)</span>}
         </Label>
         <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
           <PopoverTrigger asChild>
