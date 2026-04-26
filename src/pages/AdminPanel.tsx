@@ -130,15 +130,16 @@ const AdminPanel = () => {
       }
     }
 
+    const isXmltv = channelForm.epg_type === "xmltv";
     const payload = {
       name: channelForm.name, channel_number: parseInt(channelForm.channel_number),
       stream_url: channelForm.stream_url, logo_url: logoUrl,
       category_id: channelForm.category_id || null, is_active: channelForm.is_active,
       epg_type: channelForm.epg_type || null,
-      epg_url: channelForm.epg_type === "epg_pw" ? (channelForm.epg_url || null) : (channelForm.epg_type === "iptv_epg_org" ? (channelForm.epg_url || "https://iptv-epg.org/files/epg-br.xml") : (channelForm.epg_type === "open_epg" ? (channelForm.epg_url || "https://www.open-epg.com/files/brazil1.xml") : (channelForm.epg_type === "github_xml" ? (normalizeGithub(channelForm.epg_url) || null) : null))),
+      epg_url: isXmltv ? (normalizeGithub(channelForm.epg_url) || null) : null,
       epg_alt_text: channelForm.epg_type === "alt_text" ? (channelForm.epg_alt_text || null) : null,
-      epg_channel_id: (channelForm.epg_type === "iptv_epg_org" || channelForm.epg_type === "open_epg" || channelForm.epg_type === "github_xml") ? (channelForm.epg_channel_id || null) : null,
-      epg_grab_logo: (channelForm.epg_type === "iptv_epg_org" || channelForm.epg_type === "open_epg" || channelForm.epg_type === "github_xml") ? channelForm.epg_grab_logo : false,
+      epg_channel_id: isXmltv ? (channelForm.epg_channel_id || null) : null,
+      epg_grab_logo: isXmltv ? channelForm.epg_grab_logo : false,
       epg_show_synopsis: channelForm.epg_show_synopsis,
     };
     let error;
