@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabaseLocal";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tv2, Clock, Globe, Search, X } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";

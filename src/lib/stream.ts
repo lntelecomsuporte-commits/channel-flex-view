@@ -1,5 +1,5 @@
 import { Capacitor } from "@capacitor/core";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabaseLocal";
 
 /**
  * REGRA IMUTÁVEL DESTE PROJETO (LN TV self-hosted):

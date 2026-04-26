@@ -19,7 +19,7 @@ import { useSessionHeartbeat } from "@/hooks/useSessionHeartbeat";
 import { isSelectKey } from "@/lib/remoteKeys";
 import { List, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabaseLocal";
 
 const LONG_PRESS_MS = 450;
 // No APK (Android nativo) o EPG é pesado para o WebView de receptores fracos:
