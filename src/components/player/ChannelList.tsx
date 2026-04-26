@@ -197,12 +197,13 @@ interface RowData {
   epgMap: Map<string, EPGProgram[]>;
   favoriteIds: Set<string>;
   onSelect: (index: number) => void;
+  onFocus: (index: number) => void;
   onSynopsis: (p: EPGProgram) => void;
   setItemRef: (index: number, el: HTMLDivElement | null) => void;
 }
 
 const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
-  const { filteredChannels, channels, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect, onSynopsis, setItemRef } = data;
+  const { filteredChannels, channels, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect, onFocus, onSynopsis, setItemRef } = data;
   const channel = filteredChannels[index];
   const ch = channel as any;
   const programs = epgMap.get(channel.id) || [];
@@ -217,7 +218,13 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
     <div style={style}>
       <div
         ref={(el) => setItemRef(index, el)}
-        onClick={() => onSelect(realIndex)}
+        onPointerEnter={(e) => {
+          if (e.pointerType === "mouse") onFocus(index);
+        }}
+        onClick={() => {
+          onFocus(index);
+          onSelect(realIndex);
+        }}
         className={`flex items-center gap-3 px-3 sm:px-4 h-full cursor-pointer transition-colors border-b border-border/20 ${
           isFocused
             ? "bg-primary/15 ring-1 ring-inset ring-primary/40"
