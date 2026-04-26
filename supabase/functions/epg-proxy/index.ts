@@ -126,6 +126,7 @@ serve(async (req) => {
   const url = new URL(req.url);
   const xmlUrl = url.searchParams.get("url");
   const channelsParam = url.searchParams.get("channels"); // "id1,id2,id3"
+  const fresh = url.searchParams.get("fresh") === "1";
 
   if (!xmlUrl) {
     return new Response(JSON.stringify({ error: "Missing url parameter" }), {
