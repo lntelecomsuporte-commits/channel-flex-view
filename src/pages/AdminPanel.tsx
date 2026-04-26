@@ -40,19 +40,8 @@ const AdminPanel = () => {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Fetch ALL XML presets (used when epg_type === "all" for global channel search)
-  const { data: allXmlPresets = [] } = useQuery({
-    queryKey: ["epg_url_presets", "all_xml"],
-    enabled: channelForm.epg_type === "all",
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("epg_url_presets")
-        .select("url, epg_type")
-        .in("epg_type", ["iptv_epg_org", "open_epg", "github_xml"]);
-      if (error) throw error;
-      return (data || []) as { url: string; epg_type: string }[];
-    },
-  });
+  // (removido) busca global de presets — agora o EpgUrlPresetSelector lista
+  // todas as URLs salvas do tipo "xmltv" e o usuário escolhe quais buscar.
 
   // Fetch category includes
   const { data: categoryIncludes } = useQuery({
