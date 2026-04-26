@@ -223,7 +223,7 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
             ? "bg-primary/15 ring-1 ring-inset ring-primary/40"
             : isActive
               ? "bg-accent/20"
-              : "hover:bg-accent/10"
+              : ""
         }`}
       >
         <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-md overflow-hidden bg-white/10 flex items-center justify-center relative">
