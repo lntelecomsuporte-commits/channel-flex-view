@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseLocal";
 import { Button } from "@/components/ui/button";
@@ -13,44 +13,88 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
   const navigate = useNavigate();
   const cardRef = useRef<HTMLDivElement>(null);
+  const activeInputRef = useRef<HTMLInputElement | null>(null);
+
+  const keepFocusedInputAboveKeyboard = useCallback(() => {
+    if (keyboardHeight <= 0 || !activeInputRef.current) {
+      setKeyboardOffset(0);
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      const inputRect = activeInputRef.current?.getBoundingClientRect();
+      const cardRect = cardRef.current?.getBoundingClientRect();
+      if (!inputRect || !cardRect) return;
+
+      const safeBottom = window.innerHeight - keyboardHeight - 24;
+      const overlap = inputRect.bottom - safeBottom;
+
+      if (overlap <= 0) return;
+
+      setKeyboardOffset((current) => {
+        const originalCardTop = cardRect.top + current;
+        const maxOffset = Math.max(0, originalCardTop + 96);
+        return Math.min(current + overlap, maxOffset);
+      });
+    });
+  }, [keyboardHeight]);
 
   // Detect keyboard via Capacitor (native) and visualViewport (web fallback)
   useEffect(() => {
     let cleanupNative: (() => void) | undefined;
+    let cleanupViewport: (() => void) | undefined;
+
+    const vv = window.visualViewport;
+    if (vv) {
+      const onResize = () => {
+        const diff = window.innerHeight - vv.height;
+        setKeyboardHeight(diff > 100 ? diff : 0);
+      };
+      vv.addEventListener("resize", onResize);
+      vv.addEventListener("scroll", onResize);
+      cleanupViewport = () => {
+        vv.removeEventListener("resize", onResize);
+        vv.removeEventListener("scroll", onResize);
+      };
+    }
 
     // Capacitor native keyboard events
     (async () => {
       try {
         const { Keyboard } = await import("@capacitor/keyboard");
-        const showSub = await Keyboard.addListener("keyboardWillShow", (info) => {
+        const show = (info: { keyboardHeight: number }) => {
           setKeyboardHeight(info.keyboardHeight);
-        });
-        const hideSub = await Keyboard.addListener("keyboardWillHide", () => {
+        };
+        const hide = () => {
           setKeyboardHeight(0);
-        });
+          setKeyboardOffset(0);
+        };
+        const subscriptions = await Promise.all([
+          Keyboard.addListener("keyboardWillShow", show),
+          Keyboard.addListener("keyboardDidShow", show),
+          Keyboard.addListener("keyboardWillHide", hide),
+          Keyboard.addListener("keyboardDidHide", hide),
+        ]);
         cleanupNative = () => {
-          showSub.remove();
-          hideSub.remove();
+          subscriptions.forEach((subscription) => void subscription.remove());
         };
       } catch {
-        // not running in Capacitor — use visualViewport fallback
-        const vv = window.visualViewport;
-        if (!vv) return;
-        const onResize = () => {
-          const diff = window.innerHeight - vv.height;
-          setKeyboardHeight(diff > 100 ? diff : 0);
-        };
-        vv.addEventListener("resize", onResize);
-        cleanupNative = () => vv.removeEventListener("resize", onResize);
+        // not running in Capacitor — visualViewport fallback remains active
       }
     })();
 
     return () => {
       cleanupNative?.();
+      cleanupViewport?.();
     };
   }, []);
+
+  useEffect(() => {
+    keepFocusedInputAboveKeyboard();
+  }, [keyboardHeight, keepFocusedInputAboveKeyboard]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,15 +132,12 @@ const LoginPage = () => {
     navigate("/");
   };
 
-  // Translate the card up so it sits above the keyboard with a small gap.
-  const offset = keyboardHeight > 0 ? Math.max(0, keyboardHeight / 2 - 20) : 0;
-
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-background p-4 overflow-hidden">
       <div
         ref={cardRef}
         className="w-full max-w-sm transition-transform duration-200"
-        style={{ transform: `translateY(-${offset}px)` }}
+        style={{ transform: `translateY(-${keyboardOffset}px)` }}
       >
         <Card>
           <CardHeader className="text-center">
@@ -114,6 +155,10 @@ const LoginPage = () => {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onFocus={(e) => {
+                    activeInputRef.current = e.currentTarget;
+                    keepFocusedInputAboveKeyboard();
+                  }}
                   required
                   placeholder="seu@email.com"
                   autoComplete="username"
@@ -126,6 +171,10 @@ const LoginPage = () => {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onFocus={(e) => {
+                    activeInputRef.current = e.currentTarget;
+                    keepFocusedInputAboveKeyboard();
+                  }}
                   required
                   autoComplete="current-password"
                 />
