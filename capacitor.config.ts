@@ -7,6 +7,12 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: true,
   },
+  plugins: {
+    Keyboard: {
+      resize: 'native',
+      resizeOnFullScreen: true,
+    },
+  },
   server: {
     url: 'https://tv2.lntelecom.net',
     cleartext: false,
