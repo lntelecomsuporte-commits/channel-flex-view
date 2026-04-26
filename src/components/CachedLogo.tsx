@@ -1,5 +1,6 @@
 import { useEffect, useState, type ImgHTMLAttributes } from "react";
 import { getCachedLogo, subscribeLogo } from "@/lib/logoCache";
+import { resolveLogoUrl } from "@/lib/logoUrl";
 
 interface CachedLogoProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> {
   src: string | null | undefined;
