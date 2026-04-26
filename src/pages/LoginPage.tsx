@@ -40,29 +40,6 @@ const LoginPage = () => {
     };
   }, [scrollFocusedInputIntoView]);
 
-  useEffect(() => {
-    let cleanupNative: (() => void) | undefined;
-
-    (async () => {
-      try {
-        // @vite-ignore — pacote opcional; pode não existir no build do servidor.
-        const mod = await import(/* @vite-ignore */ "@capacitor/keyboard").catch(() => null);
-        if (!mod?.Keyboard) return;
-        const { Keyboard } = mod;
-        const subscriptions = await Promise.all([
-          Keyboard.addListener("keyboardWillShow", scrollFocusedInputIntoView),
-          Keyboard.addListener("keyboardDidShow", scrollFocusedInputIntoView),
-        ]);
-        cleanupNative = () => {
-          subscriptions.forEach((subscription: { remove: () => void }) => void subscription.remove());
-        };
-      } catch {
-        // Web/preview ou pacote indisponível: visualViewport cobre o comportamento.
-      }
-    })();
-
-    return () => cleanupNative?.();
-  }, [scrollFocusedInputIntoView]);
 
   const handleInputFocus = useCallback(
     (input: HTMLInputElement) => {
