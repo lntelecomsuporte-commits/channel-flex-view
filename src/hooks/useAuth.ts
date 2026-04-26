@@ -53,7 +53,9 @@ export function useAuth() {
         setUser(currentUser);
 
         if (currentUser) {
-          setLoading(true);
+          // IMPORTANT: NEVER set loading=true here. Doing so would unmount
+          // <PlayerPage/> via <ProtectedRoute> on every TOKEN_REFRESHED event
+          // (~every 50min) and reset currentIndex back to channel 0.
           setTimeout(async () => {
             const { data, error } = await supabase.rpc("has_role", {
               _user_id: currentUser.id,
