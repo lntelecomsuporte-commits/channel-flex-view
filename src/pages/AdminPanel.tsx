@@ -336,57 +336,12 @@ const AdminPanel = () => {
                         <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">Nenhum</SelectItem>
-                          <SelectItem value="all">🔍 Todos (somar fontes — só para buscar ID)</SelectItem>
-                          <SelectItem value="epg_pw">EPG.PW</SelectItem>
                           <SelectItem value="alt_text">Texto Alternativo</SelectItem>
-                          <SelectItem value="iptv_epg_org">IPTV-EPG.org</SelectItem>
-                          <SelectItem value="open_epg">Open-EPG.com</SelectItem>
-                          <SelectItem value="github_xml">GitHub XML (XMLTV)</SelectItem>
+                          <SelectItem value="xmltv">XMLTV</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
-
-                  {channelForm.epg_type === "all" && (
-                    <div className="space-y-2 rounded-md border border-dashed border-primary/40 p-3 bg-primary/5">
-                      <p className="text-xs text-muted-foreground">
-                        Modo busca global: pesquisa em <strong>{allXmlPresets.length}</strong> URL{allXmlPresets.length !== 1 ? "s" : ""} salva{allXmlPresets.length !== 1 ? "s" : ""} (todos os tipos XML). Use para descobrir o ID do canal e depois troque para o tipo específico antes de salvar.
-                      </p>
-                      <Label>ID do Canal (busca em todas as fontes)</Label>
-                      <EpgChannelPicker
-                        value={channelForm.epg_channel_id}
-                        onChange={(v) => setChannelForm((f) => ({ ...f, epg_channel_id: v }))}
-                        xmlUrl=""
-                        extraUrls={allXmlPresets.map((p) => normalizeGithub(p.url))}
-                        onResolve={(id, sourceUrl) => {
-                          const normalized = normalizeGithub(sourceUrl);
-                          const match = allXmlPresets.find((p) => normalizeGithub(p.url) === normalized);
-                          if (match) {
-                            setChannelForm((f) => ({
-                              ...f,
-                              epg_channel_id: id,
-                              epg_type: match.epg_type,
-                              epg_url: match.url,
-                            }));
-                            toast.success("Tipo definido automaticamente", { description: `${match.epg_type} · ${match.url}` });
-                          }
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  {channelForm.epg_type === "epg_pw" && (
-                    <div className="space-y-2">
-                      <EpgUrlPresetSelector
-                        epgType="epg_pw"
-                        currentUrl={channelForm.epg_url}
-                        onSelect={(url) => setChannelForm((f) => ({ ...f, epg_url: url }))}
-                        onUrlsChange={setExtraEpgUrls}
-                      />
-                      <Label>URL do EPG.PW</Label>
-                      <Input value={channelForm.epg_url} onChange={(e) => setChannelForm((f) => ({ ...f, epg_url: e.target.value }))} placeholder="https://epg.pw/api/epg.json?channel_id=..." />
-                    </div>
-                  )}
 
                   {channelForm.epg_type === "alt_text" && (
                     <div className="space-y-2">
@@ -395,42 +350,47 @@ const AdminPanel = () => {
                     </div>
                   )}
 
-                  {(channelForm.epg_type === "iptv_epg_org" || channelForm.epg_type === "open_epg" || channelForm.epg_type === "github_xml") && (
+                  {channelForm.epg_type === "xmltv" && (
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <EpgUrlPresetSelector
-                          epgType={channelForm.epg_type}
+                          epgType="xmltv"
                           currentUrl={channelForm.epg_url}
                           onSelect={(url) => setChannelForm((f) => ({ ...f, epg_url: url }))}
                           onUrlsChange={setExtraEpgUrls}
                         />
-                        <Label>URL do XML {channelForm.epg_type === "github_xml" && <span className="text-xs text-muted-foreground">(URL raw do GitHub — link com /blob/ é convertido automaticamente)</span>}</Label>
+                        <Label>URL do XML <span className="text-xs text-muted-foreground">(selecione uma das URLs salvas acima ou cole aqui — link com /blob/ do GitHub é convertido automaticamente)</span></Label>
                         <Input
-                          value={channelForm.epg_url || (channelForm.epg_type === "open_epg" ? "https://www.open-epg.com/files/brazil1.xml" : (channelForm.epg_type === "github_xml" ? "" : "https://iptv-epg.org/files/epg-br.xml"))}
+                          value={channelForm.epg_url}
                           onChange={(e) => setChannelForm((f) => ({ ...f, epg_url: e.target.value }))}
-                          placeholder={channelForm.epg_type === "open_epg" ? "https://www.open-epg.com/files/brazil1.xml" : (channelForm.epg_type === "github_xml" ? "https://raw.githubusercontent.com/usuario/repo/branch/arquivo.xml" : "https://iptv-epg.org/files/epg-br.xml")}
+                          placeholder="https://..."
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label>ID do Canal (no XML)</Label>
+                        <Label>ID do Canal (no XML) <span className="text-xs text-muted-foreground">— a busca cobre todas as URLs marcadas acima</span></Label>
                         <EpgChannelPicker
                           value={channelForm.epg_channel_id}
                           onChange={(v) => setChannelForm((f) => ({ ...f, epg_channel_id: v }))}
-                          xmlUrl={normalizeGithub(channelForm.epg_url || (channelForm.epg_type === "open_epg" ? "https://www.open-epg.com/files/brazil1.xml" : (channelForm.epg_type === "github_xml" ? "" : "https://iptv-epg.org/files/epg-br.xml")))}
+                          xmlUrl={normalizeGithub(channelForm.epg_url || "")}
                           extraUrls={extraEpgUrls.map(normalizeGithub)}
+                          onResolve={(id, sourceUrl) => {
+                            // Se o canal foi achado em outra URL, atualiza a URL principal
+                            const normalized = normalizeGithub(sourceUrl);
+                            if (normalized && normalized !== normalizeGithub(channelForm.epg_url || "")) {
+                              setChannelForm((f) => ({ ...f, epg_channel_id: id, epg_url: sourceUrl }));
+                              toast.success("URL definida automaticamente", { description: sourceUrl });
+                            }
+                          }}
                         />
                       </div>
                       <div className="flex items-center gap-2">
                         <Checkbox checked={channelForm.epg_grab_logo} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, epg_grab_logo: !!v }))} />
                         <Label>Usar logo do canal do EPG (substitui URL do logo)</Label>
                       </div>
-                    </div>
-                  )}
-
-                  {(channelForm.epg_type === "epg_pw" || channelForm.epg_type === "iptv_epg_org" || channelForm.epg_type === "open_epg" || channelForm.epg_type === "github_xml") && (
-                    <div className="flex items-center gap-2">
-                      <Checkbox checked={channelForm.epg_show_synopsis} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, epg_show_synopsis: !!v }))} />
-                      <Label>Exibir sinopse (permite clicar em um programa para ver a descrição)</Label>
+                      <div className="flex items-center gap-2">
+                        <Checkbox checked={channelForm.epg_show_synopsis} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, epg_show_synopsis: !!v }))} />
+                        <Label>Exibir sinopse (permite clicar em um programa para ver a descrição)</Label>
+                      </div>
                     </div>
                   )}
                 </div>
