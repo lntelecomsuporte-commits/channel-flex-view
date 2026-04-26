@@ -29,6 +29,7 @@ const PROJECT_ROOT = join(__dirname, "..");
 const EPG_DIR = join(PROJECT_ROOT, "public", "epg");
 const SOURCES_DIR = join(EPG_DIR, "sources");
 const CONSOLIDATED_PATH = join(EPG_DIR, "lntv.xml");
+const CONSOLIDATED_JSON_PATH = join(EPG_DIR, "lntv.json");
 const FETCH_TIMEOUT_MS = 90_000;
 
 const STACK_DIR = process.env.LNTV_STACK_DIR || "/opt/lntv";
@@ -223,13 +224,42 @@ function escapeXml(s) {
     .replace(/"/g, "&quot;");
 }
 
+function decodeXmlEntities(s) {
+  if (!s) return s;
+  if (s.indexOf("&") === -1) return s;
+  return s
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&amp;/g, "&");
+}
+
+function parseXmltvDateToIso(str) {
+  const m = String(str || "").match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s*([+-]\d{4})?/);
+  if (!m) return null;
+  const [, y, mo, d, h, mi, s, tz] = m;
+  const tzF = tz ? tz.replace(/(\d{2})(\d{2})/, "$1:$2") : "+00:00";
+  return new Date(`${y}-${mo}-${d}T${h}:${mi}:${s}${tzF}`).toISOString();
+}
+
 /** Extrai <channel id="..."> e <programme channel="..."> de `xml` para os IDs em `wanted`. */
 function extractFromXml(xml, wantedIds) {
   const channelOut = [];
   const progOut = [];
+  const progStruct = []; // { channel, title, start_date, desc, rating }
   const wanted = new Set(wantedIds);
   const wantedLower = new Set(wantedIds.map((id) => id.toLowerCase()));
   const matches = (id) => wanted.has(id) || wantedLower.has(id.toLowerCase());
+  // mapa para devolver o ID exato como cadastrado no banco (preserva case)
+  const canonicalById = new Map();
+  for (const id of wantedIds) {
+    canonicalById.set(id, id);
+    canonicalById.set(id.toLowerCase(), id);
+  }
+  const canonical = (id) => canonicalById.get(id) || canonicalById.get(id.toLowerCase()) || id;
 
   const channelRe = /<channel\b[^>]*\bid\s*=\s*"([^"]+)"[^>]*>[\s\S]*?<\/channel>/g;
   let m;
@@ -241,12 +271,42 @@ function extractFromXml(xml, wantedIds) {
     }
   }
 
-  const progRe = /<programme\b[^>]*\bchannel\s*=\s*"([^"]+)"[^>]*>[\s\S]*?<\/programme>/g;
+  const progRe = /<programme\b([^>]*)>([\s\S]*?)<\/programme>/g;
+  const attrRe = /(\w+)\s*=\s*"([^"]*)"/g;
+  const titleRe = /<title\b[^>]*>([\s\S]*?)<\/title>/;
+  const descRe = /<desc\b[^>]*>([\s\S]*?)<\/desc>/;
+  const ratingRe = /<rating\b[^>]*>[\s\S]*?<value\b[^>]*>([\s\S]*?)<\/value>[\s\S]*?<\/rating>/;
+
   while ((m = progRe.exec(xml)) !== null) {
-    if (matches(m[1])) progOut.push(m[0]);
+    const attrs = m[1];
+    const inner = m[2];
+    let channelId = null;
+    let startAttr = null;
+    attrRe.lastIndex = 0;
+    let am;
+    while ((am = attrRe.exec(attrs)) !== null) {
+      if (am[1] === "channel") channelId = am[2];
+      else if (am[1] === "start") startAttr = am[2];
+      if (channelId && startAttr) break;
+    }
+    if (!channelId || !startAttr) continue;
+    if (!matches(channelId)) continue;
+    const startIso = parseXmltvDateToIso(startAttr);
+    if (!startIso) continue;
+    progOut.push(m[0]);
+    const titleM = titleRe.exec(inner);
+    const descM = descRe.exec(inner);
+    const ratingM = ratingRe.exec(inner);
+    progStruct.push({
+      channel: canonical(channelId),
+      title: titleM ? decodeXmlEntities(titleM[1].trim()) : "",
+      start_date: startIso,
+      desc: descM ? decodeXmlEntities(descM[1].trim()) : null,
+      rating: ratingM ? decodeXmlEntities(ratingM[1].trim()) : null,
+    });
   }
 
-  return { channels: channelOut, programmes: progOut };
+  return { channels: channelOut, programmes: progOut, programStructs: progStruct };
 }
 
 async function consolidate(slugByUrl) {
@@ -269,6 +329,7 @@ async function consolidate(slugByUrl) {
   // Acumula <channel> e <programme> filtrados de cada fonte
   const allChannelXml = new Map(); // id → xml
   const allProgrammeXml = [];
+  const byChannelStruct = new Map(); // canonical id → [program]
 
   for (const [url, ids] of wantedByUrl) {
     const slug = slugByUrl.get(url);
@@ -278,11 +339,19 @@ async function consolidate(slugByUrl) {
       continue;
     }
     const xml = await readFile(path, "utf8");
-    const { channels: ch, programmes: pr } = extractFromXml(xml, ids);
+    const { channels: ch, programmes: pr, programStructs: ps } = extractFromXml(xml, ids);
     log(`   ${slug}: ${ch.length} canais, ${pr.length} programas`);
     for (const c of ch) if (!allChannelXml.has(c.id)) allChannelXml.set(c.id, c.xml);
     for (const p of pr) allProgrammeXml.push(p);
+    for (const p of ps) {
+      let arr = byChannelStruct.get(p.channel);
+      if (!arr) { arr = []; byChannelStruct.set(p.channel, arr); }
+      arr.push({ title: p.title, start_date: p.start_date, desc: p.desc, rating: p.rating });
+    }
   }
+
+  // Ordena os programas por horário (mesma ordem que o cliente faria)
+  byChannelStruct.forEach((arr) => arr.sort((a, b) => a.start_date.localeCompare(b.start_date)));
 
   // Adiciona metadados dos nossos canais (display-name + icon do nosso logo, se houver)
   // Para canais sem entry no XML original (ex: canal só com logo nosso), cria <channel> mínimo.
@@ -308,6 +377,19 @@ async function consolidate(slugByUrl) {
   await mkdir(EPG_DIR, { recursive: true });
   await writeFile(CONSOLIDATED_PATH, out, "utf8");
   log(`✅ ${CONSOLIDATED_PATH} — ${(out.length / 1024).toFixed(1)} KB · ${allChannelXml.size + ourChannelMeta.length} canais · ${allProgrammeXml.length} programas`);
+
+  // JSON pré-parseado — o cliente (APK) só faz JSON.parse (instantâneo).
+  const byChannelObj = {};
+  byChannelStruct.forEach((arr, id) => { byChannelObj[id] = arr; });
+  const json = {
+    generated: new Date().toISOString(),
+    channelCount: byChannelStruct.size,
+    programCount: allProgrammeXml.length,
+    byChannel: byChannelObj,
+  };
+  await writeFile(CONSOLIDATED_JSON_PATH, JSON.stringify(json), "utf8");
+  const jsonSize = (await stat(CONSOLIDATED_JSON_PATH)).size;
+  log(`✅ ${CONSOLIDATED_JSON_PATH} — ${(jsonSize / 1024).toFixed(1)} KB · ${byChannelStruct.size} canais`);
 }
 
 async function main() {

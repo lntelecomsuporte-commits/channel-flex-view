@@ -24,6 +24,9 @@ export const getEpgBaseUrl = (): string => {
 /** URL do XML consolidado dos nossos canais (sempre pequeno e atualizado). */
 export const getConsolidatedEpgUrl = (): string => `${getEpgBaseUrl()}/epg/lntv.xml`;
 
+/** URL do JSON pré-parseado — o APK só faz JSON.parse (super rápido). */
+export const getConsolidatedEpgJsonUrl = (): string => `${getEpgBaseUrl()}/epg/lntv.json`;
+
 /** URL de uma fonte EPG cacheada localmente (mesmo slug do sync-epg.mjs). */
 export const getLocalSourceUrl = (sourceUrl: string): string =>
   `${getEpgBaseUrl()}/epg/sources/${urlToSlug(sourceUrl)}`;
