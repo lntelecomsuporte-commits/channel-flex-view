@@ -61,7 +61,7 @@ export function useChannels() {
   useEffect(() => {
     if (!query.data) return;
     primeLogoVersions(
-      query.data.map((c) => ({ url: c.logo_url, version: c.updated_at }))
+      query.data.map((c) => ({ url: resolveLogoUrl(c.logo_url), version: c.updated_at }))
     );
   }, [query.data]);
 
