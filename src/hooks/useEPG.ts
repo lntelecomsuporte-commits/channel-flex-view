@@ -152,45 +152,76 @@ export async function fetchConsolidatedXmltv(): Promise<XmltvBundle | null> {
   }
 }
 
+// Decodifica entidades XML básicas (sem DOMParser — muito mais rápido em WebView Android)
+function decodeXmlEntities(s: string): string {
+  if (!s) return s;
+  if (s.indexOf("&") === -1) return s;
+  return s
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&amp;/g, "&");
+}
+
+/**
+ * Parser XMLTV via regex — muito mais rápido que DOMParser em WebView Android.
+ * O DOMParser de WebViews antigos engasga com arquivos > 500KB e pode travar
+ * o thread principal por minutos enquanto o vídeo HLS está rodando.
+ */
 async function parseXmltvText(text: string): Promise<XmltvBundle> {
   const byChannel = new Map<string, EPGProgram[]>();
 
-  await yieldToMain();
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(text, "text/xml");
+  // Regex global para cada <programme ...>...</programme>
+  const progRe = /<programme\b([^>]*)>([\s\S]*?)<\/programme>/g;
+  const attrRe = /(\w+)\s*=\s*"([^"]*)"/g;
+  const titleRe = /<title\b[^>]*>([\s\S]*?)<\/title>/;
+  const descRe = /<desc\b[^>]*>([\s\S]*?)<\/desc>/;
+  const ratingRe = /<rating\b[^>]*>[\s\S]*?<value\b[^>]*>([\s\S]*?)<\/value>[\s\S]*?<\/rating>/;
+
+  const CHUNK = 400;
+  let count = 0;
+  let m: RegExpExecArray | null;
+
   await yieldToMain();
 
-  const programmes = doc.getElementsByTagName("programme");
-  const total = programmes.length;
-  // Chunk grande mesmo no APK — yieldToMain agora usa setTimeout(0)
-  // que devolve controle rapidinho. Chunk pequeno só multiplica overhead.
-  const CHUNK = IS_NATIVE ? 800 : 500;
+  while ((m = progRe.exec(text)) !== null) {
+    const attrs = m[1];
+    const inner = m[2];
 
-  for (let i = 0; i < total; i++) {
-    const prog = programmes[i];
-    const channelId = prog.getAttribute("channel");
-    if (!channelId) continue;
-    const startAttr = prog.getAttribute("start");
-    if (!startAttr) continue;
+    let channelId: string | null = null;
+    let startAttr: string | null = null;
+    attrRe.lastIndex = 0;
+    let am: RegExpExecArray | null;
+    while ((am = attrRe.exec(attrs)) !== null) {
+      if (am[1] === "channel") channelId = am[2];
+      else if (am[1] === "start") startAttr = am[2];
+      if (channelId && startAttr) break;
+    }
+    if (!channelId || !startAttr) continue;
+
     const startIso = parseXmltvDateToIso(startAttr);
     if (!startIso) continue;
 
-    const titleEl = prog.getElementsByTagName("title")[0];
-    const descEl = prog.getElementsByTagName("desc")[0];
-    const ratingEl = prog.querySelector("rating value");
+    const titleM = titleRe.exec(inner);
+    const descM = descRe.exec(inner);
+    const ratingM = ratingRe.exec(inner);
 
     const program: EPGProgram = {
-      title: titleEl?.textContent || "",
+      title: titleM ? decodeXmlEntities(titleM[1].trim()) : "",
       start_date: startIso,
-      desc: descEl?.textContent || null,
-      rating: ratingEl?.textContent || null,
+      desc: descM ? decodeXmlEntities(descM[1].trim()) : null,
+      rating: ratingM ? decodeXmlEntities(ratingM[1].trim()) : null,
     };
 
     const arr = byChannel.get(channelId);
     if (arr) arr.push(program);
     else byChannel.set(channelId, [program]);
 
-    if (i > 0 && i % CHUNK === 0) {
+    count++;
+    if (count % CHUNK === 0) {
       await yieldToMain();
     }
   }
