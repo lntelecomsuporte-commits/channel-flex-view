@@ -12,89 +12,62 @@ const LoginPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [keyboardOffset, setKeyboardOffset] = useState(0);
   const navigate = useNavigate();
-  const cardRef = useRef<HTMLDivElement>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
   const activeInputRef = useRef<HTMLInputElement | null>(null);
 
-  const keepFocusedInputAboveKeyboard = useCallback(() => {
-    if (keyboardHeight <= 0 || !activeInputRef.current) {
-      setKeyboardOffset(0);
-      return;
-    }
-
-    requestAnimationFrame(() => {
-      const inputRect = activeInputRef.current?.getBoundingClientRect();
-      const cardRect = cardRef.current?.getBoundingClientRect();
-      if (!inputRect || !cardRect) return;
-
-      const safeBottom = window.innerHeight - keyboardHeight - 24;
-      const overlap = inputRect.bottom - safeBottom;
-
-      if (overlap <= 0) return;
-
-      setKeyboardOffset((current) => {
-        const originalCardTop = cardRect.top + current;
-        const maxOffset = Math.max(0, originalCardTop + 96);
-        return Math.min(current + overlap, maxOffset);
+  const scrollFocusedInputIntoView = useCallback(() => {
+    window.setTimeout(() => {
+      activeInputRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "nearest",
       });
-    });
-  }, [keyboardHeight]);
+    }, 120);
+  }, []);
 
-  // Detect keyboard via Capacitor (native) and visualViewport (web fallback)
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const handleViewportChange = () => scrollFocusedInputIntoView();
+    vv.addEventListener("resize", handleViewportChange);
+    vv.addEventListener("scroll", handleViewportChange);
+
+    return () => {
+      vv.removeEventListener("resize", handleViewportChange);
+      vv.removeEventListener("scroll", handleViewportChange);
+    };
+  }, [scrollFocusedInputIntoView]);
+
   useEffect(() => {
     let cleanupNative: (() => void) | undefined;
-    let cleanupViewport: (() => void) | undefined;
 
-    const vv = window.visualViewport;
-    if (vv) {
-      const onResize = () => {
-        const diff = window.innerHeight - vv.height;
-        setKeyboardHeight(diff > 100 ? diff : 0);
-      };
-      vv.addEventListener("resize", onResize);
-      vv.addEventListener("scroll", onResize);
-      cleanupViewport = () => {
-        vv.removeEventListener("resize", onResize);
-        vv.removeEventListener("scroll", onResize);
-      };
-    }
-
-    // Capacitor native keyboard events
     (async () => {
       try {
         const { Keyboard } = await import("@capacitor/keyboard");
-        const show = (info: { keyboardHeight: number }) => {
-          setKeyboardHeight(info.keyboardHeight);
-        };
-        const hide = () => {
-          setKeyboardHeight(0);
-          setKeyboardOffset(0);
-        };
         const subscriptions = await Promise.all([
-          Keyboard.addListener("keyboardWillShow", show),
-          Keyboard.addListener("keyboardDidShow", show),
-          Keyboard.addListener("keyboardWillHide", hide),
-          Keyboard.addListener("keyboardDidHide", hide),
+          Keyboard.addListener("keyboardWillShow", scrollFocusedInputIntoView),
+          Keyboard.addListener("keyboardDidShow", scrollFocusedInputIntoView),
         ]);
         cleanupNative = () => {
           subscriptions.forEach((subscription) => void subscription.remove());
         };
       } catch {
-        // not running in Capacitor — visualViewport fallback remains active
+        // Web/preview: visualViewport já cobre o comportamento.
       }
     })();
 
-    return () => {
-      cleanupNative?.();
-      cleanupViewport?.();
-    };
-  }, []);
+    return () => cleanupNative?.();
+  }, [scrollFocusedInputIntoView]);
 
-  useEffect(() => {
-    keepFocusedInputAboveKeyboard();
-  }, [keyboardHeight, keepFocusedInputAboveKeyboard]);
+  const handleInputFocus = useCallback(
+    (input: HTMLInputElement) => {
+      activeInputRef.current = input;
+      scrollFocusedInputIntoView();
+    },
+    [scrollFocusedInputIntoView]
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,12 +106,11 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-background p-4 overflow-hidden">
-      <div
-        ref={cardRef}
-        className="w-full max-w-sm transition-transform duration-200"
-        style={{ transform: `translateY(-${keyboardOffset}px)` }}
-      >
+    <div
+      ref={pageRef}
+      className="min-h-[100dvh] overflow-y-auto bg-background p-4 flex items-center justify-center"
+    >
+      <div className="w-full max-w-sm py-8">
         <Card>
           <CardHeader className="text-center">
             <div className="flex justify-center mb-2">
@@ -155,10 +127,7 @@ const LoginPage = () => {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  onFocus={(e) => {
-                    activeInputRef.current = e.currentTarget;
-                    keepFocusedInputAboveKeyboard();
-                  }}
+                  onFocus={(e) => handleInputFocus(e.currentTarget)}
                   required
                   placeholder="seu@email.com"
                   autoComplete="username"
@@ -171,10 +140,7 @@ const LoginPage = () => {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  onFocus={(e) => {
-                    activeInputRef.current = e.currentTarget;
-                    keepFocusedInputAboveKeyboard();
-                  }}
+                  onFocus={(e) => handleInputFocus(e.currentTarget)}
                   required
                   autoComplete="current-password"
                 />
