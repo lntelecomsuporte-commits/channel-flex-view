@@ -1,5 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/lib/supabaseLocal";
+import { LOCAL_AUTH_STORAGE_KEY } from "@/lib/localBackend";
 
 /**
  * REGRA IMUTÁVEL DESTE PROJETO (LN TV self-hosted):
@@ -85,6 +86,13 @@ export const getProxiedStreamUrl = (streamUrl: string): string => {
 const readTokenFromStorage = (): string | null => {
   if (typeof localStorage === "undefined") return null;
   try {
+    const localRaw = localStorage.getItem(LOCAL_AUTH_STORAGE_KEY);
+    if (localRaw) {
+      const parsed = JSON.parse(localRaw);
+      const token = parsed?.access_token ?? parsed?.currentSession?.access_token ?? null;
+      if (typeof token === "string" && token.length > 0) return token;
+    }
+
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (!key || !key.startsWith("sb-") || !key.endsWith("-auth-token")) continue;
