@@ -103,7 +103,12 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     const isAppleDevice = /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent) &&
       video.canPlayType("application/vnd.apple.mpegurl");
 
-    if (isAppleDevice) {
+    // No APK Android, o WebView (Chromium) NÃO toca HLS nativo, então
+    // hls.js continua sendo necessário. Mas para .mp4 / progressive,
+    // usamos <video src> direto (zero overhead, decodificação nativa).
+    const isHls = /\.m3u8(\?|$)/i.test(playableStreamUrl) || playableStreamUrl.includes("hls-proxy");
+
+    if (isAppleDevice || !isHls) {
       video.src = playableStreamUrl;
       if (autoPlay) video.play().catch(() => {});
     } else if (Hls.isSupported()) {
