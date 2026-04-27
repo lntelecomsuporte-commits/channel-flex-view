@@ -116,8 +116,19 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         enableWorker: true,
         // Buffer padrão, mas com folga do ao vivo para absorver oscilações
         lowLatencyMode: false,
-        liveSyncDurationCount: 6,        // ~6 segmentos atrás do live edge
-        liveMaxLatencyDurationCount: 12, // tolerância antes de re-sincronizar
+        liveSyncDurationCount: 3,        // ~3 segmentos atrás do live edge (mais perto = abre mais rápido)
+        liveMaxLatencyDurationCount: 10, // tolerância antes de re-sincronizar
+        // === Otimizações de tempo de troca de canal (fast channel zap) ===
+        // Começa pela qualidade mais baixa → 1º frame em ~500ms-1s.
+        // ABR sobe pra qualidade ideal nos próximos segmentos.
+        startLevel: 0,
+        // Buffer inicial menor: WebView começa a tocar com 10s de buffer
+        // em vez de tentar encher os 30s/60s padrão antes de dar play.
+        maxBufferLength: 10,
+        maxMaxBufferLength: 30,
+        maxBufferSize: 30 * 1000 * 1000, // 30MB
+        // Pré-busca o primeiro fragmento enquanto o manifesto ainda processa
+        startFragPrefetch: true,
         // Retries agressivos para fragmentos e manifestos
         fragLoadingMaxRetry: isSignedProxyUrl ? 1 : 8,
         fragLoadingRetryDelay: 500,
@@ -128,8 +139,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         levelLoadingMaxRetry: isSignedProxyUrl ? 1 : 6,
         levelLoadingRetryDelay: 500,
         levelLoadingMaxRetryTimeout: isSignedProxyUrl ? 1500 : 16000,
-        // ABR conservador: começa baixo, sobe devagar
-        startLevel: -1,
+        // ABR conservador na subida pra evitar reflickar logo após startLevel:0
         abrEwmaDefaultEstimate: 500000,
         abrBandWidthFactor: 0.85,
         abrBandWidthUpFactor: 0.6,
