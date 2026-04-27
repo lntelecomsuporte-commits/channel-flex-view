@@ -635,7 +635,7 @@ const PlayerPage = () => {
                 ? channels[(currentIndex - 1 + channels.length) % channels.length]?.stream_url ?? null
                 : null
             }
-          />ND
+          />
           {showStats && (
             <StatsOverlay
               videoEl={playerRef.current?.getVideoElement() ?? null}
