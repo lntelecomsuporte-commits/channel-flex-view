@@ -22,10 +22,10 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseLocal";
 
 const LONG_PRESS_MS = 450;
-// No APK (Android nativo) o EPG é pesado para o WebView de receptores fracos:
-// só dispara depois de 5 min sem interação. No browser web mantemos 12s.
+// O EPG consolidado agora vem pré-processado em JSON (~570KB), então pode
+// iniciar logo após o login sem esperar minutos de inatividade.
 const IS_NATIVE_APK = typeof window !== "undefined" && !!(window as any).Capacitor?.isNativePlatform?.();
-const EPG_IDLE_MS = IS_NATIVE_APK ? 5 * 60 * 1000 : 12000;
+const EPG_IDLE_MS = IS_NATIVE_APK ? 12_000 : 6_000;
 
 const PlayerPage = () => {
   const { user, signOut } = useAuth();
@@ -111,7 +111,7 @@ const PlayerPage = () => {
   const [osdTimeout, setOsdTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [previewTimeout, setPreviewTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
 
-  const [preloadEpg, setPreloadEpg] = useState(false);
+  const [preloadEpg, setPreloadEpg] = useState(!IS_NATIVE_APK);
 
   useMultiEPG(
     channels?.map((ch: any) => ({
@@ -205,26 +205,13 @@ const PlayerPage = () => {
 
   const fc: any = focusedChannel;
   useEffect(() => {
-    const canWarmEpg =
-      !!channels?.length &&
-      !showChannelList &&
-      !showPreview &&
-      favFocusIndex === null &&
-      !synopsisProgram &&
-      !showStats &&
-      !numBuffer &&
-      !showOSD &&
-      !showFavoritesBar;
-
-    if (!canWarmEpg) {
-      setPreloadEpg(false);
+    if (!channels?.length || preloadEpg) {
       return;
     }
 
-    setPreloadEpg(false);
     const t = setTimeout(() => setPreloadEpg(true), EPG_IDLE_MS);
     return () => clearTimeout(t);
-  }, [channels?.length, currentIndex, showChannelList, showPreview, favFocusIndex, synopsisProgram, showStats, numBuffer, showOSD, showFavoritesBar]);
+  }, [channels?.length, preloadEpg]);
 
   const { data: focusedEpg } = useEPG({
     epg_type: fc?.epg_type,

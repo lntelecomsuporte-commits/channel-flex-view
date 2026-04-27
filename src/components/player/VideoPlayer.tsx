@@ -23,6 +23,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   const hlsRef = useRef<Hls | null>(null);
   const [muted, setMuted] = useState(true);
   const [useProxyFallback, setUseProxyFallback] = useState(false);
+  const [proxyTokenFailure, setProxyTokenFailure] = useState(false);
   const [resolvedUrl, setResolvedUrl] = useState<string>("");
   const youTubeVideoId = extractYouTubeVideoId(streamUrl);
 
@@ -42,7 +43,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       let url: string;
       if (useProxyFallback) {
         url = getProxiedStreamUrl(streamUrl);
-      } else if (useProxyToken && channelId) {
+      } else if (useProxyToken && channelId && !proxyTokenFailure) {
         url = await resolveChannelStreamUrl(streamUrl, channelId, true);
       } else {
         url = getPlayableStreamUrl(streamUrl);
@@ -50,12 +51,13 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       if (!cancelled) setResolvedUrl(url);
     })();
     return () => { cancelled = true; };
-  }, [streamUrl, useProxyFallback, useProxyToken, channelId, youTubeVideoId]);
+  }, [streamUrl, useProxyFallback, useProxyToken, channelId, youTubeVideoId, proxyTokenFailure]);
 
   const playableStreamUrl = resolvedUrl;
 
   useEffect(() => {
     setUseProxyFallback(false);
+    setProxyTokenFailure(false);
   }, [streamUrl]);
 
 
@@ -72,9 +74,18 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       hlsRef.current = null;
     }
 
+    const isSignedProxyUrl = playableStreamUrl.includes("/functions/v1/hls-proxy") && playableStreamUrl.includes("st=");
     const forcedProxyUrl = getProxiedStreamUrl(streamUrl);
-    const canFallbackToProxy = !useProxyFallback && forcedProxyUrl !== streamUrl && forcedProxyUrl !== playableStreamUrl;
+    const canFallbackToDirect = isSignedProxyUrl && !proxyTokenFailure;
+    const canFallbackToProxy = !useProxyFallback && !isSignedProxyUrl && forcedProxyUrl !== streamUrl && forcedProxyUrl !== playableStreamUrl;
+    const fallbackToDirect = () => {
+      if (!canFallbackToDirect) return false;
+      console.warn("[HLS] Proxy assinado falhou — tentando stream direto");
+      setProxyTokenFailure(true);
+      return true;
+    };
     const fallbackToProxy = () => {
+      if (fallbackToDirect()) return true;
       if (!canFallbackToProxy) return false;
       console.warn("[HLS] Stream direto falhou — tentando via proxy");
       setUseProxyFallback(true);
@@ -100,15 +111,15 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         liveSyncDurationCount: 6,        // ~6 segmentos atrás do live edge
         liveMaxLatencyDurationCount: 12, // tolerância antes de re-sincronizar
         // Retries agressivos para fragmentos e manifestos
-        fragLoadingMaxRetry: 8,
+        fragLoadingMaxRetry: isSignedProxyUrl ? 1 : 8,
         fragLoadingRetryDelay: 500,
-        fragLoadingMaxRetryTimeout: 16000,
-        manifestLoadingMaxRetry: 6,
+        fragLoadingMaxRetryTimeout: isSignedProxyUrl ? 1500 : 16000,
+        manifestLoadingMaxRetry: isSignedProxyUrl ? 1 : 6,
         manifestLoadingRetryDelay: 500,
-        manifestLoadingMaxRetryTimeout: 16000,
-        levelLoadingMaxRetry: 6,
+        manifestLoadingMaxRetryTimeout: isSignedProxyUrl ? 1500 : 16000,
+        levelLoadingMaxRetry: isSignedProxyUrl ? 1 : 6,
         levelLoadingRetryDelay: 500,
-        levelLoadingMaxRetryTimeout: 16000,
+        levelLoadingMaxRetryTimeout: isSignedProxyUrl ? 1500 : 16000,
         // ABR conservador: começa baixo, sobe devagar
         startLevel: -1,
         abrEwmaDefaultEstimate: 500000,
@@ -167,7 +178,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         hlsRef.current = null;
       }
     };
-  }, [playableStreamUrl, autoPlay, streamUrl, useProxyFallback]);
+  }, [playableStreamUrl, autoPlay, streamUrl, useProxyFallback, proxyTokenFailure]);
 
   // Unmute after first user interaction
   useEffect(() => {
