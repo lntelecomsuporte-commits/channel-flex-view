@@ -621,6 +621,21 @@ const PlayerPage = () => {
             channelId={currentChannel.id}
             useProxyToken={(currentChannel as any).use_proxy_token ?? false}
           />
+          {/* Pre-aquece o próximo canal (UP) e o anterior (DOWN) — corta o zap */}
+          <ChannelPrefetch
+            nextStreamUrl={
+              channels && channels.length > 1
+                ? channels[(currentIndex + 1) % channels.length]?.stream_url ?? null
+                : null
+            }
+          />
+          <ChannelPrefetch
+            nextStreamUrl={
+              channels && channels.length > 1
+                ? channels[(currentIndex - 1 + channels.length) % channels.length]?.stream_url ?? null
+                : null
+            }
+          />ND
           {showStats && (
             <StatsOverlay
               videoEl={playerRef.current?.getVideoElement() ?? null}
