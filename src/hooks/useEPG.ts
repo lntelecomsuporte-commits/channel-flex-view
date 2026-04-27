@@ -299,17 +299,11 @@ export function useEPG(channel: {
   });
 
   const data = useMemo<EPGData>(() => {
-    if (!bundleQuery.data || !source) return { current: null, next: null };
+    if (!bundleQuery.data || !channelId) return { current: null, next: null };
 
-    const programs =
-      bundleQuery.data.kind === "xmltv"
-        ? channel.epg_channel_id
-          ? bundleQuery.data.byChannel.get(channel.epg_channel_id) || []
-          : []
-        : bundleQuery.data.programs;
-
+    const programs = bundleQuery.data.byChannel.get(channelId) || [];
     return getCurrentAndNextPrograms(programs);
-  }, [bundleQuery.data, source, channel.epg_channel_id]);
+  }, [bundleQuery.data, channelId]);
 
   return {
     ...bundleQuery,
