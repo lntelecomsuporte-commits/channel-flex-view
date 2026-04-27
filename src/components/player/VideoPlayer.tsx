@@ -3,6 +3,7 @@ import Hls from "hls.js";
 import { Capacitor } from "@capacitor/core";
 import { getPlayableStreamUrl, getProxiedStreamUrl, resolveChannelStreamUrl } from "@/lib/stream";
 import { extractYouTubeVideoId } from "@/lib/youtube";
+import { getDeviceProfile } from "@/lib/deviceProfile";
 import YouTubePlayer from "./YouTubePlayer";
 
 const IS_NATIVE_APK = Capacitor.isNativePlatform();
