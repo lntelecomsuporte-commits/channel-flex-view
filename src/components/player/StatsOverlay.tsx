@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useState } from "react";
 import type Hls from "hls.js";
 import { X } from "lucide-react";
+import { getDeviceProfile } from "@/lib/deviceProfile";
 
 interface StatsOverlayProps {
   videoEl: HTMLVideoElement | null;
