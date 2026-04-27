@@ -40,39 +40,13 @@ export function useMultiEPG(channels: ChannelEPGInput[], enabled: boolean = true
     queryFn: fetchConsolidatedXmltv,
   });
 
-  // 2) Fallback: para canais que NÃO foram cobertos pelo consolidado
-  //    (ex: epg_url solta que não está em epg_url_presets) caímos no
-  //    fluxo antigo de baixar/filtrar por fonte.
-  const sources = useMemo(() => {
-    const consolidatedIds = new Set<string>();
-    if (consolidated.data?.kind === "xmltv") {
-      consolidated.data.byChannel.forEach((_, id) => consolidatedIds.add(id));
-    }
-
-    const map = new Map<string, { kind: "xmltv" | "epgpw"; url: string; channelIds: Set<string> }>();
-    for (const ch of channels) {
-      const source = getEpgSource(ch);
-      if (!source) continue;
-      // Se o consolidado já cobre esse canal, pula
-      if (source.kind === "xmltv" && ch.epg_channel_id && consolidatedIds.has(ch.epg_channel_id)) continue;
-      const key = `${source.kind}::${source.url}`;
-      let entry = map.get(key);
-      if (!entry) {
-        entry = { kind: source.kind, url: source.url, channelIds: new Set<string>() };
-        map.set(key, entry);
-      }
-      if (source.kind === "xmltv" && ch.epg_channel_id) {
-        entry.channelIds.add(ch.epg_channel_id);
-      }
-    }
-    return Array.from(map.entries()).map(([key, v]) => ({
-      key,
-      kind: v.kind,
-      url: v.url,
-      channelIds: Array.from(v.channelIds).sort(),
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourcesKey, consolidated.data]);
+  // Fallback DESABILITADO: se o canal não está no /epg/lntv.xml consolidado,
+  // ele simplesmente fica sem EPG. Antes tentávamos baixar a fonte original
+  // (via /epg/sources/<slug>.xml ou epg-proxy), mas isso causava centenas de
+  // 404 e travava a UI por minutos. O servidor (sync-epg.mjs) é a única
+  // fonte de verdade — se o canal não aparece no consolidado, é porque o
+  // epg_channel_id está errado ou a URL não está em epg_url_presets.
+  const sources: { key: string; kind: "xmltv" | "epgpw"; url: string; channelIds: string[] }[] = [];
 
   const queries = useQueries({
     queries: sources.map((src) => ({
