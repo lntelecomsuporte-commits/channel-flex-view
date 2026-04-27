@@ -310,6 +310,8 @@ export function useEPG(channel: {
     refetchInterval: 10 * 60_000,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
+    // Boot instantâneo: devolve EPG persistido antes do fetch terminar
+    initialData: readCachedEpgBundle,
     queryFn: fetchConsolidatedXmltv,
   });
 
