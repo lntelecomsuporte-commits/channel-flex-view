@@ -23,6 +23,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   const hlsRef = useRef<Hls | null>(null);
   const [muted, setMuted] = useState(true);
   const [useProxyFallback, setUseProxyFallback] = useState(false);
+  const [proxyTokenFailure, setProxyTokenFailure] = useState(false);
   const [resolvedUrl, setResolvedUrl] = useState<string>("");
   const youTubeVideoId = extractYouTubeVideoId(streamUrl);
 
@@ -42,7 +43,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       let url: string;
       if (useProxyFallback) {
         url = getProxiedStreamUrl(streamUrl);
-      } else if (useProxyToken && channelId) {
+      } else if (useProxyToken && channelId && !proxyTokenFailure) {
         url = await resolveChannelStreamUrl(streamUrl, channelId, true);
       } else {
         url = getPlayableStreamUrl(streamUrl);
@@ -50,12 +51,13 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       if (!cancelled) setResolvedUrl(url);
     })();
     return () => { cancelled = true; };
-  }, [streamUrl, useProxyFallback, useProxyToken, channelId, youTubeVideoId]);
+  }, [streamUrl, useProxyFallback, useProxyToken, channelId, youTubeVideoId, proxyTokenFailure]);
 
   const playableStreamUrl = resolvedUrl;
 
   useEffect(() => {
     setUseProxyFallback(false);
+    setProxyTokenFailure(false);
   }, [streamUrl]);
 
 
