@@ -149,6 +149,8 @@ export async function fetchConsolidatedXmltv(): Promise<XmltvBundle | null> {
       const json = await res.json();
       const byChannelObj = json?.byChannel;
       if (byChannelObj && typeof byChannelObj === "object") {
+        // Persiste em disco — próximo boot devolve do cache antes mesmo do fetch
+        try { epgJsonCache.write(byChannelObj); } catch { /* ignore */ }
         const byChannel = new Map<string, EPGProgram[]>();
         for (const id of Object.keys(byChannelObj)) {
           const arr = byChannelObj[id];
@@ -169,6 +171,18 @@ export async function fetchConsolidatedXmltv(): Promise<XmltvBundle | null> {
   } catch {
     return null;
   }
+}
+
+/** Lê o EPG persistido em disco (boot instantâneo). */
+function readCachedEpgBundle(): XmltvBundle | null {
+  const cached = epgJsonCache.read<Record<string, EPGProgram[]>>();
+  if (!cached) return null;
+  const byChannel = new Map<string, EPGProgram[]>();
+  for (const id of Object.keys(cached)) {
+    const arr = cached[id];
+    if (Array.isArray(arr)) byChannel.set(id, arr);
+  }
+  return byChannel.size > 0 ? { kind: "xmltv", byChannel } : null;
 }
 
 // Decodifica entidades XML básicas (sem DOMParser — muito mais rápido em WebView Android)
