@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useState } from "react";
 import type Hls from "hls.js";
 import { X } from "lucide-react";
+import { getDeviceProfile } from "@/lib/deviceProfile";
 
 interface StatsOverlayProps {
   videoEl: HTMLVideoElement | null;
@@ -191,6 +192,19 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
         {destIp.host && (
           <Row label="Host" value={destIp.host} />
         )}
+        {(() => {
+          const p = getDeviceProfile();
+          const cap = hls?.autoLevelCapping ?? -1;
+          const capLabel = cap >= 0 && hls?.levels?.[cap]
+            ? `${hls.levels[cap].height || "?"}p`
+            : "none";
+          return (
+            <>
+              <Row label="Device" value={`${p.weak ? "weak" : "strong"} (${p.reason})`} />
+              <Row label="Level cap" value={capLabel} />
+            </>
+          );
+        })()}
       </div>
     </div>
   );

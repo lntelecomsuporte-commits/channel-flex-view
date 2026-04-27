@@ -3,6 +3,7 @@ import Hls from "hls.js";
 import { Capacitor } from "@capacitor/core";
 import { getPlayableStreamUrl, getProxiedStreamUrl, resolveChannelStreamUrl } from "@/lib/stream";
 import { extractYouTubeVideoId } from "@/lib/youtube";
+import { getDeviceProfile } from "@/lib/deviceProfile";
 import YouTubePlayer from "./YouTubePlayer";
 
 const IS_NATIVE_APK = Capacitor.isNativePlatform();
@@ -112,6 +113,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       video.src = playableStreamUrl;
       if (autoPlay) video.play().catch(() => {});
     } else if (Hls.isSupported()) {
+      const profile = getDeviceProfile();
       const hls = new Hls({
         enableWorker: true,
         // Buffer padrão, mas com folga do ao vivo para absorver oscilações
@@ -122,10 +124,10 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         // Começa pela qualidade mais baixa → 1º frame em ~500ms-1s.
         // ABR sobe pra qualidade ideal nos próximos segmentos.
         startLevel: 0,
-        // Buffer inicial menor: WebView começa a tocar com 10s de buffer
-        // em vez de tentar encher os 30s/60s padrão antes de dar play.
-        maxBufferLength: 10,
-        maxMaxBufferLength: 30,
+        // Buffer dinâmico: 10s em devices fortes (zap rápido),
+        // 30s em devices fracos (absorve underruns do decoder lento).
+        maxBufferLength: profile.maxBufferLength,
+        maxMaxBufferLength: Math.max(30, profile.maxBufferLength),
         maxBufferSize: 30 * 1000 * 1000, // 30MB
         // Pré-busca o primeiro fragmento enquanto o manifesto ainda processa
         startFragPrefetch: true,
@@ -148,6 +150,31 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       hls.loadSource(playableStreamUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        // Plano A+: cap de qualidade em devices fracos.
+        // Procura o maior nível com altura <= maxHeight (ex: 720p).
+        if (profile.maxHeight && hls.levels?.length) {
+          let capIdx = -1;
+          let capHeight = 0;
+          hls.levels.forEach((lvl, idx) => {
+            const h = lvl.height || 0;
+            if (h <= profile.maxHeight! && h > capHeight) {
+              capHeight = h;
+              capIdx = idx;
+            }
+          });
+          if (capIdx >= 0) {
+            hls.autoLevelCapping = capIdx;
+            console.log(`[HLS] Device fraco — cap em ${capHeight}p (level ${capIdx})`);
+          } else {
+            // Single-bitrate ou só tem qualidades acima do cap → força a menor
+            const minIdx = hls.levels.reduce(
+              (acc, lvl, idx) => (lvl.height < hls.levels[acc].height ? idx : acc),
+              0,
+            );
+            hls.autoLevelCapping = minIdx;
+            console.warn(`[HLS] Device fraco — sem nível <=${profile.maxHeight}p, forçando menor (${hls.levels[minIdx].height || "?"}p)`);
+          }
+        }
         if (autoPlay) video.play().catch(() => {});
       });
 
@@ -184,6 +211,54 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       hls.on(Hls.Events.FRAG_LOADED, () => {
         mediaErrorRecoveryAttempts = 0;
       });
+
+      // === Plano C: auto-recovery quando travar imagem por >4s ===
+      // Em devices fracos com decoder saturado, o vídeo congela mas hls.js
+      // não dispara erro (segmentos continuam baixando). Detectamos via
+      // evento `waiting` e, se persistir, derrubamos pro nível mínimo.
+      let waitingTimer: number | null = null;
+      let freezeRecoveryCount = 0;
+      const onWaiting = () => {
+        if (waitingTimer) return;
+        waitingTimer = window.setTimeout(() => {
+          waitingTimer = null;
+          if (video.paused || video.ended) return;
+          freezeRecoveryCount++;
+          console.warn(`[HLS] Freeze detectado (>4s) — recovery #${freezeRecoveryCount}`);
+          if (hls.levels?.length > 1) {
+            // Força nível mínimo (qualidade mais baixa disponível)
+            const minIdx = hls.levels.reduce(
+              (acc, lvl, idx) => (lvl.height < hls.levels[acc].height ? idx : acc),
+              0,
+            );
+            hls.currentLevel = minIdx;
+            hls.autoLevelCapping = minIdx;
+            console.warn(`[HLS] Forçado para nível ${minIdx} (${hls.levels[minIdx].height || "?"}p)`);
+          }
+          // Tenta retomar
+          hls.startLoad();
+          video.play().catch(() => {});
+        }, 4000);
+      };
+      const onPlaying = () => {
+        if (waitingTimer) {
+          clearTimeout(waitingTimer);
+          waitingTimer = null;
+        }
+      };
+      video.addEventListener("waiting", onWaiting);
+      video.addEventListener("playing", onPlaying);
+      video.addEventListener("stalled", onWaiting);
+
+      // Cleanup adicional desses listeners
+      const origDestroy = hls.destroy.bind(hls);
+      hls.destroy = () => {
+        video.removeEventListener("waiting", onWaiting);
+        video.removeEventListener("playing", onPlaying);
+        video.removeEventListener("stalled", onWaiting);
+        if (waitingTimer) clearTimeout(waitingTimer);
+        origDestroy();
+      };
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = playableStreamUrl;
       if (autoPlay) video.play().catch(() => {});
