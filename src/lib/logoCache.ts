@@ -127,8 +127,10 @@ async function downloadOne(url: string, version: string) {
 export function primeLogoVersions(items: Array<{ url: string | null | undefined; version: string | null | undefined }>) {
   const cache = load();
   let queued = 0;
+  const appOrigin = typeof window !== "undefined" ? window.location.origin : "";
   for (const item of items) {
     if (!item.url) continue;
+    if (!item.url.startsWith(appOrigin) && !item.url.startsWith("/")) continue;
     const version = item.version || "";
     const existing = cache[item.url];
     if (existing && existing.version === version) continue; // já está atualizado
