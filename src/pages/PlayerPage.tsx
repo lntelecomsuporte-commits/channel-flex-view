@@ -8,6 +8,7 @@ import { useMultiEPG } from "@/hooks/useMultiEPG";
 import { useNativeBackButton } from "@/hooks/useNativeBackButton";
 import { useBackgroundPlayback } from "@/hooks/useBackgroundPlayback";
 import VideoPlayer, { type VideoPlayerHandle } from "@/components/player/VideoPlayer";
+import ChannelPrefetch from "@/components/player/ChannelPrefetch";
 import ChannelOSD from "@/components/player/ChannelOSD";
 import ChannelPreview from "@/components/player/ChannelPreview";
 import ChannelList from "@/components/player/ChannelList";
