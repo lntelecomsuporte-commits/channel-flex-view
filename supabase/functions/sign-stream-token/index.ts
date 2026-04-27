@@ -1,5 +1,5 @@
 // Assina um token HMAC de curta duração para tocar um canal específico via hls-proxy.
-// Vincula user_id + channel_id + exp. TTL fixo de 60s.
+// Vincula user_id + channel_id + exp. TTL fixo longo o suficiente para HLS ao vivo.
 // O cliente chama esta função e usa o token retornado em `?st=...&exp=...&ch=...&uid=...` no hls-proxy.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -14,7 +14,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SECRET = Deno.env.get("STREAM_TOKEN_SECRET")!;
 
-const TTL_SECONDS = 60;
+const TTL_SECONDS = 6 * 60 * 60;
 
 const toBase64Url = (bytes: ArrayBuffer): string => {
   const bin = String.fromCharCode(...new Uint8Array(bytes));
