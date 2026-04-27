@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabaseLocal";
 import type { Tables } from "@/integrations/supabase/types";
 import { primeLogoVersions } from "@/lib/logoCache";
 import { resolveLogoUrl } from "@/lib/logoUrl";
+import { channelsCache } from "@/lib/diskCache";
 
 export type Channel = Tables<"channels">;
 export type Category = Tables<"categories">;
