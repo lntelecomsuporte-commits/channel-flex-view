@@ -8,6 +8,7 @@ import { useMultiEPG } from "@/hooks/useMultiEPG";
 import { useNativeBackButton } from "@/hooks/useNativeBackButton";
 import { useBackgroundPlayback } from "@/hooks/useBackgroundPlayback";
 import VideoPlayer, { type VideoPlayerHandle } from "@/components/player/VideoPlayer";
+import ChannelPrefetch from "@/components/player/ChannelPrefetch";
 import ChannelOSD from "@/components/player/ChannelOSD";
 import ChannelPreview from "@/components/player/ChannelPreview";
 import ChannelList from "@/components/player/ChannelList";
@@ -619,6 +620,21 @@ const PlayerPage = () => {
             streamUrl={currentChannel.stream_url}
             channelId={currentChannel.id}
             useProxyToken={(currentChannel as any).use_proxy_token ?? false}
+          />
+          {/* Pre-aquece o próximo canal (UP) e o anterior (DOWN) — corta o zap */}
+          <ChannelPrefetch
+            nextStreamUrl={
+              channels && channels.length > 1
+                ? channels[(currentIndex + 1) % channels.length]?.stream_url ?? null
+                : null
+            }
+          />
+          <ChannelPrefetch
+            nextStreamUrl={
+              channels && channels.length > 1
+                ? channels[(currentIndex - 1 + channels.length) % channels.length]?.stream_url ?? null
+                : null
+            }
           />
           {showStats && (
             <StatsOverlay

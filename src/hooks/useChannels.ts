@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabaseLocal";
 import type { Tables } from "@/integrations/supabase/types";
 import { primeLogoVersions } from "@/lib/logoCache";
 import { resolveLogoUrl } from "@/lib/logoUrl";
+import { channelsCache } from "@/lib/diskCache";
 
 export type Channel = Tables<"channels">;
 export type Category = Tables<"categories">;
@@ -11,8 +12,16 @@ export type Category = Tables<"categories">;
 export function useChannels() {
   const query = useQuery({
     queryKey: ["channels"],
-    // Sempre revalida ao abrir o app / voltar foco — garante que mudanças
-    // de logo/URL feitas no painel apareçam assim que o APK reabrir.
+    // Stale-while-revalidate: usa o cache em disco como initialData pra
+    // pintar a tela em < 100ms no boot do APK, e revalida em background.
+    initialData: () => {
+      const cached = channelsCache.read<Channel[]>();
+      return cached && cached.length > 0 ? cached : undefined;
+    },
+    initialDataUpdatedAt: () => {
+      const age = channelsCache.age();
+      return age != null ? Date.now() - age : 0;
+    },
     staleTime: 0,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
@@ -47,7 +56,10 @@ export function useChannels() {
             .in("category_id", allCategoryIds)
             .order("channel_number", { ascending: true });
           if (error) throw error;
-          return data as Channel[];
+          const list = (data ?? []) as Channel[];
+          // Persiste em disco pro próximo boot
+          if (list.length > 0) channelsCache.write(list);
+          return list;
         }
         // No access records = no channels
         return [] as Channel[];

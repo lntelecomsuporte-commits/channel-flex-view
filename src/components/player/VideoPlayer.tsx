@@ -1,8 +1,11 @@
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react";
 import Hls from "hls.js";
+import { Capacitor } from "@capacitor/core";
 import { getPlayableStreamUrl, getProxiedStreamUrl, resolveChannelStreamUrl } from "@/lib/stream";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 import YouTubePlayer from "./YouTubePlayer";
+
+const IS_NATIVE_APK = Capacitor.isNativePlatform();
 
 interface VideoPlayerProps {
   streamUrl: string;
@@ -100,7 +103,12 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     const isAppleDevice = /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent) &&
       video.canPlayType("application/vnd.apple.mpegurl");
 
-    if (isAppleDevice) {
+    // No APK Android, o WebView (Chromium) NÃO toca HLS nativo, então
+    // hls.js continua sendo necessário. Mas para .mp4 / progressive,
+    // usamos <video src> direto (zero overhead, decodificação nativa).
+    const isHls = /\.m3u8(\?|$)/i.test(playableStreamUrl) || playableStreamUrl.includes("hls-proxy");
+
+    if (isAppleDevice || !isHls) {
       video.src = playableStreamUrl;
       if (autoPlay) video.play().catch(() => {});
     } else if (Hls.isSupported()) {
