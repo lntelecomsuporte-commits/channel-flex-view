@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Capacitor } from "@capacitor/core";
 import { getLocalFunctionUrl } from "@/lib/localBackend";
 import { getConsolidatedEpgUrl, getConsolidatedEpgJsonUrl, getLocalSourceUrl } from "@/lib/epgCache";
+import { epgJsonCache } from "@/lib/diskCache";
 
 export interface EPGProgram {
   title: string;
