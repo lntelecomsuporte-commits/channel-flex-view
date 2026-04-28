@@ -9,12 +9,11 @@ type: feature
 ## Arquitetura — cache local servido pelo nginx (3h cron)
 
 1. **`scripts/sync-epg.mjs`** roda via cron a cada 3h:
-   - Coleta URLs de DUAS fontes (deduplicadas):
-     a) `epg_url_presets` (URLs salvas pelo admin)
-     b) `channels.epg_url` distintas de canais ativos com `epg_channel_id` (URLs avulsas)
+   - Lê todas as URLs de `epg_url_presets` (tabela do admin)
    - Baixa cada XMLTV para `/opt/lntv-frontend/public/epg/sources/<slug>.xml`
-   - Lê `public.channels` ativos e gera `/opt/lntv-frontend/public/epg/lntv.xml` (consolidado, só nossos canais)
-   - Remove arquivos órfãos (URLs que não existem mais em nenhuma das duas fontes)
+   - Lê `public.channels` ativos com `epg_channel_id` preenchido
+   - Filtra cada fonte e gera `/opt/lntv-frontend/public/epg/lntv.xml` (consolidado, só nossos canais)
+   - Remove arquivos órfãos (URLs deletadas do admin)
    - User-Agent fallback (bot → browser-like) para vencer anti-bot do open-epg
 2. **Nginx** serve `/epg/sources/*.xml` e `/epg/lntv.xml` direto do disco — sem CORS, sem proxy.
 3. **Frontend** (`useMultiEPG`): sempre tenta `lntv.xml` primeiro (1 fetch leve), e só cai no `epg-proxy` para canais cuja `epg_url` não esteja em `epg_url_presets`.
@@ -34,11 +33,7 @@ Definido em `src/lib/hash.ts` (SHA-1 puro JS) + `src/lib/epgCache.ts` (`urlToSlu
 ```bash
 node scripts/sync-epg.mjs --consolidate
 ```
-
-## Forçar redownload (ignora cache de 2h30)
-```bash
-node scripts/sync-epg.mjs --force
-```
+Use depois de salvar canal no admin (futuro: trigger automático via webhook).
 
 ## Timezone
 UI exibe horário local com offset -3 (Brasília). Datas vêm em ISO do parser XMLTV.
@@ -51,3 +46,4 @@ location /epg/ {
   types { application/xml xml; }
 }
 ```
+(Após `npm run build` o conteúdo de `public/epg/` é copiado pra `dist/epg/` → `/var/www/lntv/epg/` via rsync. **Importante:** o rsync precisa NÃO excluir `epg/`.)
