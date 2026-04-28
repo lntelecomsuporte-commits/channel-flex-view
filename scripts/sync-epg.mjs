@@ -345,8 +345,8 @@ async function consolidate(slugByUrl) {
   const wantedByUrl = new Map();
   for (const ch of channels) {
     if (!slugByUrl.has(ch.epg_url)) {
-      // Canal aponta pra URL que não está em epg_url_presets — ignora silenciosamente
-      // (admin pode digitar URL solta; nesse caso o sistema cai no proxy remoto)
+      // URL não foi baixada (ex.: download falhou) — cai no proxy remoto no cliente.
+      log(`   ⚠ canal ${ch.channel_number} ${ch.name}: URL sem cache local (${ch.epg_url.slice(0, 80)}…)`);
       continue;
     }
     let arr = wantedByUrl.get(ch.epg_url);
