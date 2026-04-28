@@ -148,6 +148,34 @@ function fetchPresets() {
   return raw.split("\n").map((u) => u.trim()).filter(Boolean);
 }
 
+/** URLs avulsas: canais que apontam pra uma epg_url que NÃO está em epg_url_presets. */
+function fetchChannelEpgUrls() {
+  const sql = `
+    SELECT DISTINCT c.epg_url
+    FROM public.channels c
+    WHERE c.is_active = true
+      AND c.epg_url IS NOT NULL AND c.epg_url <> ''
+      AND c.epg_channel_id IS NOT NULL AND c.epg_channel_id <> ''
+      AND (c.epg_type IS NULL OR c.epg_type IN ('xmltv','iptv_epg_org','open_epg','github_xml'))
+  `;
+  const raw = psql(sql).trim();
+  if (!raw) return [];
+  return raw.split("\n").map((u) => u.trim()).filter(Boolean);
+}
+
+/** Une presets + URLs avulsas dos canais (deduplicado, preserva ordem). */
+function fetchAllEpgUrls() {
+  const seen = new Set();
+  const out = [];
+  for (const u of fetchPresets()) { if (!seen.has(u)) { seen.add(u); out.push(u); } }
+  let extras = 0;
+  for (const u of fetchChannelEpgUrls()) {
+    if (!seen.has(u)) { seen.add(u); out.push(u); extras++; }
+  }
+  if (extras > 0) log(`   + ${extras} URL(s) avulsa(s) de canais (sem preset)`);
+  return out;
+}
+
 function fetchOurChannels() {
   // Só canais XMLTV ativos com epg_channel_id e epg_url preenchidos
   const sql = `
