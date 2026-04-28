@@ -431,13 +431,12 @@ async function main() {
 
   let slugByUrl;
   if (CONSOLIDATE_ONLY) {
-    // Reconstrói o mapa só pelas URLs do banco (arquivos já estão em disco)
-    const presets = fetchPresets();
-    slugByUrl = new Map(presets.map((u) => [u, urlToSlug(u)]));
+    const allUrls = fetchAllEpgUrls();
+    slugByUrl = new Map(allUrls.map((u) => [u, urlToSlug(u)]));
   } else {
-    const presets = fetchPresets();
-    log(`   URLs salvas: ${presets.length}`);
-    slugByUrl = await syncSources(presets);
+    const allUrls = fetchAllEpgUrls();
+    log(`   URLs totais (presets + avulsas): ${allUrls.length}`);
+    slugByUrl = await syncSources(allUrls);
   }
 
   await consolidate(slugByUrl);
