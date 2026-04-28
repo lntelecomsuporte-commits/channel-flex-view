@@ -18,8 +18,14 @@ const FavoritesBar = ({ channels, favoriteIds, currentChannelId, visible, onSele
   const activeRef = useRef<HTMLButtonElement>(null);
   const focusedRef = useRef<HTMLButtonElement>(null);
 
-  // ordered favorites
+  // ordered favorites (dedup defensivo: nunca repetir o mesmo canal)
+  const seen = new Set<string>();
   const favs = favoriteIds
+    .filter((id) => {
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    })
     .map((id) => channels.find((c) => c.id === id))
     .filter((c): c is Channel => !!c);
 
