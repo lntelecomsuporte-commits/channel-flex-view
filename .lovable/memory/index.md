@@ -12,6 +12,7 @@ SEMPRE ao final de QUALQUER mudança (frontend, edge function, migration), inclu
 
 ## Memories
 - [Self-hosted deployment](mem://deployment/self-hosted) — Procedimento de sync obrigatório após cada mudança
+- [APK Auto-update](mem://deployment/apk-downloads) — /opt/lntv-downloads/ fora do webroot, nginx alias SEM try_files
 - [No Cloud constraint](mem://constraints/no-cloud) — Tudo local, proxies no mesmo domínio, regras de build
 - [Player & Navigation](mem://features/player) — Remote/touch controls, autoplay rules, Airplay support
 - [Hubsoft Integration](mem://features/hubsoft-integration) — Webhooks, TVLN filtering, CPF login generation, blocking logic
