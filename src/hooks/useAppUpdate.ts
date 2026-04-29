@@ -62,8 +62,10 @@ async function getCurrentVersionCode(): Promise<number | null> {
     const info = await App.getInfo();
     // info.build é string com o versionCode no Android
     const code = parseInt(info.build, 10);
+    console.log("[useAppUpdate] App.getInfo()", { name: info.name, version: info.version, build: info.build, parsedCode: code });
     return Number.isFinite(code) ? code : null;
-  } catch {
+  } catch (e) {
+    console.warn("[useAppUpdate] App.getInfo() failed", e);
     return null;
   }
 }
@@ -76,15 +78,19 @@ async function fetchRemoteVersion(): Promise<RemoteVersion | null> {
   for (const url of urls) {
     try {
       const joiner = url.includes("?") ? "&" : "?";
-      const res = await fetch(`${url}${joiner}t=${Date.now()}`, {
-        cache: "no-store",
-      });
+      const fullUrl = `${url}${joiner}t=${Date.now()}`;
+      const res = await fetch(fullUrl, { cache: "no-store" });
+      console.log("[useAppUpdate] fetch", fullUrl, "->", res.status);
       if (!res.ok) continue;
       const data = (await res.json()) as RemoteVersion;
-      if (typeof data.versionCode !== "number" || !data.url) continue;
+      if (typeof data.versionCode !== "number" || !data.url) {
+        console.warn("[useAppUpdate] payload inválido", data);
+        continue;
+      }
+      console.log("[useAppUpdate] remote version", data);
       return normalizeApkUrl(data);
-    } catch {
-      /* tenta a próxima URL */
+    } catch (e) {
+      console.warn("[useAppUpdate] fetch falhou", url, e);
     }
   }
 
@@ -100,21 +106,34 @@ export function useAppUpdate(): UseAppUpdateResult {
   const dismissedVersionCodeRef = useRef<number | null>(null);
 
   const check = useCallback(async () => {
-    if (!(await isNativeApp())) return;
+    const native = await isNativeApp();
+    console.log("[useAppUpdate] check() start, native=", native);
+    if (!native) return;
     const current = await getCurrentVersionCode();
-    if (current === null) return;
+    if (current === null) {
+      console.warn("[useAppUpdate] currentVersionCode null, abortando");
+      return;
+    }
     setCurrentVersionCode(current);
 
     const remote = await fetchRemoteVersion();
-    if (!remote) return;
+    if (!remote) {
+      console.warn("[useAppUpdate] remote null, abortando");
+      return;
+    }
 
+    console.log("[useAppUpdate] compare", { current, remote: remote.versionCode });
     if (remote.versionCode <= current) {
       setAvailable(null);
       return;
     }
 
-    if (dismissedVersionCodeRef.current === remote.versionCode) return;
+    if (dismissedVersionCodeRef.current === remote.versionCode) {
+      console.log("[useAppUpdate] versão já dispensada nesta sessão");
+      return;
+    }
 
+    console.log("[useAppUpdate] ✅ update disponível, mostrando prompt");
     setAvailable(remote);
   }, []);
 
