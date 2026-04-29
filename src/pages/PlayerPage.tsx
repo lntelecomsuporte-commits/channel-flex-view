@@ -643,12 +643,32 @@ const PlayerPage = () => {
                 ? channels[(currentIndex + 1) % channels.length]?.stream_url ?? null
                 : null
             }
+            channelId={
+              channels && channels.length > 1
+                ? channels[(currentIndex + 1) % channels.length]?.id ?? null
+                : null
+            }
+            useProxyToken={
+              channels && channels.length > 1
+                ? ((channels[(currentIndex + 1) % channels.length] as any)?.use_proxy_token ?? false)
+                : false
+            }
           />
           <ChannelPrefetch
             nextStreamUrl={
               channels && channels.length > 1
                 ? channels[(currentIndex - 1 + channels.length) % channels.length]?.stream_url ?? null
                 : null
+            }
+            channelId={
+              channels && channels.length > 1
+                ? channels[(currentIndex - 1 + channels.length) % channels.length]?.id ?? null
+                : null
+            }
+            useProxyToken={
+              channels && channels.length > 1
+                ? ((channels[(currentIndex - 1 + channels.length) % channels.length] as any)?.use_proxy_token ?? false)
+                : false
             }
           />
           {showStats && (
