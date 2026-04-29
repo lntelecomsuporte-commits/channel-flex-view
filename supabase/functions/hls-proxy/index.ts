@@ -132,6 +132,20 @@ const getProxyEndpoint = (request: Request, requestUrl: URL) => {
 
 const mediaExtensions = [".m3u8", ".m4s", ".ts", ".aac", ".mp3", ".mp4", ".m4a", ".key", ".vtt", ".webvtt", ".jpg", ".jpeg", ".png", ".webp", ".gif"];
 
+// Content-types aceitos quando a URL não tem extensão de mídia (ex.: MPEG-TS bruto via HTTP)
+const allowedUpstreamContentTypes = [
+  "video/mp2t",
+  "video/mpeg",
+  "video/mp4",
+  "application/octet-stream", // muitos servidores TS retornam isso
+  "application/vnd.apple.mpegurl",
+  "application/x-mpegurl",
+  "audio/mpegurl",
+  "audio/aac",
+  "audio/mpeg",
+  "image/",
+];
+
 const isPrivateHostname = (hostname: string) => {
   const normalized = hostname.toLowerCase();
   if (["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(normalized) || normalized.endsWith(".local")) return true;
@@ -405,9 +419,11 @@ Deno.serve(async (request) => {
     return new Response("Unsupported protocol", { status: 400, headers: corsHeaders });
   }
 
-  if (isPrivateHostname(upstreamUrl.hostname) || !isMediaRequest(upstreamUrl.pathname)) {
+  if (isPrivateHostname(upstreamUrl.hostname)) {
     return new Response("URL blocked by proxy policy", { status: 403, headers: corsHeaders });
   }
+  // Se a URL tem extensão de mídia, libera direto. Senão, validamos depois pelo content-type upstream.
+  const hasMediaExtension = isMediaRequest(upstreamUrl.pathname);
 
   const upstreamHeaders = new Headers();
   const range = request.headers.get("range");
