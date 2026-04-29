@@ -635,7 +635,7 @@ const PlayerPage = () => {
             channelId={currentChannel.id}
             useProxyToken={(currentChannel as any).use_proxy_token ?? false}
             backupStreamUrls={(currentChannel as any).backup_stream_urls ?? null}
-            streamFormat={((currentChannel as any).stream_format as "auto" | "hls" | "ts" | "mp4") ?? "auto"}
+            streamFormat={((currentChannel as any).stream_format as "auto" | "hls" | "mp4") ?? "auto"}
           />
           {/* Pre-aquece o próximo canal (UP) e o anterior (DOWN) — corta o zap */}
           <ChannelPrefetch
