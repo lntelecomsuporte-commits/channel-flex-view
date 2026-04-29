@@ -52,6 +52,20 @@ jobs:
           echo "Backend target:"
           grep VITE_SUPABASE_URL .env.production
 
+      - name: Set Android versionCode/versionName from run number
+        run: |
+          VERSION_CODE=${{ github.run_number }}
+          VERSION_NAME="1.0.${{ github.run_number }}"
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
+          # Atualiza android/app/build.gradle (já presente no repo)
+          if [ -f android/app/build.gradle ]; then
+            sed -i "s/versionCode [0-9]\+/versionCode $VERSION_CODE/" android/app/build.gradle
+            sed -i "s/versionName \"[^\"]*\"/versionName \"$VERSION_NAME\"/" android/app/build.gradle
+            echo "Versão definida:"
+            grep -E "versionCode|versionName" android/app/build.gradle
+          fi
+
       - name: Build web (dist/)
         run: npm run build
 
@@ -63,6 +77,12 @@ jobs:
 
       - name: Capacitor sync
         run: npx cap sync android
+
+      - name: Re-apply versionCode/versionName after cap sync
+        run: |
+          sed -i "s/versionCode [0-9]\+/versionCode ${VERSION_CODE}/" android/app/build.gradle
+          sed -i "s/versionName \"[^\"]*\"/versionName \"${VERSION_NAME}\"/" android/app/build.gradle
+          grep -E "versionCode|versionName" android/app/build.gradle
 
       - name: Generate Android icons & splash from resources/
         run: |
