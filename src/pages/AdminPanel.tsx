@@ -330,8 +330,29 @@ const AdminPanel = () => {
                     <Input type="number" value={channelForm.channel_number} onChange={(e) => setChannelForm((f) => ({ ...f, channel_number: e.target.value }))} placeholder="Ex: 1" />
                   </div>
                   <div className="space-y-2 md:col-span-2">
-                    <Label>URL do Stream (HLS) <span className="text-destructive">*</span></Label>
+                    <Label>URL do Stream <span className="text-destructive">*</span></Label>
                     <Input value={channelForm.stream_url} onChange={(e) => setChannelForm((f) => ({ ...f, stream_url: e.target.value }))} placeholder="https://seu-flussonic.com/canal/index.m3u8" />
+                    <p className="text-xs text-muted-foreground">
+                      Suportado: HLS (.m3u8), MPEG-TS (.ts) e MP4. RTMP/RTSP <strong>não funcionam no navegador</strong> — transcodifique para HLS no Flussonic.
+                    </p>
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>Formato do Stream</Label>
+                    <Select
+                      value={channelForm.stream_format}
+                      onValueChange={(v) => setChannelForm((f) => ({ ...f, stream_format: v }))}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="auto">Auto (detectar pela URL)</SelectItem>
+                        <SelectItem value="hls">HLS (.m3u8)</SelectItem>
+                        <SelectItem value="ts">MPEG-TS (.ts)</SelectItem>
+                        <SelectItem value="mp4">MP4 progressivo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Use <strong>Auto</strong> na maioria dos casos. Force o formato apenas se a URL não tiver extensão padrão (ex.: <code>/stream</code> sem <code>.ts</code>/<code>.m3u8</code>).
+                    </p>
                   </div>
                   <div className="space-y-2 md:col-span-2">
                     <Label>URLs de Backup (opcional)</Label>
