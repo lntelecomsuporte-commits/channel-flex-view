@@ -414,7 +414,6 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       className="absolute inset-0 w-full h-full object-contain"
       playsInline
       muted={muted}
-      // @ts-expect-error - AirPlay attributes
       x-webkit-airplay="allow"
       webkit-playsinline="true"
       crossOrigin="anonymous"
