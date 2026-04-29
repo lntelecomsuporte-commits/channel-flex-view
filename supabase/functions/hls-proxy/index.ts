@@ -426,6 +426,16 @@ Deno.serve(async (request) => {
   // Se a URL tem extensão de mídia, libera direto. Senão, validamos depois pelo content-type upstream.
   const hasMediaExtension = isMediaRequest(upstreamUrl.pathname);
 
+  // Log estruturado de cada request — facilita auditar quem está passando pelo proxy.
+  // Formato: [hls-proxy] <method> <proto>//<host><path> mode=<jwt|signed> ua=<short>
+  try {
+    const mode = authCtx.signed ? "signed" : "jwt";
+    const ua = (request.headers.get("user-agent") ?? "").slice(0, 60);
+    console.log(
+      `[hls-proxy] ${request.method} ${upstreamUrl.protocol}//${upstreamUrl.host}${upstreamUrl.pathname} mode=${mode} ip=${getClientIp(request)} ua="${ua}"`,
+    );
+  } catch { /* noop */ }
+
   const upstreamHeaders = new Headers();
   const range = request.headers.get("range");
   const accept = request.headers.get("accept");
