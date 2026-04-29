@@ -337,24 +337,6 @@ const AdminPanel = () => {
                     </p>
                   </div>
                   <div className="space-y-2 md:col-span-2">
-                    <Label>Formato do Stream</Label>
-                    <Select
-                      value={channelForm.stream_format}
-                      onValueChange={(v) => setChannelForm((f) => ({ ...f, stream_format: v }))}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="auto">Auto (detectar pela URL)</SelectItem>
-                        <SelectItem value="hls">HLS (.m3u8)</SelectItem>
-                        <SelectItem value="ts">MPEG-TS (.ts)</SelectItem>
-                        <SelectItem value="mp4">MP4 progressivo</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Use <strong>Auto</strong> na maioria dos casos. Force o formato apenas se a URL não tiver extensão padrão (ex.: <code>/stream</code> sem <code>.ts</code>/<code>.m3u8</code>).
-                    </p>
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
                     <Label>URLs de Backup (opcional)</Label>
                     <Textarea
                       rows={3}

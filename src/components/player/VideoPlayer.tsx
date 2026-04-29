@@ -5,13 +5,8 @@ import { extractYouTubeVideoId } from "@/lib/youtube";
 import { getDeviceProfile } from "@/lib/deviceProfile";
 import YouTubePlayer from "./YouTubePlayer";
 
-export type StreamFormat = "auto" | "hls" | "mp4";
-
-/** Detecta o engine a usar com base no formato escolhido + URL original. */
-const detectEngine = (format: StreamFormat, url: string, sourceUrl = url): "hls" | "native" => {
-  if (format === "hls") return "hls";
-  if (format === "mp4") return "native";
-  // auto: olha a URL
+/** Detecta o engine a usar com base na URL (extensão). */
+const detectEngine = (url: string, sourceUrl = url): "hls" | "native" => {
   const source = sourceUrl.toLowerCase();
   const playable = url.toLowerCase();
   if (/\.m3u8(\?|$)/.test(source) || /\.m3u8(\?|$)/.test(playable)) return "hls";
@@ -46,9 +41,6 @@ interface VideoPlayerProps {
    *  na URL principal (erro fatal não-recuperável), avança automaticamente
    *  para a próxima URL desta lista. */
   backupStreamUrls?: string[] | null;
-  /** Formato do stream — controla qual engine de player usar.
-   *  "auto" (padrão) detecta pela extensão da URL. */
-  streamFormat?: StreamFormat;
 }
 
 export interface VideoPlayerHandle {
@@ -56,7 +48,7 @@ export interface VideoPlayerHandle {
   getHls: () => Hls | null;
 }
 
-const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, backupStreamUrls = null, streamFormat = "auto" }, ref) => {
+const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, backupStreamUrls = null }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   
@@ -160,11 +152,9 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     const isAppleDevice = /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent) &&
       video.canPlayType("application/vnd.apple.mpegurl");
 
-    // Detecta engine considerando o formato cadastrado no canal.
-    // - "auto" (padrão): olha extensão da URL.
-    // - "hls"/"ts"/"mp4": força o engine correspondente.
-    const engine = detectEngine(streamFormat, playableStreamUrl, activeStreamUrl);
-    console.log(`[Player] engine=${engine} format=${streamFormat} url=${playableStreamUrl.slice(0, 80)}...`);
+    // Detecta engine pela extensão da URL: .m3u8 → hls.js, resto → tag <video>.
+    const engine = detectEngine(playableStreamUrl, activeStreamUrl);
+    console.log(`[Player] engine=${engine} url=${playableStreamUrl.slice(0, 80)}...`);
 
     if (engine === "hls" && !isAppleDevice && Hls.isSupported()) {
       const profile = getDeviceProfile();
@@ -338,7 +328,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         hlsRef.current = null;
       }
     };
-  }, [playableStreamUrl, autoPlay, activeStreamUrl, useProxyFallback, proxyTokenFailure, streamFormat]);
+  }, [playableStreamUrl, autoPlay, activeStreamUrl, useProxyFallback, proxyTokenFailure]);
 
   // Unmute after first user interaction
   useEffect(() => {
