@@ -5,13 +5,8 @@ import { extractYouTubeVideoId } from "@/lib/youtube";
 import { getDeviceProfile } from "@/lib/deviceProfile";
 import YouTubePlayer from "./YouTubePlayer";
 
-export type StreamFormat = "auto" | "hls" | "mp4";
-
-/** Detecta o engine a usar com base no formato escolhido + URL original. */
-const detectEngine = (format: StreamFormat, url: string, sourceUrl = url): "hls" | "native" => {
-  if (format === "hls") return "hls";
-  if (format === "mp4") return "native";
-  // auto: olha a URL
+/** Detecta o engine a usar com base na URL (extensão). */
+const detectEngine = (url: string, sourceUrl = url): "hls" | "native" => {
   const source = sourceUrl.toLowerCase();
   const playable = url.toLowerCase();
   if (/\.m3u8(\?|$)/.test(source) || /\.m3u8(\?|$)/.test(playable)) return "hls";
