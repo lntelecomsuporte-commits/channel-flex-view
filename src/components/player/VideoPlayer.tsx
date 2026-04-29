@@ -101,9 +101,9 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     }
 
     const isSignedProxyUrl = playableStreamUrl.includes("/functions/v1/hls-proxy") && playableStreamUrl.includes("st=");
-    const forcedProxyUrl = getProxiedStreamUrl(streamUrl);
+    const forcedProxyUrl = getProxiedStreamUrl(activeStreamUrl);
     const canFallbackToDirect = isSignedProxyUrl && !proxyTokenFailure;
-    const canFallbackToProxy = !useProxyFallback && !isSignedProxyUrl && forcedProxyUrl !== streamUrl && forcedProxyUrl !== playableStreamUrl;
+    const canFallbackToProxy = !useProxyFallback && !isSignedProxyUrl && forcedProxyUrl !== activeStreamUrl && forcedProxyUrl !== playableStreamUrl;
     const fallbackToDirect = () => {
       if (!canFallbackToDirect) return false;
       console.warn("[HLS] Proxy assinado falhou — tentando stream direto");
@@ -118,7 +118,9 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       return true;
     };
     const handleVideoError = () => {
-      fallbackToProxy();
+      // Tag <video> direta (mp4/native HLS): tenta proxy → senão próximo backup
+      if (fallbackToProxy()) return;
+      tryNextBackup();
     };
     video.addEventListener("error", handleVideoError);
 
