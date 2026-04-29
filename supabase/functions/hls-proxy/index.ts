@@ -518,13 +518,20 @@ Deno.serve(async (request) => {
   const proxyEndpoint = getProxyEndpoint(request, requestUrl);
   const ip = getClientIp(request);
   const contentLength = parseInt(upstreamResponse.headers.get("content-length") ?? "0", 10) || 0;
+  let responseBody = upstreamResponse.body;
+  let sniffedMpegTs = false;
 
   // Quando a URL não tinha extensão de mídia, valida pelo content-type upstream.
   // Permite MPEG-TS bruto via HTTP (ex.: http://host:porta/) que servidores
   // tipo Flussonic/UDPxy retornam como video/mp2t ou application/octet-stream.
   if (!hasMediaExtension) {
     const allowed = allowedUpstreamContentTypes.some((t) => contentType.includes(t));
-    if (!allowed) {
+    if (!allowed && contentType.includes("text/html")) {
+      const sniffed = await sniffMpegTsBody(responseBody);
+      sniffedMpegTs = sniffed.isMpegTs;
+      responseBody = sniffed.body;
+    }
+    if (!allowed && !sniffedMpegTs) {
       console.warn(`[hls-proxy] bloqueado: URL sem extensão e content-type não-mídia: ${contentType} (${resolvedTarget})`);
       try { upstreamResponse.body?.cancel(); } catch { /* noop */ }
       return new Response("URL blocked by proxy policy (non-media content-type)", { status: 403, headers: corsHeaders });
@@ -566,10 +573,11 @@ Deno.serve(async (request) => {
   // - accept-ranges induz o player a fazer range requests num live, o que
   //   o servidor de origem (UDPxy/xtream/etc) não suporta corretamente.
   const isRawMpegTs =
-    !hasMediaExtension &&
-    (contentType.includes("video/mp2t") ||
+    (!hasMediaExtension &&
+      (contentType.includes("video/mp2t") ||
       contentType.includes("video/mpeg") ||
-      contentType.includes("application/octet-stream"));
+      contentType.includes("application/octet-stream"))) ||
+    sniffedMpegTs;
 
   if (isRawMpegTs) {
     responseHeaders.set("Content-Type", "video/mp2t");
@@ -582,7 +590,7 @@ Deno.serve(async (request) => {
     });
   }
 
-  return new Response(upstreamResponse.body, {
+  return new Response(responseBody, {
       status: upstreamResponse.status,
       headers: responseHeaders,
     });
