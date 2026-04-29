@@ -98,7 +98,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         }
       } else {
         url = getPlayableStreamUrl(activeStreamUrl);
-        setResolvedContentType("");
+        if (!cancelled) setResolvedContentType("");
       }
       if (!cancelled) setResolvedUrl(url);
     })();
@@ -139,6 +139,10 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
+    if (mpegtsRef.current) {
+      mpegtsRef.current.destroy();
+      mpegtsRef.current = null;
+    }
 
     const isSignedProxyUrl = playableStreamUrl.includes("/functions/v1/hls-proxy") && playableStreamUrl.includes("st=");
     const handleVideoError = () => {
@@ -153,7 +157,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       video.canPlayType("application/vnd.apple.mpegurl");
 
     // Detecta engine pela extensão da URL: .m3u8 → hls.js, resto → tag <video>.
-    const engine = detectEngine(playableStreamUrl, activeStreamUrl);
+    const engine = detectEngine(playableStreamUrl, activeStreamUrl, resolvedContentType);
     console.log(`[Player] engine=${engine} url=${playableStreamUrl.slice(0, 80)}...`);
 
     if (engine === "hls" && !isAppleDevice && Hls.isSupported()) {
