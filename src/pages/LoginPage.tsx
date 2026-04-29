@@ -135,7 +135,7 @@ const LoginPage = () => {
                     readOnly={isNative}
                     required
                     autoComplete="current-password"
-                    className={`pr-11 sm:h-12 sm:text-base ${activeField === "password" && isNative ? "ring-2 ring-primary" : ""}`}
+                    className={`pr-11 sm:h-12 sm:text-base ${activeField === "password" && useVirtualKeyboard ? "ring-2 ring-primary" : ""}`}
                   />
                   <button
                     type="button"
