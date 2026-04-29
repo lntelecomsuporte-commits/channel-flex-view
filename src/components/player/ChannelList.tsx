@@ -191,7 +191,7 @@ function SynopsisModal({ program, onClose }: { program: EPGProgram; onClose: () 
 
 interface RowData {
   filteredChannels: Channel[];
-  channels: Channel[];
+  channelIndexMap: Map<string, number>;
   currentIndex: number;
   focusedIndex: number;
   epgMap: Map<string, EPGProgram[]>;
@@ -203,13 +203,13 @@ interface RowData {
 }
 
 const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
-  const { filteredChannels, channels, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect, onFocus, onSynopsis, setItemRef } = data;
+  const { filteredChannels, channelIndexMap, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect, onFocus, onSynopsis, setItemRef } = data;
   const channel = filteredChannels[index];
   const ch = channel as any;
   const programs = epgMap.get(channel.id) || [];
   const altText = ch.epg_alt_text as string | null;
   const epgType = ch.epg_type as string | null;
-  const realIndex = useMemo(() => channels.indexOf(channel), [channels, channel]);
+  const realIndex = channelIndexMap.get(channel.id) ?? -1;
   const isActive = realIndex === currentIndex;
   const isFocused = index === focusedIndex;
   const isFav = favoriteIds.has(channel.id);
@@ -270,6 +270,10 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
 
   const enterPressStartRef = useRef<number | null>(null);
   const enterFavoriteFiredRef = useRef(false);
+  // Throttle de 16ms (~60fps) para repetição de teclas de navegação
+  // (ArrowUp/Down e Page+/-) — evita acumular re-renders quando segura a tecla.
+  const lastNavTickRef = useRef(0);
+  const NAV_THROTTLE_MS = 16;
 
   const epgMap = useMultiEPG(
     channels.map((ch) => ({
@@ -310,11 +314,11 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
   }, [visible]);
 
   // Faz o scroll para o item focado quando o índice muda durante navegação.
-  // A posição inicial é resolvida via `initialScrollOffset` no FixedSizeList,
-  // garantindo centralização correta já na primeira pintura.
+  // Usa "auto" (instantâneo) em vez de "smart" (animado) para evitar acúmulo
+  // de animações quando o usuário segura a tecla pra varrer canais rapidamente.
   useEffect(() => {
     if (!visible || listSize.height <= 0) return;
-    listRef.current?.scrollToItem(focusedIndex, "smart");
+    listRef.current?.scrollToItem(focusedIndex, "auto");
   }, [focusedIndex, visible, listSize.height]);
 
   // Calcula offset inicial centralizado no canal atual (usado só na 1ª render
@@ -330,10 +334,17 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
     itemRefs.current[index] = el;
   };
 
+  // Lookup O(1) do índice real do canal (em vez de channels.indexOf por linha).
+  const channelIndexMap = useMemo(() => {
+    const m = new Map<string, number>();
+    channels.forEach((ch, i) => m.set(ch.id, i));
+    return m;
+  }, [channels]);
+
   const rowData = useMemo<RowData>(
     () => ({
       filteredChannels,
-      channels,
+      channelIndexMap,
       currentIndex,
       focusedIndex,
       epgMap,
@@ -343,7 +354,7 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
       onSynopsis: (p: EPGProgram) => setSynopsisProgram(p),
       setItemRef,
     }),
-    [filteredChannels, channels, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect]
+    [filteredChannels, channelIndexMap, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect]
   );
 
   useEffect(() => {
@@ -359,6 +370,20 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
       }
 
       const isSearchFocused = document.activeElement === searchRef.current;
+
+      // Throttle de repetição: quando o usuário segura a tecla, ignora
+      // eventos que cheguem antes de 16ms desde o último processado.
+      const isNavKey =
+        isPageNextKey(e) || isPagePrevKey(e) || e.key === "ArrowUp" || e.key === "ArrowDown";
+      if (isNavKey && e.repeat) {
+        const now = performance.now();
+        if (now - lastNavTickRef.current < NAV_THROTTLE_MS) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        lastNavTickRef.current = now;
+      }
 
       // FF / RW / Ch+ / Ch- → paginate by 10
       if (isPageNextKey(e)) {

@@ -52,6 +52,20 @@ jobs:
           echo "Backend target:"
           grep VITE_SUPABASE_URL .env.production
 
+      - name: Set Android versionCode/versionName from run number
+        run: |
+          VERSION_CODE=${{ github.run_number }}
+          VERSION_NAME="1.0.${{ github.run_number }}"
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
+          # Atualiza android/app/build.gradle (já presente no repo)
+          if [ -f android/app/build.gradle ]; then
+            sed -i "s/versionCode [0-9]\+/versionCode $VERSION_CODE/" android/app/build.gradle
+            sed -i "s/versionName \"[^\"]*\"/versionName \"$VERSION_NAME\"/" android/app/build.gradle
+            echo "Versão definida:"
+            grep -E "versionCode|versionName" android/app/build.gradle
+          fi
+
       - name: Build web (dist/)
         run: npm run build
 
@@ -63,6 +77,12 @@ jobs:
 
       - name: Capacitor sync
         run: npx cap sync android
+
+      - name: Re-apply versionCode/versionName after cap sync
+        run: |
+          sed -i "s/versionCode [0-9]\+/versionCode ${VERSION_CODE}/" android/app/build.gradle
+          sed -i "s/versionName \"[^\"]*\"/versionName \"${VERSION_NAME}\"/" android/app/build.gradle
+          grep -E "versionCode|versionName" android/app/build.gradle
 
       - name: Generate Android icons & splash from resources/
         run: |
@@ -80,14 +100,29 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: Rename APK
+      - name: Rename APK + generate version.json
         run: |
           mkdir -p out
-          cp android/app/build/outputs/apk/debug/app-debug.apk out/lntv-debug-${{ github.run_number }}.apk
+          APK_NAME="lntv-debug-${{ github.run_number }}.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "out/${APK_NAME}"
+          # Cópia "latest" para URL estável usada pelo notificador
+          cp "out/${APK_NAME}" out/lntv-latest.apk
+          # version.json publicado junto ao APK em /downloads/ no nginx
+          cat > out/version.json <<EOF
+          {
+            "versionCode": ${VERSION_CODE},
+            "versionName": "${VERSION_NAME}",
+            "url": "https://tv2.lntelecom.net/downloads/lntv-latest.apk",
+            "notes": "Build #${{ github.run_number }} — ${{ github.event.head_commit.message }}"
+          }
+          EOF
+          cat out/version.json
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: lntv-debug-apk
-          path: out/*.apk
+          path: |
+            out/*.apk
+            out/version.json
           retention-days: 30
