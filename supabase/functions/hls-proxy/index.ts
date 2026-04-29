@@ -155,9 +155,9 @@ const isMpegTsChunk = (chunk: Uint8Array): boolean => {
   return true;
 };
 
-const sniffMpegTsBody = async (body: ReadableStream<Uint8Array> | null): Promise<{
+const sniffMpegTsBody = async (body: ReadableStream<Uint8Array<ArrayBufferLike>> | null): Promise<{
   isMpegTs: boolean;
-  body: ReadableStream<Uint8Array> | null;
+  body: ReadableStream<Uint8Array<ArrayBufferLike>> | null;
 }> => {
   if (!body) return { isMpegTs: false, body: null };
   const reader = body.getReader();
