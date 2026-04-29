@@ -409,17 +409,18 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
         lastNavTickRef.current = now;
       }
 
-      // FF / RW / Ch+ / Ch- / ArrowLeft / ArrowRight → paginar 10
+      // FF / RW / Ch+ / Ch- / ArrowLeft / ArrowRight → paginar 5 (garante troca de tela em TVs que mostram ~6 canais)
+      const PAGE_STEP = 5;
       if (isPageNextKey(e) || e.key === "ArrowRight") {
         e.preventDefault();
         e.stopPropagation();
-        setFocusedIndex((prev) => Math.min(filteredChannels.length - 1, prev + 10));
+        setFocusedIndex((prev) => Math.min(filteredChannels.length - 1, prev + PAGE_STEP));
         return;
       }
       if (isPagePrevKey(e) || e.key === "ArrowLeft") {
         e.preventDefault();
         e.stopPropagation();
-        setFocusedIndex((prev) => Math.max(0, prev - 10));
+        setFocusedIndex((prev) => Math.max(0, prev - PAGE_STEP));
         return;
       }
 
