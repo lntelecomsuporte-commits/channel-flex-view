@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useAllChannels, useCategories } from "@/hooks/useChannels";
@@ -42,6 +42,8 @@ const AdminPanel = () => {
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const channelFormRef = useRef<HTMLDivElement>(null);
+  const categoryFormRef = useRef<HTMLDivElement>(null);
 
   // (removido) busca global de presets — agora o EpgUrlPresetSelector lista
   // todas as URLs salvas do tipo "xmltv" e o usuário escolhe quais buscar.
@@ -195,6 +197,9 @@ const AdminPanel = () => {
       epg_show_synopsis: (ch as any).epg_show_synopsis ?? false,
       use_proxy_token: (ch as any).use_proxy_token ?? false,
     });
+    requestAnimationFrame(() => {
+      channelFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   };
 
   const resetCategoryForm = () => setCategoryForm({ name: "", position: "", includedCategoryIds: [] });
@@ -307,7 +312,7 @@ const AdminPanel = () => {
           </TabsList>
 
           <TabsContent value="channels">
-            <Card className="mb-6">
+            <Card className="mb-6" ref={channelFormRef}>
               <CardHeader><CardTitle>{editingChannelId ? "Editar Canal" : "Novo Canal"}</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -485,7 +490,7 @@ const AdminPanel = () => {
           </TabsContent>
 
           <TabsContent value="categories">
-            <Card className="mb-6">
+            <Card className="mb-6" ref={categoryFormRef}>
               <CardHeader><CardTitle>{editingCategoryId ? "Editar Categoria" : "Nova Categoria"}</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
