@@ -4,6 +4,7 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, range, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+  "Access-Control-Expose-Headers": "content-type, content-length, content-range, accept-ranges, x-lntv-final-url, x-lntv-final-content-type",
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -506,12 +507,16 @@ Deno.serve(async (request) => {
       headers: {
         ...corsHeaders,
         "Content-Type": "application/vnd.apple.mpegurl",
+        "X-LNTV-Final-URL": upstreamResponse.url,
+        "X-LNTV-Final-Content-Type": contentType,
         "Cache-Control": "no-store",
       },
     });
   }
 
   const responseHeaders = new Headers(corsHeaders);
+  responseHeaders.set("X-LNTV-Final-URL", upstreamResponse.url);
+  responseHeaders.set("X-LNTV-Final-Content-Type", contentType);
 
   // Detecta MPEG-TS bruto (live stream contínuo, sem extensão de mídia).
   // Para esses, NÃO repassamos content-length nem accept-ranges:
