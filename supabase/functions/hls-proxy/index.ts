@@ -518,7 +518,7 @@ Deno.serve(async (request) => {
   const proxyEndpoint = getProxyEndpoint(request, requestUrl);
   const ip = getClientIp(request);
   const contentLength = parseInt(upstreamResponse.headers.get("content-length") ?? "0", 10) || 0;
-  let responseBody = upstreamResponse.body;
+  let responseBody: ReadableStream<Uint8Array<ArrayBufferLike>> | null = upstreamResponse.body;
   let sniffedMpegTs = false;
 
   // Quando a URL não tinha extensão de mídia, valida pelo content-type upstream.
