@@ -205,6 +205,7 @@ interface RowData {
 const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
   const { filteredChannels, channelIndexMap, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect, onFocus, onSynopsis, setItemRef } = data;
   const channel = filteredChannels[index];
+  if (!channel) return null;
   const ch = channel as any;
   const programs = epgMap.get(channel.id) || [];
   const altText = ch.epg_alt_text as string | null;
@@ -252,6 +253,31 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
       </div>
     </div>
   );
+}, (prev, next) => {
+  // Re-render só se: índice/style mudou, ou se o foco/atual entrou/saiu DESTA linha,
+  // ou se o canal/EPG/favorito desta linha mudou. Ignora mudanças de foco em outras linhas.
+  if (prev.index !== next.index) return false;
+  if (prev.style !== next.style) return false;
+  const ch = next.data.filteredChannels[next.index];
+  const prevCh = prev.data.filteredChannels[prev.index];
+  if (ch?.id !== prevCh?.id) return false;
+  if (ch?.updated_at !== prevCh?.updated_at) return false;
+  // Foco: só interessa se ESTA linha entrou ou saiu do foco/atual.
+  const wasFocused = prev.data.focusedIndex === prev.index;
+  const isFocused = next.data.focusedIndex === next.index;
+  if (wasFocused !== isFocused) return false;
+  const realIdx = next.data.channelIndexMap.get(ch?.id ?? "") ?? -1;
+  const prevRealIdx = prev.data.channelIndexMap.get(prevCh?.id ?? "") ?? -1;
+  const wasActive = prev.data.currentIndex === prevRealIdx;
+  const isActive = next.data.currentIndex === realIdx;
+  if (wasActive !== isActive) return false;
+  // EPG da linha
+  if (prev.data.epgMap.get(ch?.id ?? "") !== next.data.epgMap.get(ch?.id ?? "")) return false;
+  // Favorito da linha
+  const wasFav = prev.data.favoriteIds.has(prevCh?.id ?? "");
+  const isFav = next.data.favoriteIds.has(ch?.id ?? "");
+  if (wasFav !== isFav) return false;
+  return true;
 });
 Row.displayName = "ChannelRow";
 

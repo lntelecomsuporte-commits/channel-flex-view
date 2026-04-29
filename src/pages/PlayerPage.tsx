@@ -17,7 +17,7 @@ import StatsOverlay from "@/components/player/StatsOverlay";
 import FavoritesBar from "@/components/player/FavoritesBar";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useSessionHeartbeat } from "@/hooks/useSessionHeartbeat";
-import { isSelectKey } from "@/lib/remoteKeys";
+import { isSelectKey, isPageNextKey, isPagePrevKey } from "@/lib/remoteKeys";
 import { List, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseLocal";
@@ -374,6 +374,20 @@ const PlayerPage = () => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // FF/RW (MediaFastForward, MediaTrackNext, ChannelUp/Down): SEMPRE bloquear
+      // a propagação ANTES de qualquer coisa. Sem isso, no Fire TV a Alexa fala
+      // "não consigo pular essa transmissão" porque o sistema interpreta como
+      // comando de mídia do player ativo.
+      if (isPageNextKey(e) || isPagePrevKey(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+        (e as any).stopImmediatePropagation?.();
+        // Se a lista está aberta, deixa o ChannelList tratar (já tem listener em capture).
+        if (showChannelList) return;
+        // Lista fechada: abre a lista e deixa o ChannelList paginar no próximo evento.
+        setShowChannelList(true);
+        return;
+      }
       if (showChannelList) return;
       if (showStats && (e.key === "Escape" || e.key === "Backspace")) {
         e.preventDefault();
@@ -559,11 +573,11 @@ const PlayerPage = () => {
       showOSDTemporarily(true);
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("keydown", handleKeyDown, true);
+    window.addEventListener("keyup", handleKeyUp, true);
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("keydown", handleKeyDown, true);
+      window.removeEventListener("keyup", handleKeyUp, true);
     };
   }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, setFavorite, isUpdatingFavorite, isFavorite, showOSDTemporarily, favFocusIndex, favorites, channels, currentChannel, showOSD, showFavoritesBar, handleBackPress, pushDigit, numBuffer, jumpToChannelNumber]);
 
