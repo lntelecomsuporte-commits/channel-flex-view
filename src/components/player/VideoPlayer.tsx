@@ -1,13 +1,10 @@
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react";
 import Hls from "hls.js";
 import mpegts from "mpegts.js";
-import { Capacitor } from "@capacitor/core";
 import { getPlayableStreamUrl, getProxiedStreamUrl, resolveChannelStreamUrl } from "@/lib/stream";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 import { getDeviceProfile } from "@/lib/deviceProfile";
 import YouTubePlayer from "./YouTubePlayer";
-
-const IS_NATIVE_APK = Capacitor.isNativePlatform();
 
 export type StreamFormat = "auto" | "hls" | "ts" | "mp4";
 
@@ -30,15 +27,6 @@ const detectEngine = (format: StreamFormat, url: string, sourceUrl = url): "hls"
 const isHttpStreamUrl = (url: string): boolean => {
   try {
     return new URL(url).protocol === "http:";
-  } catch {
-    return false;
-  }
-};
-
-const isRawHttpStreamUrl = (url: string): boolean => {
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "http:" && !/\.(m3u8|mp4|m4a|aac|mp3|ts|m2ts|mts)(\?|$)/i.test(parsed.pathname);
   } catch {
     return false;
   }
@@ -148,7 +136,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     const isSignedProxyUrl = playableStreamUrl.includes("/functions/v1/hls-proxy") && playableStreamUrl.includes("st=");
     const forcedProxyUrl = getProxiedStreamUrl(activeStreamUrl);
     const canFallbackToDirect = isSignedProxyUrl && !proxyTokenFailure;
-    const canFallbackToProxy = isHttpStreamUrl(activeStreamUrl) && !(IS_NATIVE_APK && isRawHttpStreamUrl(activeStreamUrl)) && !useProxyFallback && !isSignedProxyUrl && forcedProxyUrl !== activeStreamUrl && forcedProxyUrl !== playableStreamUrl;
+    const canFallbackToProxy = isHttpStreamUrl(activeStreamUrl) && !useProxyFallback && !isSignedProxyUrl && forcedProxyUrl !== activeStreamUrl && forcedProxyUrl !== playableStreamUrl;
     const fallbackToDirect = () => {
       if (!canFallbackToDirect) return false;
       console.warn("[Player] Proxy assinado falhou — tentando stream direto");
