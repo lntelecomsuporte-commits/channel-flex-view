@@ -23,6 +23,14 @@ const detectEngine = (format: StreamFormat, url: string): "hls" | "ts" | "native
   return "native";
 };
 
+const isHttpStreamUrl = (url: string): boolean => {
+  try {
+    return new URL(url).protocol === "http:";
+  } catch {
+    return false;
+  }
+};
+
 interface VideoPlayerProps {
   streamUrl: string;
   autoPlay?: boolean;
@@ -72,7 +80,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     let cancelled = false;
     (async () => {
       let url: string;
-      if (useProxyFallback) {
+      if (useProxyFallback && isHttpStreamUrl(activeStreamUrl)) {
         url = getProxiedStreamUrl(activeStreamUrl);
       } else if (useProxyToken && channelId && !proxyTokenFailure && backupIndex < 0) {
         // Token assinado só faz sentido na URL principal (cadastrada no admin).
@@ -126,7 +134,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     const isSignedProxyUrl = playableStreamUrl.includes("/functions/v1/hls-proxy") && playableStreamUrl.includes("st=");
     const forcedProxyUrl = getProxiedStreamUrl(activeStreamUrl);
     const canFallbackToDirect = isSignedProxyUrl && !proxyTokenFailure;
-    const canFallbackToProxy = !useProxyFallback && !isSignedProxyUrl && forcedProxyUrl !== activeStreamUrl && forcedProxyUrl !== playableStreamUrl;
+    const canFallbackToProxy = isHttpStreamUrl(activeStreamUrl) && !useProxyFallback && !isSignedProxyUrl && forcedProxyUrl !== activeStreamUrl && forcedProxyUrl !== playableStreamUrl;
     const fallbackToDirect = () => {
       if (!canFallbackToDirect) return false;
       console.warn("[Player] Proxy assinado falhou — tentando stream direto");
