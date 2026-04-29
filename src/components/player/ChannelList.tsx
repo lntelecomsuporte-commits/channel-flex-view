@@ -5,7 +5,7 @@ import { useMultiEPG } from "@/hooks/useMultiEPG";
 import type { EPGProgram } from "@/hooks/useEPG";
 import { useFavorites } from "@/hooks/useFavorites";
 import { isSelectKey, isPageNextKey, isPagePrevKey } from "@/lib/remoteKeys";
-import { LogOut, X, Search, Info, Star } from "lucide-react";
+import { LogOut, X, Info, Star } from "lucide-react";
 import { CachedLogo } from "@/components/CachedLogo";
 
 interface ChannelListProps {
@@ -258,15 +258,12 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
     </div>
   );
 }, (prev, next) => {
-  // Re-render só se: índice/style mudou, ou se o foco/atual entrou/saiu DESTA linha,
-  // ou se o canal/EPG/favorito desta linha mudou. Ignora mudanças de foco em outras linhas.
   if (prev.index !== next.index) return false;
   if (prev.style !== next.style) return false;
   const ch = next.data.filteredChannels[next.index];
   const prevCh = prev.data.filteredChannels[prev.index];
   if (ch?.id !== prevCh?.id) return false;
   if (ch?.updated_at !== prevCh?.updated_at) return false;
-  // Foco: só interessa se ESTA linha entrou ou saiu do foco/atual.
   const wasFocused = prev.data.focusedIndex === prev.index;
   const isFocused = next.data.focusedIndex === next.index;
   if (wasFocused !== isFocused) return false;
@@ -275,10 +272,8 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
   const wasActive = prev.data.currentIndex === prevRealIdx;
   const isActive = next.data.currentIndex === realIdx;
   if (wasActive !== isActive) return false;
-  // EPG da linha
   if (prev.data.showEpg !== next.data.showEpg) return false;
   if (prev.data.epgMap.get(ch?.id ?? "") !== next.data.epgMap.get(ch?.id ?? "")) return false;
-  // Favorito da linha
   const wasFav = prev.data.favoriteIds.has(prevCh?.id ?? "");
   const isFav = next.data.favoriteIds.has(ch?.id ?? "");
   if (wasFav !== isFav) return false;
@@ -289,13 +284,11 @@ Row.displayName = "ChannelRow";
 const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSelect, onClose, onLogout }: ChannelListProps) => {
   const [focusedIndex, setFocusedIndex] = useState(currentIndex);
   const [synopsisProgram, setSynopsisProgram] = useState<EPGProgram | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
   const [listSize, setListSize] = useState({ width: 0, height: 0 });
   const [showEpgDetails, setShowEpgDetails] = useState(!IS_NATIVE_APK);
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<FixedSizeList>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const searchRef = useRef<HTMLInputElement>(null);
 
   const { favorites, isFavorite, setFavorite, isUpdatingFavorite } = useFavorites();
   const favoriteIds = useMemo(() => new Set(favorites.map((f) => f.channel_id)), [favorites]);
@@ -303,9 +296,13 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
   const enterPressStartRef = useRef<number | null>(null);
   const enterFavoriteFiredRef = useRef(false);
   // Throttle de 16ms (~60fps) para repetição de teclas de navegação
-  // (ArrowUp/Down e Page+/-) — evita acumular re-renders quando segura a tecla.
   const lastNavTickRef = useRef(0);
   const NAV_THROTTLE_MS = 16;
+
+  // Lógica "estilo OSD": ↑↓ apertando uma vez → troca rapidamente.
+  // Segurando → corre os canais (foca, sem abrir). Ao SOLTAR (keyup),
+  // abre o canal focado. Distinguimos toque-curto de hold via flag.
+  const arrowHeldRef = useRef(false);
 
   const epgMap = useMultiEPG(
     channels.map((ch) => ({
@@ -317,18 +314,14 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
     visible && preloadEpg && showEpgDetails
   );
 
-  const filteredChannels = useMemo(() => {
-    if (!searchQuery.trim()) return channels;
-    const q = searchQuery.toLowerCase();
-    return channels.filter((ch) => ch.name.toLowerCase().includes(q) || String(ch.channel_number).includes(q));
-  }, [channels, searchQuery]);
+  const filteredChannels = channels;
 
   // Quando a lista abre, foca o canal atual (não o primeiro da lista).
   useEffect(() => {
     if (visible) {
       setFocusedIndex(currentIndex);
-      setSearchQuery("");
       setShowEpgDetails(!IS_NATIVE_APK);
+      arrowHeldRef.current = false;
       if (IS_NATIVE_APK && preloadEpg) {
         const t = setTimeout(() => setShowEpgDetails(true), 350);
         return () => clearTimeout(t);
@@ -336,9 +329,6 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
     }
   }, [visible, currentIndex, preloadEpg]);
 
-  // Mede tamanho do container ANTES de renderizar a lista virtual.
-  // Sem isso, no APK (WebView lento) a lista monta com height=0 e ignora
-  // o scroll inicial, deixando a posição no canal 000.
   useLayoutEffect(() => {
     if (!visible) return;
     const el = containerRef.current;
@@ -354,16 +344,11 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
     return () => ro.disconnect();
   }, [visible]);
 
-  // Faz o scroll para o item focado quando o índice muda durante navegação.
-  // Usa "auto" (instantâneo) em vez de "smart" (animado) para evitar acúmulo
-  // de animações quando o usuário segura a tecla pra varrer canais rapidamente.
   useEffect(() => {
     if (!visible || listSize.height <= 0) return;
     listRef.current?.scrollToItem(focusedIndex, "auto");
   }, [focusedIndex, visible, listSize.height]);
 
-  // Calcula offset inicial centralizado no canal atual (usado só na 1ª render
-  // da lista virtual). Deve ser função estável para não recriar a lista.
   const initialOffset = useMemo(() => {
     const ITEM = 72;
     const target = currentIndex * ITEM - Math.max(0, listSize.height / 2 - ITEM / 2);
@@ -375,7 +360,6 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
     itemRefs.current[index] = el;
   };
 
-  // Lookup O(1) do índice real do canal (em vez de channels.indexOf por linha).
   const channelIndexMap = useMemo(() => {
     const m = new Map<string, number>();
     channels.forEach((ch, i) => m.set(ch.id, i));
@@ -411,12 +395,10 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
         return;
       }
 
-      const isSearchFocused = document.activeElement === searchRef.current;
-
-      // Throttle de repetição: quando o usuário segura a tecla, ignora
-      // eventos que cheguem antes de 16ms desde o último processado.
+      // Throttle de repetição
       const isNavKey =
-        isPageNextKey(e) || isPagePrevKey(e) || e.key === "ArrowUp" || e.key === "ArrowDown";
+        isPageNextKey(e) || isPagePrevKey(e) || e.key === "ArrowUp" || e.key === "ArrowDown" ||
+        e.key === "ArrowLeft" || e.key === "ArrowRight";
       if (isNavKey && e.repeat) {
         const now = performance.now();
         if (now - lastNavTickRef.current < NAV_THROTTLE_MS) {
@@ -427,14 +409,14 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
         lastNavTickRef.current = now;
       }
 
-      // FF / RW / Ch+ / Ch- → paginate by 10
-      if (isPageNextKey(e)) {
+      // FF / RW / Ch+ / Ch- / ArrowLeft / ArrowRight → paginar 10
+      if (isPageNextKey(e) || e.key === "ArrowRight") {
         e.preventDefault();
         e.stopPropagation();
         setFocusedIndex((prev) => Math.min(filteredChannels.length - 1, prev + 10));
         return;
       }
-      if (isPagePrevKey(e)) {
+      if (isPagePrevKey(e) || e.key === "ArrowLeft") {
         e.preventDefault();
         e.stopPropagation();
         setFocusedIndex((prev) => Math.max(0, prev - 10));
@@ -445,20 +427,20 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
         case "ArrowUp":
           e.preventDefault();
           e.stopPropagation();
+          if (e.repeat) arrowHeldRef.current = true;
           setFocusedIndex((prev) => (prev > 0 ? prev - 1 : filteredChannels.length - 1));
           return;
         case "ArrowDown":
           e.preventDefault();
           e.stopPropagation();
+          if (e.repeat) arrowHeldRef.current = true;
           setFocusedIndex((prev) => (prev < filteredChannels.length - 1 ? prev + 1 : 0));
           return;
         case "Escape":
         case "Backspace":
-          if (!isSearchFocused || e.key === "Escape") {
-            e.preventDefault();
-            e.stopPropagation();
-            onClose();
-          }
+          e.preventDefault();
+          e.stopPropagation();
+          onClose();
           return;
         default:
           if (isSelectKey(e)) {
@@ -479,7 +461,6 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
               return;
             }
 
-            // Primeiro keydown: apenas marca o tempo. Ação ocorre no keyup.
             if (enterPressStartRef.current === null) {
               enterPressStartRef.current = performance.now();
               enterFavoriteFiredRef.current = false;
@@ -489,6 +470,20 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      // Soltou seta ↑/↓ depois de segurar → confirma o canal focado
+      if ((e.key === "ArrowUp" || e.key === "ArrowDown") && arrowHeldRef.current) {
+        arrowHeldRef.current = false;
+        e.preventDefault();
+        e.stopPropagation();
+        const ch = filteredChannels[focusedIndex];
+        if (ch) {
+          const realIndex = channels.indexOf(ch);
+          if (realIndex >= 0) onSelect(realIndex);
+        }
+        return;
+      }
+      arrowHeldRef.current = false;
+
       if (!isSelectKey(e)) return;
       e.preventDefault();
       e.stopPropagation();
@@ -497,7 +492,7 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
       enterPressStartRef.current = null;
       enterFavoriteFiredRef.current = false;
 
-      if (fired) return; // já favoritou no long-press, não selecionar
+      if (fired) return;
       if (startedAt === null) return;
 
       const heldMs = performance.now() - startedAt;
@@ -505,10 +500,8 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
       if (!ch) return;
 
       if (heldMs >= LONG_PRESS_MS) {
-        // Segurou e soltou: favoritar
         if (!isUpdatingFavorite) setFavorite(ch.id, !isFavorite(ch.id));
       } else {
-        // Toque curto: selecionar canal
         const realIndex = channels.indexOf(ch);
         if (realIndex >= 0) onSelect(realIndex);
       }
@@ -530,23 +523,8 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
         <div className="flex justify-between items-center gap-3">
           <h2 className="text-lg sm:text-xl font-bold text-foreground flex-shrink-0">Canais</h2>
 
-          <div className="flex-1 max-w-xs relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input
-              ref={searchRef}
-              type="text"
-              placeholder="Buscar canal..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setFocusedIndex(0);
-              }}
-              className="w-full pl-8 pr-3 py-1.5 text-sm bg-secondary/50 border border-border/50 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
-
-          <div className="flex items-center gap-3 flex-shrink-0">
-            <span className="text-xs text-muted-foreground hidden sm:inline">↑↓ Navegar • OK Selecionar • Segure OK Favoritar • ESC Fechar</span>
+          <div className="flex items-center gap-3 flex-shrink-0 ml-auto">
+            <span className="text-xs text-muted-foreground hidden sm:inline">↑↓ Navegar/Solte abre • ←→ ±10 • OK Selecionar • Segure OK Favoritar • ESC Fechar</span>
             {onLogout && (
               <button onClick={(e) => { e.stopPropagation(); onLogout(); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-destructive/20 hover:bg-destructive/40 text-destructive text-xs font-medium transition-colors">
                 <LogOut className="w-3.5 h-3.5" /> Sair
