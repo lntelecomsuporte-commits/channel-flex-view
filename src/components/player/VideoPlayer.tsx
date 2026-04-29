@@ -328,12 +328,8 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
-      if (mpegtsRef.current) {
-        try { mpegtsRef.current.destroy(); } catch { /* noop */ }
-        mpegtsRef.current = null;
-      }
     };
-  }, [playableStreamUrl, autoPlay, activeStreamUrl, useProxyFallback, proxyTokenFailure, streamFormat, reconnectNonce]);
+  }, [playableStreamUrl, autoPlay, activeStreamUrl, useProxyFallback, proxyTokenFailure, streamFormat]);
 
   // Unmute after first user interaction
   useEffect(() => {
