@@ -185,7 +185,14 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         tryNextBackup();
       });
       if (autoPlay) {
-        player.play().catch((e) => console.warn("[mpegts] play() rejeitado:", e));
+        try {
+          const p = player.play() as unknown as Promise<void> | void;
+          if (p && typeof (p as Promise<void>).catch === "function") {
+            (p as Promise<void>).catch((e) => console.warn("[mpegts] play() rejeitado:", e));
+          }
+        } catch (e) {
+          console.warn("[mpegts] play() throw:", e);
+        }
       }
     } else if (engine === "hls" && !isAppleDevice && Hls.isSupported()) {
       const profile = getDeviceProfile();
