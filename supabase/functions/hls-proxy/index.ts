@@ -337,9 +337,10 @@ const logProxyAccess = async (
 };
 
 Deno.serve(async (request) => {
-  if (request.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  try {
+    if (request.method === "OPTIONS") {
+      return new Response(null, { headers: corsHeaders });
+    }
 
   const requestUrl = new URL(request.url);
   let target = requestUrl.searchParams.get("url");
@@ -430,12 +431,28 @@ Deno.serve(async (request) => {
   const accept = request.headers.get("accept");
   if (range) upstreamHeaders.set("range", range);
   if (accept) upstreamHeaders.set("accept", accept);
+  // User-Agent: alguns servidores (Flussonic, nginx-rtmp) exigem UA não vazio
+  upstreamHeaders.set("user-agent", request.headers.get("user-agent") ?? "Mozilla/5.0 LNTV-Proxy");
 
-  const upstreamResponse = await fetch(upstreamUrl, {
-    method: "GET",
-    headers: upstreamHeaders,
-    redirect: "follow",
-  });
+  // Propaga abort do cliente -> upstream (essencial para streams MPEG-TS infinitos:
+  // se o player fechar a conexão, o fetch upstream também precisa cancelar,
+  // senão fica vazando conexões e o Deno trava).
+  let upstreamResponse: Response;
+  try {
+    upstreamResponse = await fetch(upstreamUrl, {
+      method: "GET",
+      headers: upstreamHeaders,
+      redirect: "follow",
+      signal: request.signal,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes("aborted") || msg.includes("AbortError")) {
+      return new Response(null, { status: 499, headers: corsHeaders });
+    }
+    console.error(`[hls-proxy] fetch upstream falhou: ${msg} (${resolvedTarget})`);
+    return new Response(`Upstream fetch failed: ${msg}`, { status: 502, headers: corsHeaders });
+  }
 
   const contentType = upstreamResponse.headers.get("content-type")?.toLowerCase() ?? "";
   const proxyEndpoint = getProxyEndpoint(request, requestUrl);
@@ -449,6 +466,7 @@ Deno.serve(async (request) => {
     const allowed = allowedUpstreamContentTypes.some((t) => contentType.includes(t));
     if (!allowed) {
       console.warn(`[hls-proxy] bloqueado: URL sem extensão e content-type não-mídia: ${contentType} (${resolvedTarget})`);
+      try { upstreamResponse.body?.cancel(); } catch { /* noop */ }
       return new Response("URL blocked by proxy policy (non-media content-type)", { status: 403, headers: corsHeaders });
     }
   }
@@ -482,7 +500,16 @@ Deno.serve(async (request) => {
   });
 
   return new Response(upstreamResponse.body, {
-    status: upstreamResponse.status,
-    headers: responseHeaders,
-  });
+      status: upstreamResponse.status,
+      headers: responseHeaders,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes("aborted") || msg.includes("AbortError") || msg.includes("connection closed")) {
+      // Cliente fechou conexão — normal pra streams ao vivo
+      return new Response(null, { status: 499, headers: corsHeaders });
+    }
+    console.error(`[hls-proxy] handler crash: ${msg}`);
+    return new Response(`Proxy error: ${msg}`, { status: 500, headers: corsHeaders });
+  }
 });
