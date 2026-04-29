@@ -564,7 +564,7 @@ Deno.serve(async (request) => {
 
   const responseHeaders = new Headers(corsHeaders);
   responseHeaders.set("X-LNTV-Final-URL", upstreamResponse.url);
-  responseHeaders.set("X-LNTV-Final-Content-Type", contentType);
+  responseHeaders.set("X-LNTV-Final-Content-Type", sniffedMpegTs ? "video/mp2t" : contentType);
 
   // Detecta MPEG-TS bruto (live stream contínuo, sem extensão de mídia).
   // Para esses, NÃO repassamos content-length nem accept-ranges:
