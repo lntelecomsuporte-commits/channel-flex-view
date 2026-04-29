@@ -525,7 +525,7 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
           <h2 className="text-lg sm:text-xl font-bold text-foreground flex-shrink-0">Canais</h2>
 
           <div className="flex items-center gap-3 flex-shrink-0 ml-auto">
-            <span className="text-xs text-muted-foreground hidden sm:inline">↑↓ Navegar/Solte abre • ←→ ±10 • OK Selecionar • Segure OK Favoritar • ESC Fechar</span>
+            <span className="text-xs text-muted-foreground hidden sm:inline">↑↓ Navegar/Solte abre • ←→ ±5 • OK Selecionar • Segure OK Favoritar • ESC Fechar</span>
             {onLogout && (
               <button onClick={(e) => { e.stopPropagation(); onLogout(); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-destructive/20 hover:bg-destructive/40 text-destructive text-xs font-medium transition-colors">
                 <LogOut className="w-3.5 h-3.5" /> Sair
