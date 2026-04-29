@@ -41,7 +41,7 @@ const getProxyBaseUrl = () => {
  * Monta a URL do hls-proxy somente quando for explicitamente necessário.
  * Mantém o token JWT no query param porque o player/HLS carrega segmentos sem await.
  */
-const buildProxyStreamUrl = (streamUrl: string): string | null => {
+export const buildProxyStreamUrl = (streamUrl: string): string | null => {
   const proxyBaseUrl = getProxyBaseUrl();
   if (!proxyBaseUrl) return null;
 
@@ -55,6 +55,11 @@ const buildProxyStreamUrl = (streamUrl: string): string | null => {
   proxyUrl.searchParams.set("url", streamUrl);
   proxyUrl.searchParams.set("token", token);
   return proxyUrl.toString();
+};
+
+/** True quando a URL já aponta pro nosso hls-proxy (qualquer modo). */
+export const isProxiedStreamUrl = (url: string): boolean => {
+  return url.includes("/functions/v1/hls-proxy");
 };
 
 /**

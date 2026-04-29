@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react";
 import Hls from "hls.js";
-import { getPlayableStreamUrl, resolveChannelStreamUrl } from "@/lib/stream";
+import { getPlayableStreamUrl, resolveChannelStreamUrl, buildProxyStreamUrl, isProxiedStreamUrl } from "@/lib/stream";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 import { getDeviceProfile } from "@/lib/deviceProfile";
 import YouTubePlayer from "./YouTubePlayer";
@@ -47,6 +47,9 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   const [muted, setMuted] = useState(true);
   const [proxyTokenFailure, setProxyTokenFailure] = useState(false);
   const [resolvedUrl, setResolvedUrl] = useState<string>("");
+  // Quando uma URL HTTPS direta falha por CORS/302/rede no primeiro load,
+  // tentamos UMA vez via proxy genérico (sem hardcode de host).
+  const [corsFallback, setCorsFallback] = useState(false);
   
   // Índice da URL ativa: -1 = principal (streamUrl), 0..N = backupStreamUrls[i]
   const [backupIndex, setBackupIndex] = useState(-1);
@@ -72,13 +75,17 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         // Token assinado só faz sentido na URL principal (cadastrada no admin).
         // Em backup, vai direto/proxy normal.
         url = await resolveChannelStreamUrl(activeStreamUrl, channelId, true);
+      } else if (corsFallback) {
+        // Fallback genérico: URL HTTPS direta falhou por CORS/302/rede.
+        // Tenta UMA vez via proxy antes de pular pro próximo backup.
+        url = buildProxyStreamUrl(activeStreamUrl) ?? getPlayableStreamUrl(activeStreamUrl);
       } else {
         url = getPlayableStreamUrl(activeStreamUrl);
       }
       if (!cancelled) setResolvedUrl(url);
     })();
     return () => { cancelled = true; };
-  }, [activeStreamUrl, useProxyToken, channelId, youTubeVideoId, proxyTokenFailure, backupIndex]);
+  }, [activeStreamUrl, useProxyToken, channelId, youTubeVideoId, proxyTokenFailure, backupIndex, corsFallback]);
 
   const playableStreamUrl = resolvedUrl;
 
@@ -86,6 +93,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   useEffect(() => {
     setProxyTokenFailure(false);
     setBackupIndex(-1);
+    setCorsFallback(false);
   }, [streamUrl]);
 
   // Tenta avançar para a próxima URL de backup. Retorna true se houve avanço.
@@ -94,6 +102,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     if (next >= backups.length) return false;
     console.warn(`[HLS] Falha total — trocando para backup #${next + 1}/${backups.length}: ${backups[next]}`);
     setProxyTokenFailure(false);
+    setCorsFallback(false);
     setBackupIndex(next);
     return true;
   };
@@ -203,6 +212,23 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         switch (data.type) {
           case Hls.ErrorTypes.NETWORK_ERROR:
             networkErrorRetries++;
+            // Detecta falha de carregamento do manifesto numa URL HTTPS direta
+            // (CORS, 302 cross-origin, ERR_FAILED). Tenta UMA vez via proxy
+            // genérico antes de pular pro backup. Sem hardcode de host.
+            const isManifestFail =
+              data.details === "manifestLoadError" ||
+              data.details === "manifestLoadTimeOut" ||
+              data.details === "manifestParsingError";
+            if (
+              isManifestFail &&
+              !corsFallback &&
+              !isProxiedStreamUrl(playableStreamUrl) &&
+              !useProxyToken
+            ) {
+              console.warn("[HLS] Manifesto direto falhou — tentando via proxy genérico (1x):", data.details);
+              setCorsFallback(true);
+              return;
+            }
             // Após 2 retries do startLoad sem sucesso, considera URL morta
             // e parte para o próximo backup (failover ~3s).
             if (networkErrorRetries > 2) {
