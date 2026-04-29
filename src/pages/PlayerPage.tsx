@@ -15,6 +15,7 @@ import ChannelList from "@/components/player/ChannelList";
 import SynopsisModal from "@/components/player/SynopsisModal";
 import StatsOverlay from "@/components/player/StatsOverlay";
 import FavoritesBar from "@/components/player/FavoritesBar";
+import ChannelSearch from "@/components/player/ChannelSearch";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useSessionHeartbeat } from "@/hooks/useSessionHeartbeat";
 import { isSelectKey, isPageNextKey, isPagePrevKey } from "@/lib/remoteKeys";
