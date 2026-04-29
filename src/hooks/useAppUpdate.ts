@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 /**
  * Verifica periodicamente se há uma nova versão do APK disponível.
@@ -36,7 +36,6 @@ interface UseAppUpdateResult {
 const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 min
 const VERSION_JSON_URL = "/version.json";
 const PRODUCTION_VERSION_JSON_URL = "https://tv2.lntelecom.net/version.json";
-const DISMISSED_KEY = "lntv:update:dismissed:versionCode";
 
 async function isNativeApp(): Promise<boolean> {
   try {
@@ -98,6 +97,7 @@ export function useAppUpdate(): UseAppUpdateResult {
   const [status, setStatus] = useState<UpdateStatus>("idle");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const dismissedVersionCodeRef = useRef<number | null>(null);
 
   const check = useCallback(async () => {
     if (!(await isNativeApp())) return;
@@ -113,12 +113,7 @@ export function useAppUpdate(): UseAppUpdateResult {
       return;
     }
 
-    try {
-      const dismissed = parseInt(localStorage.getItem(DISMISSED_KEY) || "0", 10);
-      if (dismissed === remote.versionCode) return;
-    } catch {
-      /* noop */
-    }
+    if (dismissedVersionCodeRef.current === remote.versionCode) return;
 
     setAvailable(remote);
   }, []);
@@ -157,13 +152,7 @@ export function useAppUpdate(): UseAppUpdateResult {
   }, [check]);
 
   const dismiss = useCallback(() => {
-    if (available) {
-      try {
-        localStorage.setItem(DISMISSED_KEY, String(available.versionCode));
-      } catch {
-        /* noop */
-      }
-    }
+    if (available) dismissedVersionCodeRef.current = available.versionCode;
     setAvailable(null);
     setStatus("idle");
     setProgress(0);
