@@ -55,7 +55,7 @@ const FavoritesBar = ({ channels, favoriteIds, currentChannelId, visible, onSele
       <div className="px-4 sm:px-6 lg:px-8 mb-1.5 flex items-center gap-1.5">
         <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
         <span className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
-          Favoritos {focusedIndex != null && <span className="text-primary">• ↑↓ sair · ←→ navegar · OK assistir</span>}
+          Favoritos {focusedIndex != null && <span className="text-primary">• ↑ buscar · ←→ navegar · ↓ sair · OK assistir</span>}
         </span>
       </div>
       <div
