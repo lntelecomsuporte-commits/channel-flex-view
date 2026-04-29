@@ -29,6 +29,7 @@ interface UseAppUpdateResult {
 
 const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 min
 const VERSION_JSON_URL = "/version.json";
+const PRODUCTION_VERSION_JSON_URL = "https://tv2.lntelecom.net/version.json";
 const DISMISSED_KEY = "lntv:update:dismissed:versionCode";
 
 async function isNativeApp(): Promise<boolean> {
@@ -53,17 +54,26 @@ async function getCurrentVersionCode(): Promise<number | null> {
 }
 
 async function fetchRemoteVersion(): Promise<RemoteVersion | null> {
-  try {
-    const res = await fetch(`${VERSION_JSON_URL}?t=${Date.now()}`, {
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as RemoteVersion;
-    if (typeof data.versionCode !== "number" || !data.url) return null;
-    return data;
-  } catch {
-    return null;
+  const urls = (await isNativeApp())
+    ? [PRODUCTION_VERSION_JSON_URL]
+    : [VERSION_JSON_URL, PRODUCTION_VERSION_JSON_URL];
+
+  for (const url of urls) {
+    try {
+      const joiner = url.includes("?") ? "&" : "?";
+      const res = await fetch(`${url}${joiner}t=${Date.now()}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) continue;
+      const data = (await res.json()) as RemoteVersion;
+      if (typeof data.versionCode !== "number" || !data.url) continue;
+      return data;
+    } catch {
+      /* tenta a próxima URL */
+    }
   }
+
+  return null;
 }
 
 export function useAppUpdate(): UseAppUpdateResult {
@@ -98,6 +108,21 @@ export function useAppUpdate(): UseAppUpdateResult {
   useEffect(() => {
     check();
     const id = window.setInterval(check, CHECK_INTERVAL_MS);
+    let appStateListener: { remove: () => Promise<void> } | null = null;
+
+    import("@capacitor/app")
+      .then(({ App }) =>
+        App.addListener("resume", () => {
+          check();
+        }),
+      )
+      .then((listener) => {
+        appStateListener = listener;
+      })
+      .catch(() => {
+        /* browser web */
+      });
+
     const onVisible = () => {
       if (document.visibilityState === "visible") check();
     };
@@ -105,6 +130,7 @@ export function useAppUpdate(): UseAppUpdateResult {
     return () => {
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", onVisible);
+      appStateListener?.remove();
     };
   }, [check]);
 
