@@ -335,6 +335,10 @@ const PlayerPage = () => {
       setSynopsisProgram(null);
       return true;
     }
+    if (searchActive) {
+      setSearchActive(false);
+      return true;
+    }
     if (showChannelList) {
       setShowChannelList(false);
       return true;
