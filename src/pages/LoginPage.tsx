@@ -119,7 +119,7 @@ const LoginPage = () => {
                   required
                   placeholder="seu@email.com"
                   autoComplete="username"
-                  className={`sm:h-12 sm:text-base ${activeField === "email" && isNative ? "ring-2 ring-primary" : ""}`}
+                  className={`sm:h-12 sm:text-base ${activeField === "email" && useVirtualKeyboard ? "ring-2 ring-primary" : ""}`}
                 />
               </div>
               <div className="space-y-1.5">
