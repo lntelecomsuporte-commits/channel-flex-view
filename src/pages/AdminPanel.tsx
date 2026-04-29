@@ -173,6 +173,7 @@ const AdminPanel = () => {
     setEditingChannelId(ch.id);
     setChannelForm({
       name: ch.name, channel_number: String(ch.channel_number), stream_url: ch.stream_url,
+      backup_stream_urls: (((ch as any).backup_stream_urls ?? []) as string[]).join("\n"),
       logo_url: ch.logo_url ?? "", category_id: ch.category_id ?? "", is_active: ch.is_active,
       epg_type: (() => {
         const t = (ch as any).epg_type ?? "";
