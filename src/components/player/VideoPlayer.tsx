@@ -26,14 +26,18 @@ export interface VideoPlayerHandle {
   getHls: () => Hls | null;
 }
 
-const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false }, ref) => {
+const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, backupStreamUrls = null }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [muted, setMuted] = useState(true);
   const [useProxyFallback, setUseProxyFallback] = useState(false);
   const [proxyTokenFailure, setProxyTokenFailure] = useState(false);
   const [resolvedUrl, setResolvedUrl] = useState<string>("");
-  const youTubeVideoId = extractYouTubeVideoId(streamUrl);
+  // Índice da URL ativa: -1 = principal (streamUrl), 0..N = backupStreamUrls[i]
+  const [backupIndex, setBackupIndex] = useState(-1);
+  const backups = backupStreamUrls?.filter((u) => !!u && u.trim().length > 0) ?? [];
+  const activeStreamUrl = backupIndex < 0 ? streamUrl : (backups[backupIndex] ?? streamUrl);
+  const youTubeVideoId = extractYouTubeVideoId(activeStreamUrl);
 
   useImperativeHandle(ref, () => ({
     getVideoElement: () => videoRef.current,
