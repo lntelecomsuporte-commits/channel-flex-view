@@ -133,9 +133,15 @@ const AdminPanel = () => {
     }
 
     const isXmltv = channelForm.epg_type === "xmltv";
+    const backupList = (channelForm.backup_stream_urls || "")
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
     const payload = {
       name: channelForm.name, channel_number: parseInt(channelForm.channel_number),
-      stream_url: channelForm.stream_url, logo_url: logoUrl,
+      stream_url: channelForm.stream_url,
+      backup_stream_urls: backupList,
+      logo_url: logoUrl,
       category_id: channelForm.category_id || null, is_active: channelForm.is_active,
       epg_type: channelForm.epg_type || null,
       epg_url: isXmltv ? (normalizeGithub(channelForm.epg_url) || null) : null,
