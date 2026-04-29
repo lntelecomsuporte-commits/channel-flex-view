@@ -147,6 +147,47 @@ const allowedUpstreamContentTypes = [
   "image/",
 ];
 
+const isMpegTsChunk = (chunk: Uint8Array): boolean => {
+  if (chunk.length < 188) return false;
+  if (chunk[0] !== 0x47) return false;
+  if (chunk.length >= 376 && chunk[188] !== 0x47) return false;
+  if (chunk.length >= 564 && chunk[376] !== 0x47) return false;
+  return true;
+};
+
+const sniffMpegTsBody = async (body: ReadableStream<Uint8Array> | null): Promise<{
+  isMpegTs: boolean;
+  body: ReadableStream<Uint8Array> | null;
+}> => {
+  if (!body) return { isMpegTs: false, body: null };
+  const reader = body.getReader();
+  const first = await reader.read();
+  if (first.done || !first.value) {
+    return { isMpegTs: false, body: null };
+  }
+  const firstChunk = first.value;
+  const restoredBody = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(firstChunk);
+      const pump = (): void => {
+        reader.read().then(({ done, value }) => {
+          if (done) {
+            controller.close();
+            return;
+          }
+          if (value) controller.enqueue(value);
+          pump();
+        }).catch((error) => controller.error(error));
+      };
+      pump();
+    },
+    cancel(reason) {
+      return reader.cancel(reason);
+    },
+  });
+  return { isMpegTs: isMpegTsChunk(firstChunk), body: restoredBody };
+};
+
 const isPrivateHostname = (hostname: string) => {
   const normalized = hostname.toLowerCase();
   if (["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(normalized) || normalized.endsWith(".local")) return true;
