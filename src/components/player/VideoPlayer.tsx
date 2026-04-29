@@ -245,6 +245,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       // Reset contador de recuperação quando voltar a tocar normalmente
       hls.on(Hls.Events.FRAG_LOADED, () => {
         mediaErrorRecoveryAttempts = 0;
+        networkErrorRetries = 0;
       });
 
       // === Plano C: auto-recovery quando travar imagem por >4s ===
