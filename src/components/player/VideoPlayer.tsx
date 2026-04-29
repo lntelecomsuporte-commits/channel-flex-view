@@ -1,13 +1,10 @@
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react";
 import Hls from "hls.js";
 import mpegts from "mpegts.js";
-import { Capacitor } from "@capacitor/core";
 import { getPlayableStreamUrl, getProxiedStreamUrl, resolveChannelStreamUrl } from "@/lib/stream";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 import { getDeviceProfile } from "@/lib/deviceProfile";
 import YouTubePlayer from "./YouTubePlayer";
-
-const IS_NATIVE_APK = Capacitor.isNativePlatform();
 
 export type StreamFormat = "auto" | "hls" | "ts" | "mp4";
 
@@ -30,15 +27,6 @@ const detectEngine = (format: StreamFormat, url: string, sourceUrl = url): "hls"
 const isHttpStreamUrl = (url: string): boolean => {
   try {
     return new URL(url).protocol === "http:";
-  } catch {
-    return false;
-  }
-};
-
-const isRawHttpStreamUrl = (url: string): boolean => {
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "http:" && !/\.(m3u8|mp4|m4a|aac|mp3|ts|m2ts|mts)(\?|$)/i.test(parsed.pathname);
   } catch {
     return false;
   }
@@ -73,6 +61,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   const [useProxyFallback, setUseProxyFallback] = useState(false);
   const [proxyTokenFailure, setProxyTokenFailure] = useState(false);
   const [resolvedUrl, setResolvedUrl] = useState<string>("");
+  const [reconnectNonce, setReconnectNonce] = useState(0);
   // Índice da URL ativa: -1 = principal (streamUrl), 0..N = backupStreamUrls[i]
   const [backupIndex, setBackupIndex] = useState(-1);
   const backups = backupStreamUrls?.filter((u) => !!u && u.trim().length > 0) ?? [];
@@ -147,7 +136,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     const isSignedProxyUrl = playableStreamUrl.includes("/functions/v1/hls-proxy") && playableStreamUrl.includes("st=");
     const forcedProxyUrl = getProxiedStreamUrl(activeStreamUrl);
     const canFallbackToDirect = isSignedProxyUrl && !proxyTokenFailure;
-    const canFallbackToProxy = isHttpStreamUrl(activeStreamUrl) && !(IS_NATIVE_APK && isRawHttpStreamUrl(activeStreamUrl)) && !useProxyFallback && !isSignedProxyUrl && forcedProxyUrl !== activeStreamUrl && forcedProxyUrl !== playableStreamUrl;
+    const canFallbackToProxy = isHttpStreamUrl(activeStreamUrl) && !useProxyFallback && !isSignedProxyUrl && forcedProxyUrl !== activeStreamUrl && forcedProxyUrl !== playableStreamUrl;
     const fallbackToDirect = () => {
       if (!canFallbackToDirect) return false;
       console.warn("[Player] Proxy assinado falhou — tentando stream direto");
@@ -205,6 +194,39 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         if (fallbackToProxy()) return;
         tryNextBackup();
       });
+
+      // MPEG-TS bruto via HTTP/proxy às vezes congela sem disparar ERROR.
+      // Se a posição do vídeo não avança por alguns segundos, recriamos o player
+      // mantendo a mesma URL; isso força nova conexão upstream no proxy.
+      let lastTime = 0;
+      let stalledTicks = 0;
+      const watchdog = window.setInterval(() => {
+        if (video.paused || video.ended || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+          stalledTicks = 0;
+          lastTime = video.currentTime;
+          return;
+        }
+
+        const currentTime = video.currentTime;
+        if (Math.abs(currentTime - lastTime) < 0.05) {
+          stalledTicks++;
+        } else {
+          stalledTicks = 0;
+          lastTime = currentTime;
+        }
+
+        if (stalledTicks >= 3) {
+          stalledTicks = 0;
+          console.warn("[mpegts] stream travado — reconectando");
+          setReconnectNonce((n) => n + 1);
+        }
+      }, 3000);
+
+      const origDestroy = player.destroy.bind(player);
+      player.destroy = () => {
+        window.clearInterval(watchdog);
+        origDestroy();
+      };
       if (autoPlay) {
         try {
           const p = player.play() as unknown as Promise<void> | void;
@@ -391,7 +413,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         mpegtsRef.current = null;
       }
     };
-  }, [playableStreamUrl, autoPlay, activeStreamUrl, useProxyFallback, proxyTokenFailure, streamFormat]);
+  }, [playableStreamUrl, autoPlay, activeStreamUrl, useProxyFallback, proxyTokenFailure, streamFormat, reconnectNonce]);
 
   // Unmute after first user interaction
   useEffect(() => {
