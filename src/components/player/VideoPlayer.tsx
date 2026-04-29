@@ -211,6 +211,23 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         switch (data.type) {
           case Hls.ErrorTypes.NETWORK_ERROR:
             networkErrorRetries++;
+            // Detecta falha de carregamento do manifesto numa URL HTTPS direta
+            // (CORS, 302 cross-origin, ERR_FAILED). Tenta UMA vez via proxy
+            // genérico antes de pular pro backup. Sem hardcode de host.
+            const isManifestFail =
+              data.details === "manifestLoadError" ||
+              data.details === "manifestLoadTimeOut" ||
+              data.details === "manifestParsingError";
+            if (
+              isManifestFail &&
+              !corsFallback &&
+              !isProxiedStreamUrl(playableStreamUrl) &&
+              !useProxyToken
+            ) {
+              console.warn("[HLS] Manifesto direto falhou — tentando via proxy genérico (1x):", data.details);
+              setCorsFallback(true);
+              return;
+            }
             // Após 2 retries do startLoad sem sucesso, considera URL morta
             // e parte para o próximo backup (failover ~3s).
             if (networkErrorRetries > 2) {
