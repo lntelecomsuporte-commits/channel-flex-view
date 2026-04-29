@@ -16,17 +16,6 @@ import { LOCAL_AUTH_STORAGE_KEY, getLocalFunctionUrl } from "@/lib/localBackend"
  */
 const PRODUCTION_HOST = "https://tv2.lntelecom.net";
 
-// Hosts que não entregam CORS/seguem 302 de um jeito que o browser bloqueia.
-// VLC abre porque não aplica CORS; no app web/WebView precisa iniciar pelo proxy
-// para evitar erro no console e fallback tardio.
-const FORCE_PROXY_HOSTS = new Set([
-  "cr7v.short.gy",
-]);
-
-const shouldForceProxy = (url: URL): boolean => {
-  return FORCE_PROXY_HOSTS.has(url.hostname.toLowerCase()) && /\.m3u8$/i.test(url.pathname);
-};
-
 const getProxyBaseUrl = () => {
   let origin = PRODUCTION_HOST;
 
@@ -128,10 +117,6 @@ export const getPlayableStreamUrl = (streamUrl: string): string => {
 
   try {
     const parsedUrl = new URL(streamUrl);
-
-    if (shouldForceProxy(parsedUrl)) {
-      return buildProxyStreamUrl(streamUrl) ?? streamUrl;
-    }
 
     if (Capacitor.isNativePlatform()) {
       // HTTP no APK também precisa sair por HTTPS/proxy: mpegts.js roda via fetch/XHR
