@@ -310,11 +310,11 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
   }, [visible]);
 
   // Faz o scroll para o item focado quando o índice muda durante navegação.
-  // A posição inicial é resolvida via `initialScrollOffset` no FixedSizeList,
-  // garantindo centralização correta já na primeira pintura.
+  // Usa "auto" (instantâneo) em vez de "smart" (animado) para evitar acúmulo
+  // de animações quando o usuário segura a tecla pra varrer canais rapidamente.
   useEffect(() => {
     if (!visible || listSize.height <= 0) return;
-    listRef.current?.scrollToItem(focusedIndex, "smart");
+    listRef.current?.scrollToItem(focusedIndex, "auto");
   }, [focusedIndex, visible, listSize.height]);
 
   // Calcula offset inicial centralizado no canal atual (usado só na 1ª render
@@ -330,10 +330,17 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
     itemRefs.current[index] = el;
   };
 
+  // Lookup O(1) do índice real do canal (em vez de channels.indexOf por linha).
+  const channelIndexMap = useMemo(() => {
+    const m = new Map<string, number>();
+    channels.forEach((ch, i) => m.set(ch.id, i));
+    return m;
+  }, [channels]);
+
   const rowData = useMemo<RowData>(
     () => ({
       filteredChannels,
-      channels,
+      channelIndexMap,
       currentIndex,
       focusedIndex,
       epgMap,
@@ -343,7 +350,7 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
       onSynopsis: (p: EPGProgram) => setSynopsisProgram(p),
       setItemRef,
     }),
-    [filteredChannels, channels, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect]
+    [filteredChannels, channelIndexMap, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect]
   );
 
   useEffect(() => {
