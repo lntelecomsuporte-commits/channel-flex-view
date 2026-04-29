@@ -153,8 +153,10 @@ export const resolveChannelStreamUrl = async (
   if (useProxyToken && channelId) {
     const signed = await buildSignedProxyStreamUrl(streamUrl, channelId);
     if (signed) return signed;
-    // Fallback: melhor tocar pelo proxy normal do que falhar quando a flag foi marcada.
-    return buildProxyStreamUrl(streamUrl) ?? getPlayableStreamUrl(streamUrl);
+    // Segurança: se o admin marcou "Ocultar URL", nunca cai para URL direta
+    // nem para proxy legado com `url=` porque isso expõe a origem no F12.
+    console.error("[stream] Ocultar URL ativo, mas token assinado não foi gerado — bloqueando URL direta");
+    return "";
   }
   return getPlayableStreamUrl(streamUrl);
 };
