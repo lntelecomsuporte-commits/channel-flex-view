@@ -1,26 +1,20 @@
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react";
 import Hls from "hls.js";
-import mpegts from "mpegts.js";
 import { getPlayableStreamUrl, getProxiedStreamUrl, resolveChannelStreamUrl } from "@/lib/stream";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 import { getDeviceProfile } from "@/lib/deviceProfile";
 import YouTubePlayer from "./YouTubePlayer";
 
-export type StreamFormat = "auto" | "hls" | "ts" | "mp4";
+export type StreamFormat = "auto" | "hls" | "mp4";
 
 /** Detecta o engine a usar com base no formato escolhido + URL original. */
-const detectEngine = (format: StreamFormat, url: string, sourceUrl = url): "hls" | "ts" | "native" => {
+const detectEngine = (format: StreamFormat, url: string, sourceUrl = url): "hls" | "native" => {
   if (format === "hls") return "hls";
-  if (format === "ts") return "ts";
   if (format === "mp4") return "native";
   // auto: olha a URL
   const source = sourceUrl.toLowerCase();
   const playable = url.toLowerCase();
   if (/\.m3u8(\?|$)/.test(source) || /\.m3u8(\?|$)/.test(playable)) return "hls";
-  if (/\.(ts|m2ts|mts)(\?|$)/.test(source) || source.includes("mpegts")) return "ts";
-  // Streams HTTP sem extensão normalmente são MPEG-TS bruto; se passarem pelo
-  // hls-proxy, não podem ser tratados como playlist HLS.
-  if (isHttpStreamUrl(sourceUrl)) return "ts";
   return "native";
 };
 
@@ -56,12 +50,12 @@ export interface VideoPlayerHandle {
 const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, backupStreamUrls = null, streamFormat = "auto" }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
-  const mpegtsRef = useRef<mpegts.Player | null>(null);
+  
   const [muted, setMuted] = useState(true);
   const [useProxyFallback, setUseProxyFallback] = useState(false);
   const [proxyTokenFailure, setProxyTokenFailure] = useState(false);
   const [resolvedUrl, setResolvedUrl] = useState<string>("");
-  const [reconnectNonce, setReconnectNonce] = useState(0);
+  
   // Índice da URL ativa: -1 = principal (streamUrl), 0..N = backupStreamUrls[i]
   const [backupIndex, setBackupIndex] = useState(-1);
   const backups = backupStreamUrls?.filter((u) => !!u && u.trim().length > 0) ?? [];
@@ -128,10 +122,6 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
-    if (mpegtsRef.current) {
-      try { mpegtsRef.current.destroy(); } catch { /* noop */ }
-      mpegtsRef.current = null;
-    }
 
     const isSignedProxyUrl = playableStreamUrl.includes("/functions/v1/hls-proxy") && playableStreamUrl.includes("st=");
     const forcedProxyUrl = getProxiedStreamUrl(activeStreamUrl);
@@ -167,85 +157,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     const engine = detectEngine(streamFormat, playableStreamUrl, activeStreamUrl);
     console.log(`[Player] engine=${engine} format=${streamFormat} url=${playableStreamUrl.slice(0, 80)}...`);
 
-    if (engine === "ts" && mpegts.getFeatureList().mseLivePlayback) {
-      // === MPEG-TS via mpegts.js ===
-      const player = mpegts.createPlayer(
-        {
-          type: "mpegts",
-          isLive: true,
-          url: playableStreamUrl,
-          cors: true,
-        },
-        {
-          enableWorker: true,
-          // Stash buffer pequeno mas habilitado: absorve jitter de rede do proxy
-          // sem segurar muito tempo. Com false + chasing, MPEG-TS bruto trava
-          // porque o player tenta "seek" pra alcançar o live edge — coisa que
-          // streams TS contínuos não suportam (sem index, sem byte-range).
-          enableStashBuffer: true,
-          stashInitialSize: 384, // ~384KB ≈ 1-2s de TS, baixa latência mas estável
-          // DESABILITA latency chasing: ele assume que dá pra "pular" no buffer,
-          // mas TS bruto via proxy não tem seek confiável — e o "chasing"
-          // agressivo causa exatamente o sintoma de travar (igual VLC funciona
-          // porque ele só segue o stream, não tenta cortar pra alcançar live).
-          liveBufferLatencyChasing: false,
-          autoCleanupSourceBuffer: true,
-          // Reconexão automática em caso de queda de conexão upstream
-          reuseRedirectedURL: true,
-        },
-      );
-      mpegtsRef.current = player;
-      player.attachMediaElement(video);
-      player.load();
-      player.on(mpegts.Events.ERROR, (errType: string, errDetail: string) => {
-        console.error("[mpegts] erro fatal:", errType, errDetail);
-        if (fallbackToProxy()) return;
-        tryNextBackup();
-      });
-
-      // MPEG-TS bruto via HTTP/proxy às vezes congela sem disparar ERROR.
-      // Se a posição do vídeo não avança por alguns segundos, recriamos o player
-      // mantendo a mesma URL; isso força nova conexão upstream no proxy.
-      let lastTime = 0;
-      let stalledTicks = 0;
-      const watchdog = window.setInterval(() => {
-        if (video.paused || video.ended || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-          stalledTicks = 0;
-          lastTime = video.currentTime;
-          return;
-        }
-
-        const currentTime = video.currentTime;
-        if (Math.abs(currentTime - lastTime) < 0.05) {
-          stalledTicks++;
-        } else {
-          stalledTicks = 0;
-          lastTime = currentTime;
-        }
-
-        if (stalledTicks >= 3) {
-          stalledTicks = 0;
-          console.warn("[mpegts] stream travado — reconectando");
-          setReconnectNonce((n) => n + 1);
-        }
-      }, 3000);
-
-      const origDestroy = player.destroy.bind(player);
-      player.destroy = () => {
-        window.clearInterval(watchdog);
-        origDestroy();
-      };
-      if (autoPlay) {
-        try {
-          const p = player.play() as unknown as Promise<void> | void;
-          if (p && typeof (p as Promise<void>).catch === "function") {
-            (p as Promise<void>).catch((e) => console.warn("[mpegts] play() rejeitado:", e));
-          }
-        } catch (e) {
-          console.warn("[mpegts] play() throw:", e);
-        }
-      }
-    } else if (engine === "hls" && !isAppleDevice && Hls.isSupported()) {
+    if (engine === "hls" && !isAppleDevice && Hls.isSupported()) {
       const profile = getDeviceProfile();
       const hls = new Hls({
         enableWorker: true,
@@ -416,12 +328,8 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
-      if (mpegtsRef.current) {
-        try { mpegtsRef.current.destroy(); } catch { /* noop */ }
-        mpegtsRef.current = null;
-      }
     };
-  }, [playableStreamUrl, autoPlay, activeStreamUrl, useProxyFallback, proxyTokenFailure, streamFormat, reconnectNonce]);
+  }, [playableStreamUrl, autoPlay, activeStreamUrl, useProxyFallback, proxyTokenFailure, streamFormat]);
 
   // Unmute after first user interaction
   useEffect(() => {
