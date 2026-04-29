@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 /**
  * Verifica periodicamente se há uma nova versão do APK disponível.
@@ -27,6 +27,7 @@ interface UseAppUpdateResult {
   currentVersionCode: number | null;
   dismiss: () => void;
   download: () => void;
+  checkNow: () => void;
   status: UpdateStatus;
   progress: number; // 0..100
   error: string | null;
@@ -35,7 +36,6 @@ interface UseAppUpdateResult {
 const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 min
 const VERSION_JSON_URL = "/version.json";
 const PRODUCTION_VERSION_JSON_URL = "https://tv2.lntelecom.net/version.json";
-const DISMISSED_KEY = "lntv:update:dismissed:versionCode";
 
 async function isNativeApp(): Promise<boolean> {
   try {
@@ -44,6 +44,16 @@ async function isNativeApp(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function normalizeApkUrl(remote: RemoteVersion): RemoteVersion {
+  if (!remote.url.includes("/downloads/lntv-latest.apk")) return remote;
+  // Compatibilidade com o script atual do servidor, que está publicando
+  // lntv-release.apk. O workflow novo continua gerando lntv-latest.apk.
+  return {
+    ...remote,
+    url: remote.url.replace("/downloads/lntv-latest.apk", "/downloads/lntv-release.apk"),
+  };
 }
 
 async function getCurrentVersionCode(): Promise<number | null> {
@@ -72,7 +82,7 @@ async function fetchRemoteVersion(): Promise<RemoteVersion | null> {
       if (!res.ok) continue;
       const data = (await res.json()) as RemoteVersion;
       if (typeof data.versionCode !== "number" || !data.url) continue;
-      return data;
+      return normalizeApkUrl(data);
     } catch {
       /* tenta a próxima URL */
     }
@@ -87,6 +97,7 @@ export function useAppUpdate(): UseAppUpdateResult {
   const [status, setStatus] = useState<UpdateStatus>("idle");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const dismissedVersionCodeRef = useRef<number | null>(null);
 
   const check = useCallback(async () => {
     if (!(await isNativeApp())) return;
@@ -102,18 +113,15 @@ export function useAppUpdate(): UseAppUpdateResult {
       return;
     }
 
-    try {
-      const dismissed = parseInt(localStorage.getItem(DISMISSED_KEY) || "0", 10);
-      if (dismissed === remote.versionCode) return;
-    } catch {
-      /* noop */
-    }
+    if (dismissedVersionCodeRef.current === remote.versionCode) return;
 
     setAvailable(remote);
   }, []);
 
   useEffect(() => {
     check();
+    const t1 = window.setTimeout(check, 3000);
+    const t2 = window.setTimeout(check, 15000);
     const id = window.setInterval(check, CHECK_INTERVAL_MS);
     let appStateListener: { remove: () => Promise<void> } | null = null;
 
@@ -135,6 +143,8 @@ export function useAppUpdate(): UseAppUpdateResult {
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", onVisible);
       appStateListener?.remove();
@@ -142,13 +152,7 @@ export function useAppUpdate(): UseAppUpdateResult {
   }, [check]);
 
   const dismiss = useCallback(() => {
-    if (available) {
-      try {
-        localStorage.setItem(DISMISSED_KEY, String(available.versionCode));
-      } catch {
-        /* noop */
-      }
-    }
+    if (available) dismissedVersionCodeRef.current = available.versionCode;
     setAvailable(null);
     setStatus("idle");
     setProgress(0);
@@ -226,7 +230,7 @@ export function useAppUpdate(): UseAppUpdateResult {
     }
   }, [available]);
 
-  return { available, currentVersionCode, dismiss, download, status, progress, error };
+  return { available, currentVersionCode, dismiss, download, checkNow: check, status, progress, error };
 }
 
 async function blobToBase64(blob: Blob): Promise<string> {

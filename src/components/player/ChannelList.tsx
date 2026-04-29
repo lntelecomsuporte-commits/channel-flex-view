@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, memo } from "react";
+import { useState, useEffect, useRef, useMemo, memo, useLayoutEffect } from "react";
 import { FixedSizeList, type ListChildComponentProps } from "react-window";
 import type { Channel } from "@/hooks/useChannels";
 import { useMultiEPG } from "@/hooks/useMultiEPG";
@@ -19,6 +19,7 @@ interface ChannelListProps {
 }
 
 const LONG_PRESS_MS = 1500;
+const IS_NATIVE_APK = typeof window !== "undefined" && !!(window as any).Capacitor?.isNativePlatform?.();
 
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
@@ -196,6 +197,7 @@ interface RowData {
   focusedIndex: number;
   epgMap: Map<string, EPGProgram[]>;
   favoriteIds: Set<string>;
+  showEpg: boolean;
   onSelect: (index: number) => void;
   onFocus: (index: number) => void;
   onSynopsis: (p: EPGProgram) => void;
@@ -203,7 +205,7 @@ interface RowData {
 }
 
 const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
-  const { filteredChannels, channelIndexMap, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect, onFocus, onSynopsis, setItemRef } = data;
+  const { filteredChannels, channelIndexMap, currentIndex, focusedIndex, epgMap, favoriteIds, showEpg, onSelect, onFocus, onSynopsis, setItemRef } = data;
   const channel = filteredChannels[index];
   if (!channel) return null;
   const ch = channel as any;
@@ -246,9 +248,11 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
           <span className="text-lg sm:text-xl font-bold text-foreground">{String(channel.channel_number).padStart(3, "0")}</span>
           <p className="text-xs sm:text-sm text-muted-foreground truncate leading-tight">{channel.name}</p>
         </div>
-        <div className="flex-1 min-w-0 flex items-center">
-          <ChannelEPGInfo programs={programs} altText={altText} epgType={epgType} onClickSynopsis={onSynopsis} />
-        </div>
+        {showEpg && (
+          <div className="flex-1 min-w-0 flex items-center">
+            <ChannelEPGInfo programs={programs} altText={altText} epgType={epgType} onClickSynopsis={onSynopsis} />
+          </div>
+        )}
         {isActive && <span className="text-xs text-primary font-bold flex-shrink-0">● ATUAL</span>}
       </div>
     </div>
@@ -272,6 +276,7 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
   const isActive = next.data.currentIndex === realIdx;
   if (wasActive !== isActive) return false;
   // EPG da linha
+  if (prev.data.showEpg !== next.data.showEpg) return false;
   if (prev.data.epgMap.get(ch?.id ?? "") !== next.data.epgMap.get(ch?.id ?? "")) return false;
   // Favorito da linha
   const wasFav = prev.data.favoriteIds.has(prevCh?.id ?? "");
@@ -286,6 +291,7 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
   const [synopsisProgram, setSynopsisProgram] = useState<EPGProgram | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [listSize, setListSize] = useState({ width: 0, height: 0 });
+  const [showEpgDetails, setShowEpgDetails] = useState(!IS_NATIVE_APK);
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<FixedSizeList>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -308,7 +314,7 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
       epg_url: (ch as any).epg_url,
       epg_channel_id: (ch as any).epg_channel_id,
     })),
-    visible && preloadEpg
+    visible && preloadEpg && showEpgDetails
   );
 
   const filteredChannels = useMemo(() => {
@@ -322,18 +328,27 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
     if (visible) {
       setFocusedIndex(currentIndex);
       setSearchQuery("");
+      setShowEpgDetails(!IS_NATIVE_APK);
+      if (IS_NATIVE_APK && preloadEpg) {
+        const t = setTimeout(() => setShowEpgDetails(true), 350);
+        return () => clearTimeout(t);
+      }
     }
-  }, [visible, currentIndex]);
+  }, [visible, currentIndex, preloadEpg]);
 
   // Mede tamanho do container ANTES de renderizar a lista virtual.
   // Sem isso, no APK (WebView lento) a lista monta com height=0 e ignora
   // o scroll inicial, deixando a posição no canal 000.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!visible) return;
     const el = containerRef.current;
     if (!el) return;
     const update = () => setListSize({ width: el.clientWidth, height: el.clientHeight });
     update();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", update);
+      return () => window.removeEventListener("resize", update);
+    }
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
@@ -375,12 +390,13 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
       focusedIndex,
       epgMap,
       favoriteIds,
+      showEpg: showEpgDetails,
       onSelect,
       onFocus: (i: number) => setFocusedIndex(i),
       onSynopsis: (p: EPGProgram) => setSynopsisProgram(p),
       setItemRef,
     }),
-    [filteredChannels, channelIndexMap, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect]
+    [filteredChannels, channelIndexMap, currentIndex, focusedIndex, epgMap, favoriteIds, showEpgDetails, onSelect]
   );
 
   useEffect(() => {

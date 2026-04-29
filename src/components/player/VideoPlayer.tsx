@@ -26,6 +26,15 @@ const isHttpStreamUrl = (url: string): boolean => {
   }
 };
 
+const isHlsManifestUrl = (url: string): boolean => {
+  try {
+    const pathname = new URL(url).pathname;
+    return /\.m3u8$/i.test(pathname);
+  } catch {
+    return /\.m3u8(\?|$)/i.test(url);
+  }
+};
+
 interface VideoPlayerProps {
   streamUrl: string;
   autoPlay?: boolean;
@@ -126,7 +135,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     const isSignedProxyUrl = playableStreamUrl.includes("/functions/v1/hls-proxy") && playableStreamUrl.includes("st=");
     const forcedProxyUrl = getProxiedStreamUrl(activeStreamUrl);
     const canFallbackToDirect = isSignedProxyUrl && !proxyTokenFailure;
-    const canFallbackToProxy = isHttpStreamUrl(activeStreamUrl) && !useProxyFallback && !isSignedProxyUrl && forcedProxyUrl !== activeStreamUrl && forcedProxyUrl !== playableStreamUrl;
+    const canFallbackToProxy = isHttpStreamUrl(activeStreamUrl) && isHlsManifestUrl(activeStreamUrl) && !useProxyFallback && !isSignedProxyUrl && forcedProxyUrl !== activeStreamUrl && forcedProxyUrl !== playableStreamUrl;
     const fallbackToDirect = () => {
       if (!canFallbackToDirect) return false;
       console.warn("[Player] Proxy assinado falhou — tentando stream direto");
