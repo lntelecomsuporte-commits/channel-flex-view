@@ -240,7 +240,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (!data.fatal) return;
         switch (data.type) {
-          case Hls.ErrorTypes.NETWORK_ERROR:
+          case Hls.ErrorTypes.NETWORK_ERROR: {
             networkErrorRetries++;
             // Detecta falha de carregamento do manifesto numa URL HTTPS direta
             // (CORS, 302 cross-origin, ERR_FAILED). Tenta UMA vez via proxy
@@ -270,6 +270,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
             console.warn(`[HLS] Erro de rede fatal (#${networkErrorRetries}) — tentando retomar:`, data.details);
             hls.startLoad();
             break;
+          }
           case Hls.ErrorTypes.MEDIA_ERROR:
             mediaErrorRecoveryAttempts++;
             console.warn("[HLS] Erro de mídia fatal — recuperando:", data.details);
@@ -413,7 +414,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       className="absolute inset-0 w-full h-full object-contain"
       playsInline
       muted={muted}
-      // @ts-ignore - AirPlay attributes
+      // @ts-expect-error - AirPlay attributes
       x-webkit-airplay="allow"
       webkit-playsinline="true"
       crossOrigin="anonymous"
