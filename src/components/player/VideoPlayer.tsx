@@ -1,15 +1,19 @@
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react";
 import Hls from "hls.js";
+import mpegts from "mpegts.js";
 import { getPlayableStreamUrl, resolveChannelStreamUrl, buildProxyStreamUrl, isProxiedStreamUrl } from "@/lib/stream";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 import { getDeviceProfile } from "@/lib/deviceProfile";
 import YouTubePlayer from "./YouTubePlayer";
 
 /** Detecta o engine a usar com base na URL (extensão). */
-const detectEngine = (url: string, sourceUrl = url): "hls" | "native" => {
+const detectEngine = (url: string, sourceUrl = url, forcedContentType = ""): "hls" | "mpegts" | "native" => {
+  const contentType = forcedContentType.toLowerCase();
+  if (contentType.includes("video/mp2t") || contentType.includes("video/mpeg")) return "mpegts";
   const source = sourceUrl.toLowerCase();
   const playable = url.toLowerCase();
   if (/\.m3u8(\?|$)/.test(source) || /\.m3u8(\?|$)/.test(playable)) return "hls";
+  if (/\.(ts|m2ts)(\?|$)/.test(source) || /\.(ts|m2ts)(\?|$)/.test(playable)) return "mpegts";
   return "native";
 };
 
@@ -43,10 +47,12 @@ export interface VideoPlayerHandle {
 const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, backupStreamUrls = null }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const mpegtsRef = useRef<mpegts.Player | null>(null);
   
   const [muted, setMuted] = useState(true);
   const [proxyTokenFailure, setProxyTokenFailure] = useState(false);
   const [resolvedUrl, setResolvedUrl] = useState<string>("");
+  const [resolvedContentType, setResolvedContentType] = useState<string>("");
   // Quando uma URL HTTPS direta falha por CORS/302/rede no primeiro load,
   // tentamos UMA vez via proxy genérico (sem hardcode de host).
   const [corsFallback, setCorsFallback] = useState(false);
@@ -82,6 +88,24 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       } else {
         url = getPlayableStreamUrl(activeStreamUrl);
       }
+
+      if (isProxiedStreamUrl(url) && isHlsManifestUrl(activeStreamUrl)) {
+        // O proxy expõe o content-type final após redirects. Se uma URL .m3u8
+        // redirecionar para TS bruto, trocamos de hls.js para mpegts.js.
+        try {
+          const probe = await fetch(url, { method: "GET" });
+          const contentType = probe.headers.get("x-lntv-final-content-type") || probe.headers.get("content-type") || "";
+          if (!cancelled) setResolvedContentType(contentType);
+          probe.body?.cancel().catch(() => {});
+          if (contentType.toLowerCase().includes("video/mp2t")) {
+            console.warn("[Player] Proxy detectou MPEG-TS bruto após redirect; usando engine MPEG-TS");
+          }
+        } catch {
+          if (!cancelled) setResolvedContentType("");
+        }
+      } else {
+        if (!cancelled) setResolvedContentType("");
+      }
       if (!cancelled) setResolvedUrl(url);
     })();
     return () => { cancelled = true; };
@@ -94,7 +118,14 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     setProxyTokenFailure(false);
     setBackupIndex(-1);
     setCorsFallback(false);
+    setResolvedContentType("");
   }, [streamUrl]);
+
+  // Se mudar de backup dentro do mesmo canal, cada URL precisa recomeçar limpa.
+  useEffect(() => {
+    setCorsFallback(false);
+    setResolvedContentType("");
+  }, [backupIndex]);
 
   // Tenta avançar para a próxima URL de backup. Retorna true se houve avanço.
   const tryNextBackup = (): boolean => {
@@ -103,6 +134,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     console.warn(`[HLS] Falha total — trocando para backup #${next + 1}/${backups.length}: ${backups[next]}`);
     setProxyTokenFailure(false);
     setCorsFallback(false);
+    setResolvedContentType("");
     setBackupIndex(next);
     return true;
   };
@@ -119,6 +151,10 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
+    if (mpegtsRef.current) {
+      mpegtsRef.current.destroy();
+      mpegtsRef.current = null;
+    }
 
     const isSignedProxyUrl = playableStreamUrl.includes("/functions/v1/hls-proxy") && playableStreamUrl.includes("st=");
     const handleVideoError = () => {
@@ -133,7 +169,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       video.canPlayType("application/vnd.apple.mpegurl");
 
     // Detecta engine pela extensão da URL: .m3u8 → hls.js, resto → tag <video>.
-    const engine = detectEngine(playableStreamUrl, activeStreamUrl);
+    const engine = detectEngine(playableStreamUrl, activeStreamUrl, resolvedContentType);
     console.log(`[Player] engine=${engine} url=${playableStreamUrl.slice(0, 80)}...`);
 
     if (engine === "hls" && !isAppleDevice && Hls.isSupported()) {
@@ -210,7 +246,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (!data.fatal) return;
         switch (data.type) {
-          case Hls.ErrorTypes.NETWORK_ERROR:
+          case Hls.ErrorTypes.NETWORK_ERROR: {
             networkErrorRetries++;
             // Detecta falha de carregamento do manifesto numa URL HTTPS direta
             // (CORS, 302 cross-origin, ERR_FAILED). Tenta UMA vez via proxy
@@ -240,6 +276,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
             console.warn(`[HLS] Erro de rede fatal (#${networkErrorRetries}) — tentando retomar:`, data.details);
             hls.startLoad();
             break;
+          }
           case Hls.ErrorTypes.MEDIA_ERROR:
             mediaErrorRecoveryAttempts++;
             console.warn("[HLS] Erro de mídia fatal — recuperando:", data.details);
@@ -311,6 +348,31 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         if (waitingTimer) clearTimeout(waitingTimer);
         origDestroy();
       };
+    } else if (engine === "mpegts" && mpegts.isSupported()) {
+      const tsPlayer = mpegts.createPlayer({
+        type: "mpegts",
+        url: playableStreamUrl,
+        isLive: true,
+        cors: true,
+      }, {
+        enableWorker: true,
+        enableStashBuffer: false,
+        isLive: true,
+        liveBufferLatencyChasing: true,
+        liveBufferLatencyMaxLatency: 3,
+        liveBufferLatencyMinRemain: 1,
+      });
+      mpegtsRef.current = tsPlayer;
+      tsPlayer.attachMediaElement(video);
+      tsPlayer.load();
+      tsPlayer.on(mpegts.Events.ERROR, (type, details) => {
+        console.warn("[MPEGTS] Erro no stream — tentando backup:", type, details);
+        tryNextBackup();
+      });
+      if (autoPlay) {
+        const result = tsPlayer.play();
+        if (result instanceof Promise) result.catch(() => {});
+      }
     } else if (engine === "native" || (engine === "hls" && isAppleDevice && video.canPlayType("application/vnd.apple.mpegurl"))) {
       // Player nativo: MP4 progressivo ou HLS no Safari/iOS (AirPlay).
       video.src = playableStreamUrl;
@@ -323,8 +385,12 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
+      if (mpegtsRef.current) {
+        mpegtsRef.current.destroy();
+        mpegtsRef.current = null;
+      }
     };
-  }, [playableStreamUrl, autoPlay, activeStreamUrl, proxyTokenFailure]);
+  }, [playableStreamUrl, autoPlay, activeStreamUrl, proxyTokenFailure, resolvedContentType]);
 
   // Unmute after first user interaction
   useEffect(() => {
@@ -354,7 +420,6 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       className="absolute inset-0 w-full h-full object-contain"
       playsInline
       muted={muted}
-      // @ts-ignore - AirPlay attributes
       x-webkit-airplay="allow"
       webkit-playsinline="true"
       crossOrigin="anonymous"
