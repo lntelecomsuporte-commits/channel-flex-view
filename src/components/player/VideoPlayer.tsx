@@ -11,15 +11,19 @@ const IS_NATIVE_APK = Capacitor.isNativePlatform();
 
 export type StreamFormat = "auto" | "hls" | "ts" | "mp4";
 
-/** Detecta o engine a usar com base no formato escolhido + URL. */
-const detectEngine = (format: StreamFormat, url: string): "hls" | "ts" | "native" => {
+/** Detecta o engine a usar com base no formato escolhido + URL original. */
+const detectEngine = (format: StreamFormat, url: string, sourceUrl = url): "hls" | "ts" | "native" => {
   if (format === "hls") return "hls";
   if (format === "ts") return "ts";
   if (format === "mp4") return "native";
   // auto: olha a URL
-  const u = url.toLowerCase();
-  if (/\.m3u8(\?|$)/.test(u) || u.includes("hls-proxy")) return "hls";
-  if (/\.(ts|m2ts|mts)(\?|$)/.test(u) || u.includes("mpegts")) return "ts";
+  const source = sourceUrl.toLowerCase();
+  const playable = url.toLowerCase();
+  if (/\.m3u8(\?|$)/.test(source) || /\.m3u8(\?|$)/.test(playable)) return "hls";
+  if (/\.(ts|m2ts|mts)(\?|$)/.test(source) || source.includes("mpegts")) return "ts";
+  // Streams HTTP sem extensão normalmente são MPEG-TS bruto; se passarem pelo
+  // hls-proxy, não podem ser tratados como playlist HLS.
+  if (isHttpStreamUrl(sourceUrl)) return "ts";
   return "native";
 };
 
@@ -162,7 +166,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     // Detecta engine considerando o formato cadastrado no canal.
     // - "auto" (padrão): olha extensão da URL.
     // - "hls"/"ts"/"mp4": força o engine correspondente.
-    const engine = detectEngine(streamFormat, playableStreamUrl);
+    const engine = detectEngine(streamFormat, playableStreamUrl, activeStreamUrl);
     console.log(`[Player] engine=${engine} format=${streamFormat} url=${playableStreamUrl.slice(0, 80)}...`);
 
     if (engine === "ts" && mpegts.getFeatureList().mseLivePlayback) {
