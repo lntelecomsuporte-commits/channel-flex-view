@@ -147,22 +147,13 @@ export const resolveChannelStreamUrl = async (
   channelId: string | null | undefined,
   useProxyToken: boolean,
 ): Promise<string> => {
-  // Regra atual: HLS HTTPS deve tocar direto mesmo no navegador.
-  // O proxy/token assinado fica restrito a streams HTTP ou fallback controlado.
-  try {
-    if (new URL(streamUrl).protocol === "https:") {
-      return streamUrl;
-    }
-  } catch {
-    /* segue fluxo padrão abaixo */
-  }
-
-  // "Ocultar URL" só faz sentido no browser (onde dá pra inspecionar via F12).
-  // No APK não há DevTools, então tocamos direto pra economizar latência/banda do proxy.
-  if (useProxyToken && channelId && !Capacitor.isNativePlatform()) {
+  // Regra do admin: se "Ocultar URL" estiver marcado, força proxy + token
+  // assinado, independente de HTTP/HTTPS. Sem essa flag, HTTPS toca direto e
+  // HTTP usa proxy para evitar Mixed Content/CORS.
+  if (useProxyToken && channelId) {
     const signed = await buildSignedProxyStreamUrl(streamUrl, channelId);
     if (signed) return signed;
-    // Fallback: melhor tocar pelo proxy normal do que falhar
+    // Fallback: melhor tocar pelo proxy normal do que falhar quando a flag foi marcada.
     return buildProxyStreamUrl(streamUrl) ?? getPlayableStreamUrl(streamUrl);
   }
   return getPlayableStreamUrl(streamUrl);
