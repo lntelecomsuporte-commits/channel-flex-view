@@ -15,6 +15,10 @@ interface VideoPlayerProps {
    *  com token assinado (esconde a URL real do provedor no F12). */
   channelId?: string | null;
   useProxyToken?: boolean;
+  /** Lista ordenada de URLs de fallback. Quando o player esgota tentativas
+   *  na URL principal (erro fatal não-recuperável), avança automaticamente
+   *  para a próxima URL desta lista. */
+  backupStreamUrls?: string[] | null;
 }
 
 export interface VideoPlayerHandle {
@@ -22,14 +26,18 @@ export interface VideoPlayerHandle {
   getHls: () => Hls | null;
 }
 
-const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false }, ref) => {
+const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, backupStreamUrls = null }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [muted, setMuted] = useState(true);
   const [useProxyFallback, setUseProxyFallback] = useState(false);
   const [proxyTokenFailure, setProxyTokenFailure] = useState(false);
   const [resolvedUrl, setResolvedUrl] = useState<string>("");
-  const youTubeVideoId = extractYouTubeVideoId(streamUrl);
+  // Índice da URL ativa: -1 = principal (streamUrl), 0..N = backupStreamUrls[i]
+  const [backupIndex, setBackupIndex] = useState(-1);
+  const backups = backupStreamUrls?.filter((u) => !!u && u.trim().length > 0) ?? [];
+  const activeStreamUrl = backupIndex < 0 ? streamUrl : (backups[backupIndex] ?? streamUrl);
+  const youTubeVideoId = extractYouTubeVideoId(activeStreamUrl);
 
   useImperativeHandle(ref, () => ({
     getVideoElement: () => videoRef.current,
@@ -46,24 +54,38 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     (async () => {
       let url: string;
       if (useProxyFallback) {
-        url = getProxiedStreamUrl(streamUrl);
-      } else if (useProxyToken && channelId && !proxyTokenFailure) {
-        url = await resolveChannelStreamUrl(streamUrl, channelId, true);
+        url = getProxiedStreamUrl(activeStreamUrl);
+      } else if (useProxyToken && channelId && !proxyTokenFailure && backupIndex < 0) {
+        // Token assinado só faz sentido na URL principal (cadastrada no admin).
+        // Em backup, vai direto/proxy normal.
+        url = await resolveChannelStreamUrl(activeStreamUrl, channelId, true);
       } else {
-        url = getPlayableStreamUrl(streamUrl);
+        url = getPlayableStreamUrl(activeStreamUrl);
       }
       if (!cancelled) setResolvedUrl(url);
     })();
     return () => { cancelled = true; };
-  }, [streamUrl, useProxyFallback, useProxyToken, channelId, youTubeVideoId, proxyTokenFailure]);
+  }, [activeStreamUrl, useProxyFallback, useProxyToken, channelId, youTubeVideoId, proxyTokenFailure, backupIndex]);
 
   const playableStreamUrl = resolvedUrl;
 
+  // Reset estado quando o canal (URL principal) muda
   useEffect(() => {
     setUseProxyFallback(false);
     setProxyTokenFailure(false);
+    setBackupIndex(-1);
   }, [streamUrl]);
 
+  // Tenta avançar para a próxima URL de backup. Retorna true se houve avanço.
+  const tryNextBackup = (): boolean => {
+    const next = backupIndex + 1;
+    if (next >= backups.length) return false;
+    console.warn(`[HLS] Falha total — trocando para backup #${next + 1}/${backups.length}: ${backups[next]}`);
+    setUseProxyFallback(false);
+    setProxyTokenFailure(false);
+    setBackupIndex(next);
+    return true;
+  };
 
   useEffect(() => {
     const video = videoRef.current;
@@ -79,9 +101,9 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     }
 
     const isSignedProxyUrl = playableStreamUrl.includes("/functions/v1/hls-proxy") && playableStreamUrl.includes("st=");
-    const forcedProxyUrl = getProxiedStreamUrl(streamUrl);
+    const forcedProxyUrl = getProxiedStreamUrl(activeStreamUrl);
     const canFallbackToDirect = isSignedProxyUrl && !proxyTokenFailure;
-    const canFallbackToProxy = !useProxyFallback && !isSignedProxyUrl && forcedProxyUrl !== streamUrl && forcedProxyUrl !== playableStreamUrl;
+    const canFallbackToProxy = !useProxyFallback && !isSignedProxyUrl && forcedProxyUrl !== activeStreamUrl && forcedProxyUrl !== playableStreamUrl;
     const fallbackToDirect = () => {
       if (!canFallbackToDirect) return false;
       console.warn("[HLS] Proxy assinado falhou — tentando stream direto");
@@ -96,7 +118,9 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       return true;
     };
     const handleVideoError = () => {
-      fallbackToProxy();
+      // Tag <video> direta (mp4/native HLS): tenta proxy → senão próximo backup
+      if (fallbackToProxy()) return;
+      tryNextBackup();
     };
     video.addEventListener("error", handleVideoError);
 
@@ -182,12 +206,22 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       // tocando o que está no buffer (gera efeito "quadriculado" natural do H.264
       // em vez de imagem congelada).
       let mediaErrorRecoveryAttempts = 0;
+      let networkErrorRetries = 0;
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (!data.fatal) return;
         switch (data.type) {
           case Hls.ErrorTypes.NETWORK_ERROR:
             if (fallbackToProxy()) return;
-            console.warn("[HLS] Erro de rede fatal — tentando retomar:", data.details);
+            networkErrorRetries++;
+            // Após 2 retries do startLoad sem sucesso, considera URL morta
+            // e parte para o próximo backup (failover ~3s).
+            if (networkErrorRetries > 2) {
+              if (tryNextBackup()) return;
+              console.error("[HLS] Sem mais backups — desistindo:", data.details);
+              hls.destroy();
+              return;
+            }
+            console.warn(`[HLS] Erro de rede fatal (#${networkErrorRetries}) — tentando retomar:`, data.details);
             hls.startLoad();
             break;
           case Hls.ErrorTypes.MEDIA_ERROR:
@@ -202,6 +236,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
             break;
           default:
             console.error("[HLS] Erro fatal não recuperável:", data);
+            if (tryNextBackup()) return;
             hls.destroy();
             break;
         }
@@ -210,6 +245,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       // Reset contador de recuperação quando voltar a tocar normalmente
       hls.on(Hls.Events.FRAG_LOADED, () => {
         mediaErrorRecoveryAttempts = 0;
+        networkErrorRetries = 0;
       });
 
       // === Plano C: auto-recovery quando travar imagem por >4s ===
@@ -271,7 +307,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         hlsRef.current = null;
       }
     };
-  }, [playableStreamUrl, autoPlay, streamUrl, useProxyFallback, proxyTokenFailure]);
+  }, [playableStreamUrl, autoPlay, activeStreamUrl, useProxyFallback, proxyTokenFailure]);
 
   // Unmute after first user interaction
   useEffect(() => {

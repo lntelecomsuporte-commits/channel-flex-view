@@ -76,6 +76,7 @@ export type Database = {
       }
       channels: {
         Row: {
+          backup_stream_urls: string[]
           category_id: string | null
           channel_number: number
           created_at: string
@@ -94,6 +95,7 @@ export type Database = {
           use_proxy_token: boolean
         }
         Insert: {
+          backup_stream_urls?: string[]
           category_id?: string | null
           channel_number: number
           created_at?: string
@@ -112,6 +114,7 @@ export type Database = {
           use_proxy_token?: boolean
         }
         Update: {
+          backup_stream_urls?: string[]
           category_id?: string | null
           channel_number?: number
           created_at?: string

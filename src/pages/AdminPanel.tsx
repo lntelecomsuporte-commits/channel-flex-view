@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseLocal";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -23,7 +24,7 @@ import EpgUrlPresetSelector from "@/components/admin/EpgUrlPresetSelector";
 import { getLocalFunctionUrl, LOCAL_SUPABASE_PUBLISHABLE_KEY } from "@/lib/localBackend";
 
 const emptyChannelForm = {
-  name: "", channel_number: "", stream_url: "", logo_url: "", category_id: "", is_active: true,
+  name: "", channel_number: "", stream_url: "", backup_stream_urls: "", logo_url: "", category_id: "", is_active: true,
   epg_type: "", epg_url: "", epg_alt_text: "", epg_channel_id: "", epg_grab_logo: false, epg_show_synopsis: false,
   use_proxy_token: false,
 };
@@ -133,9 +134,15 @@ const AdminPanel = () => {
     }
 
     const isXmltv = channelForm.epg_type === "xmltv";
+    const backupList = (channelForm.backup_stream_urls || "")
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
     const payload = {
       name: channelForm.name, channel_number: parseInt(channelForm.channel_number),
-      stream_url: channelForm.stream_url, logo_url: logoUrl,
+      stream_url: channelForm.stream_url,
+      backup_stream_urls: backupList,
+      logo_url: logoUrl,
       category_id: channelForm.category_id || null, is_active: channelForm.is_active,
       epg_type: channelForm.epg_type || null,
       epg_url: isXmltv ? (normalizeGithub(channelForm.epg_url) || null) : null,
@@ -173,6 +180,7 @@ const AdminPanel = () => {
     setEditingChannelId(ch.id);
     setChannelForm({
       name: ch.name, channel_number: String(ch.channel_number), stream_url: ch.stream_url,
+      backup_stream_urls: (((ch as any).backup_stream_urls ?? []) as string[]).join("\n"),
       logo_url: ch.logo_url ?? "", category_id: ch.category_id ?? "", is_active: ch.is_active,
       epg_type: (() => {
         const t = (ch as any).epg_type ?? "";
@@ -314,6 +322,17 @@ const AdminPanel = () => {
                   <div className="space-y-2 md:col-span-2">
                     <Label>URL do Stream (HLS) <span className="text-destructive">*</span></Label>
                     <Input value={channelForm.stream_url} onChange={(e) => setChannelForm((f) => ({ ...f, stream_url: e.target.value }))} placeholder="https://seu-flussonic.com/canal/index.m3u8" />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>URLs de Backup (opcional)</Label>
+                    <Textarea
+                      rows={3}
+                      value={channelForm.backup_stream_urls}
+                      onChange={(e) => setChannelForm((f) => ({ ...f, backup_stream_urls: e.target.value }))}
+                      placeholder={"Uma URL por linha. Se a principal cair, o player tenta cada uma em ordem.\nhttps://backup1.exemplo.com/canal/index.m3u8\nhttps://backup2.exemplo.com/canal/index.m3u8"}
+                      className="font-mono text-xs"
+                    />
+                    <p className="text-xs text-muted-foreground">Uma URL por linha — testadas em ordem após esgotar tentativas na principal (~3s por URL).</p>
                   </div>
                   <div className="space-y-2">
                     <Label>URL do Logo (opcional)</Label>
