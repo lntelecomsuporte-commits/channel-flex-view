@@ -409,17 +409,18 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
         lastNavTickRef.current = now;
       }
 
-      // FF / RW / Ch+ / Ch- / ArrowLeft / ArrowRight → paginar 10
+      // FF / RW / Ch+ / Ch- / ArrowLeft / ArrowRight → paginar 5 (garante troca de tela em TVs que mostram ~6 canais)
+      const PAGE_STEP = 5;
       if (isPageNextKey(e) || e.key === "ArrowRight") {
         e.preventDefault();
         e.stopPropagation();
-        setFocusedIndex((prev) => Math.min(filteredChannels.length - 1, prev + 10));
+        setFocusedIndex((prev) => Math.min(filteredChannels.length - 1, prev + PAGE_STEP));
         return;
       }
       if (isPagePrevKey(e) || e.key === "ArrowLeft") {
         e.preventDefault();
         e.stopPropagation();
-        setFocusedIndex((prev) => Math.max(0, prev - 10));
+        setFocusedIndex((prev) => Math.max(0, prev - PAGE_STEP));
         return;
       }
 
@@ -524,7 +525,7 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
           <h2 className="text-lg sm:text-xl font-bold text-foreground flex-shrink-0">Canais</h2>
 
           <div className="flex items-center gap-3 flex-shrink-0 ml-auto">
-            <span className="text-xs text-muted-foreground hidden sm:inline">↑↓ Navegar/Solte abre • ←→ ±10 • OK Selecionar • Segure OK Favoritar • ESC Fechar</span>
+            <span className="text-xs text-muted-foreground hidden sm:inline">↑↓ Navegar/Solte abre • ←→ ±5 • OK Selecionar • Segure OK Favoritar • ESC Fechar</span>
             {onLogout && (
               <button onClick={(e) => { e.stopPropagation(); onLogout(); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-destructive/20 hover:bg-destructive/40 text-destructive text-xs font-medium transition-colors">
                 <LogOut className="w-3.5 h-3.5" /> Sair
