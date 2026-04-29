@@ -205,6 +205,7 @@ interface RowData {
 const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
   const { filteredChannels, channelIndexMap, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect, onFocus, onSynopsis, setItemRef } = data;
   const channel = filteredChannels[index];
+  if (!channel) return null;
   const ch = channel as any;
   const programs = epgMap.get(channel.id) || [];
   const altText = ch.epg_alt_text as string | null;
