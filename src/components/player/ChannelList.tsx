@@ -371,6 +371,20 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
 
       const isSearchFocused = document.activeElement === searchRef.current;
 
+      // Throttle de repetição: quando o usuário segura a tecla, ignora
+      // eventos que cheguem antes de 16ms desde o último processado.
+      const isNavKey =
+        isPageNextKey(e) || isPagePrevKey(e) || e.key === "ArrowUp" || e.key === "ArrowDown";
+      if (isNavKey && e.repeat) {
+        const now = performance.now();
+        if (now - lastNavTickRef.current < NAV_THROTTLE_MS) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        lastNavTickRef.current = now;
+      }
+
       // FF / RW / Ch+ / Ch- → paginate by 10
       if (isPageNextKey(e)) {
         e.preventDefault();
