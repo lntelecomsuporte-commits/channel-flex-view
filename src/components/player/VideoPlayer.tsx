@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react";
 import Hls from "hls.js";
+import mpegts from "mpegts.js";
 import { Capacitor } from "@capacitor/core";
 import { getPlayableStreamUrl, getProxiedStreamUrl, resolveChannelStreamUrl } from "@/lib/stream";
 import { extractYouTubeVideoId } from "@/lib/youtube";
@@ -7,6 +8,20 @@ import { getDeviceProfile } from "@/lib/deviceProfile";
 import YouTubePlayer from "./YouTubePlayer";
 
 const IS_NATIVE_APK = Capacitor.isNativePlatform();
+
+export type StreamFormat = "auto" | "hls" | "ts" | "mp4";
+
+/** Detecta o engine a usar com base no formato escolhido + URL. */
+const detectEngine = (format: StreamFormat, url: string): "hls" | "ts" | "native" => {
+  if (format === "hls") return "hls";
+  if (format === "ts") return "ts";
+  if (format === "mp4") return "native";
+  // auto: olha a URL
+  const u = url.toLowerCase();
+  if (/\.m3u8(\?|$)/.test(u) || u.includes("hls-proxy")) return "hls";
+  if (/\.(ts|m2ts|mts)(\?|$)/.test(u) || u.includes("mpegts")) return "ts";
+  return "native";
+};
 
 interface VideoPlayerProps {
   streamUrl: string;
@@ -19,6 +34,9 @@ interface VideoPlayerProps {
    *  na URL principal (erro fatal não-recuperável), avança automaticamente
    *  para a próxima URL desta lista. */
   backupStreamUrls?: string[] | null;
+  /** Formato do stream — controla qual engine de player usar.
+   *  "auto" (padrão) detecta pela extensão da URL. */
+  streamFormat?: StreamFormat;
 }
 
 export interface VideoPlayerHandle {
