@@ -110,7 +110,7 @@ const buildSignedProxyStreamUrl = async (
  *   allowMixedContent) frequentemente bloqueia HLS HTTP servido a partir
  *   de assets HTTPS, e muitos TV Boxes simplesmente recusam HTTP cleartext.
  *   Roteando pelo hls-proxy (HTTPS) o player recebe sempre HTTPS válido.
- * - HTTPS: toca direto; se falhar, o VideoPlayer aciona fallback para o proxy.
+ * - HTTPS: toca direto. Proxy só entra se o admin marcar "Ocultar URL".
  */
 export const getPlayableStreamUrl = (streamUrl: string): string => {
   if (!streamUrl) return streamUrl;
@@ -159,12 +159,6 @@ export const resolveChannelStreamUrl = async (
     return "";
   }
   return getPlayableStreamUrl(streamUrl);
-};
-
-/** Força proxy como fallback controlado pelo VideoPlayer (web e APK). */
-export const getProxiedStreamUrl = (streamUrl: string): string => {
-  if (!streamUrl) return streamUrl;
-  return buildProxyStreamUrl(streamUrl) ?? streamUrl;
 };
 
 // Lê o token DIRETAMENTE do localStorage de forma síncrona.

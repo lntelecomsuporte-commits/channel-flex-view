@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react";
 import Hls from "hls.js";
-import { getPlayableStreamUrl, getProxiedStreamUrl, resolveChannelStreamUrl } from "@/lib/stream";
+import { getPlayableStreamUrl, resolveChannelStreamUrl } from "@/lib/stream";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 import { getDeviceProfile } from "@/lib/deviceProfile";
 import YouTubePlayer from "./YouTubePlayer";
@@ -45,7 +45,6 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   const hlsRef = useRef<Hls | null>(null);
   
   const [muted, setMuted] = useState(true);
-  const [useProxyFallback, setUseProxyFallback] = useState(false);
   const [proxyTokenFailure, setProxyTokenFailure] = useState(false);
   const [resolvedUrl, setResolvedUrl] = useState<string>("");
   
@@ -69,9 +68,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     let cancelled = false;
     (async () => {
       let url: string;
-      if (useProxyFallback) {
-        url = getProxiedStreamUrl(activeStreamUrl);
-      } else if (useProxyToken && channelId && !proxyTokenFailure && backupIndex < 0) {
+      if (useProxyToken && channelId && !proxyTokenFailure && backupIndex < 0) {
         // Token assinado só faz sentido na URL principal (cadastrada no admin).
         // Em backup, vai direto/proxy normal.
         url = await resolveChannelStreamUrl(activeStreamUrl, channelId, true);
@@ -81,13 +78,12 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       if (!cancelled) setResolvedUrl(url);
     })();
     return () => { cancelled = true; };
-  }, [activeStreamUrl, useProxyFallback, useProxyToken, channelId, youTubeVideoId, proxyTokenFailure, backupIndex]);
+  }, [activeStreamUrl, useProxyToken, channelId, youTubeVideoId, proxyTokenFailure, backupIndex]);
 
   const playableStreamUrl = resolvedUrl;
 
   // Reset estado quando o canal (URL principal) muda
   useEffect(() => {
-    setUseProxyFallback(false);
     setProxyTokenFailure(false);
     setBackupIndex(-1);
   }, [streamUrl]);
@@ -97,7 +93,6 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     const next = backupIndex + 1;
     if (next >= backups.length) return false;
     console.warn(`[HLS] Falha total — trocando para backup #${next + 1}/${backups.length}: ${backups[next]}`);
-    setUseProxyFallback(false);
     setProxyTokenFailure(false);
     setBackupIndex(next);
     return true;
@@ -117,25 +112,9 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     }
 
     const isSignedProxyUrl = playableStreamUrl.includes("/functions/v1/hls-proxy") && playableStreamUrl.includes("st=");
-    const forcedProxyUrl = getProxiedStreamUrl(activeStreamUrl);
-    const canFallbackToDirect = isSignedProxyUrl && !useProxyToken && !proxyTokenFailure;
-    const canFallbackToProxy = isHlsManifestUrl(activeStreamUrl) && !useProxyFallback && !isSignedProxyUrl && forcedProxyUrl !== activeStreamUrl && forcedProxyUrl !== playableStreamUrl;
-    const fallbackToDirect = () => {
-      if (!canFallbackToDirect) return false;
-      console.warn("[Player] Proxy assinado falhou — tentando stream direto");
-      setProxyTokenFailure(true);
-      return true;
-    };
-    const fallbackToProxy = () => {
-      if (fallbackToDirect()) return true;
-      if (!canFallbackToProxy) return false;
-      console.warn("[Player] Stream direto falhou — tentando via proxy");
-      setUseProxyFallback(true);
-      return true;
-    };
     const handleVideoError = () => {
-      // Tag <video> direta (mp4/native HLS): tenta proxy → senão próximo backup
-      if (fallbackToProxy()) return;
+      // Regra do projeto: HTTPS direto não cai para proxy automaticamente.
+      // Proxy só entra por HTTP/mixed-content ou quando "Ocultar URL" está ativo.
       tryNextBackup();
     };
     video.addEventListener("error", handleVideoError);
@@ -223,7 +202,6 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         if (!data.fatal) return;
         switch (data.type) {
           case Hls.ErrorTypes.NETWORK_ERROR:
-            if (fallbackToProxy()) return;
             networkErrorRetries++;
             // Após 2 retries do startLoad sem sucesso, considera URL morta
             // e parte para o próximo backup (failover ~3s).
@@ -320,7 +298,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         hlsRef.current = null;
       }
     };
-  }, [playableStreamUrl, autoPlay, activeStreamUrl, useProxyFallback, proxyTokenFailure]);
+  }, [playableStreamUrl, autoPlay, activeStreamUrl, proxyTokenFailure]);
 
   // Unmute after first user interaction
   useEffect(() => {
