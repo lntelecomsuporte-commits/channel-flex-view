@@ -54,24 +54,38 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     (async () => {
       let url: string;
       if (useProxyFallback) {
-        url = getProxiedStreamUrl(streamUrl);
-      } else if (useProxyToken && channelId && !proxyTokenFailure) {
-        url = await resolveChannelStreamUrl(streamUrl, channelId, true);
+        url = getProxiedStreamUrl(activeStreamUrl);
+      } else if (useProxyToken && channelId && !proxyTokenFailure && backupIndex < 0) {
+        // Token assinado só faz sentido na URL principal (cadastrada no admin).
+        // Em backup, vai direto/proxy normal.
+        url = await resolveChannelStreamUrl(activeStreamUrl, channelId, true);
       } else {
-        url = getPlayableStreamUrl(streamUrl);
+        url = getPlayableStreamUrl(activeStreamUrl);
       }
       if (!cancelled) setResolvedUrl(url);
     })();
     return () => { cancelled = true; };
-  }, [streamUrl, useProxyFallback, useProxyToken, channelId, youTubeVideoId, proxyTokenFailure]);
+  }, [activeStreamUrl, useProxyFallback, useProxyToken, channelId, youTubeVideoId, proxyTokenFailure, backupIndex]);
 
   const playableStreamUrl = resolvedUrl;
 
+  // Reset estado quando o canal (URL principal) muda
   useEffect(() => {
     setUseProxyFallback(false);
     setProxyTokenFailure(false);
+    setBackupIndex(-1);
   }, [streamUrl]);
 
+  // Tenta avançar para a próxima URL de backup. Retorna true se houve avanço.
+  const tryNextBackup = (): boolean => {
+    const next = backupIndex + 1;
+    if (next >= backups.length) return false;
+    console.warn(`[HLS] Falha total — trocando para backup #${next + 1}/${backups.length}: ${backups[next]}`);
+    setUseProxyFallback(false);
+    setProxyTokenFailure(false);
+    setBackupIndex(next);
+    return true;
+  };
 
   useEffect(() => {
     const video = videoRef.current;
