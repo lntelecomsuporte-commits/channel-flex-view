@@ -16,11 +16,6 @@ import { LOCAL_AUTH_STORAGE_KEY, getLocalFunctionUrl } from "@/lib/localBackend"
  */
 const PRODUCTION_HOST = "https://tv2.lntelecom.net";
 
-const isLikelyRawHttpStream = (url: URL): boolean => {
-  const path = url.pathname.toLowerCase();
-  return url.protocol === "http:" && !/\.(m3u8|mp4|m4a|aac|mp3|ts|m2ts|mts)(\?|$)/.test(path);
-};
-
 const getProxyBaseUrl = () => {
   let origin = PRODUCTION_HOST;
 
