@@ -191,7 +191,7 @@ function SynopsisModal({ program, onClose }: { program: EPGProgram; onClose: () 
 
 interface RowData {
   filteredChannels: Channel[];
-  channels: Channel[];
+  channelIndexMap: Map<string, number>;
   currentIndex: number;
   focusedIndex: number;
   epgMap: Map<string, EPGProgram[]>;
