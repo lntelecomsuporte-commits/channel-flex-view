@@ -15,6 +15,7 @@ import ChannelList from "@/components/player/ChannelList";
 import SynopsisModal from "@/components/player/SynopsisModal";
 import StatsOverlay from "@/components/player/StatsOverlay";
 import FavoritesBar from "@/components/player/FavoritesBar";
+import ChannelSearch from "@/components/player/ChannelSearch";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useSessionHeartbeat } from "@/hooks/useSessionHeartbeat";
 import { isSelectKey, isPageNextKey, isPagePrevKey } from "@/lib/remoteKeys";
@@ -143,6 +144,7 @@ const PlayerPage = () => {
 
   const [synopsisProgram, setSynopsisProgram] = useState<EPGProgram | null>(null);
   const [favFocusIndex, setFavFocusIndex] = useState<number | null>(null);
+  const [searchActive, setSearchActive] = useState(false);
   const lastEnterRef = useRef<{ id: string; time: number }>({ id: "", time: 0 });
   const enterHandledRef = useRef(false);
   const enterLongPressFiredRef = useRef(false);
@@ -333,6 +335,10 @@ const PlayerPage = () => {
       setSynopsisProgram(null);
       return true;
     }
+    if (searchActive) {
+      setSearchActive(false);
+      return true;
+    }
     if (showChannelList) {
       setShowChannelList(false);
       return true;
@@ -368,7 +374,7 @@ const PlayerPage = () => {
       backPressRef.current.count = 0;
     }, 2000);
     return true;
-  }, [showStats, synopsisProgram, showChannelList, favFocusIndex, showPreview, previewTimeout, showOSD, showFavoritesBar, osdTimeout]);
+  }, [showStats, synopsisProgram, searchActive, showChannelList, favFocusIndex, showPreview, previewTimeout, showOSD, showFavoritesBar, osdTimeout]);
 
   useNativeBackButton(handleBackPress);
 
@@ -389,6 +395,8 @@ const PlayerPage = () => {
         return;
       }
       if (showChannelList) return;
+      // Busca aberta consome todos os eventos (componente trata internamente).
+      if (searchActive) return;
       if (showStats && (e.key === "Escape" || e.key === "Backspace")) {
         e.preventDefault();
         setShowStats(false);
@@ -432,6 +440,10 @@ const PlayerPage = () => {
             return;
           case "ArrowUp":
             e.preventDefault();
+            // Sai dos favoritos e abre a busca acima.
+            setFavFocusIndex(null);
+            setSearchActive(true);
+            showOSDTemporarily(true);
             return;
           default:
             if (isSelectKey(e)) {
@@ -475,10 +487,16 @@ const PlayerPage = () => {
         case "ArrowUp":
           e.preventDefault();
           comboRef.current = [];
-          if (showOSD && showFavoritesBar && favChannels.length > 0) {
-            const activeIdx = favChannels.findIndex((c) => c.id === currentChannel?.id);
-            setFavFocusIndex(activeIdx >= 0 ? activeIdx : 0);
-            showOSDTemporarily(true);
+          if (showOSD && showFavoritesBar) {
+            if (favChannels.length > 0) {
+              const activeIdx = favChannels.findIndex((c) => c.id === currentChannel?.id);
+              setFavFocusIndex(activeIdx >= 0 ? activeIdx : 0);
+              showOSDTemporarily(true);
+            } else {
+              // Sem favoritos — ↑ abre direto a busca
+              setSearchActive(true);
+              showOSDTemporarily(true);
+            }
             return;
           }
           if (e.repeat) {
@@ -579,7 +597,7 @@ const PlayerPage = () => {
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
     };
-  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, setFavorite, isUpdatingFavorite, isFavorite, showOSDTemporarily, favFocusIndex, favorites, channels, currentChannel, showOSD, showFavoritesBar, handleBackPress, pushDigit, numBuffer, jumpToChannelNumber]);
+  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, searchActive, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, setFavorite, isUpdatingFavorite, isFavorite, showOSDTemporarily, favFocusIndex, favorites, channels, currentChannel, showOSD, showFavoritesBar, handleBackPress, pushDigit, numBuffer, jumpToChannelNumber]);
 
   useEffect(() => {
     if (!showFavoritesBar || !showOSD) setFavFocusIndex(null);
@@ -688,6 +706,18 @@ const PlayerPage = () => {
             />
           ) : (
             <>
+              <ChannelSearch
+                channels={channels}
+                visible={searchActive}
+                onSelect={(ch) => {
+                  const idx = channels.findIndex((c) => c.id === ch.id);
+                  if (idx >= 0) {
+                    setCurrentIndex(idx);
+                    showOSDTemporarily();
+                  }
+                }}
+                onClose={() => setSearchActive(false)}
+              />
               <FavoritesBar
                 channels={channels}
                 favoriteIds={favorites.map((f) => f.channel_id)}

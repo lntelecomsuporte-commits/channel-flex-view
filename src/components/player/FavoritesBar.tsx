@@ -43,7 +43,7 @@ const FavoritesBar = ({ channels, favoriteIds, currentChannelId, visible, onSele
         <div className="inline-flex items-center gap-2 bg-background/70 backdrop-blur-sm border border-border/50 rounded-full px-4 py-2">
           <Star className="w-4 h-4 text-yellow-500" />
           <span className="text-xs sm:text-sm text-foreground/80">
-            Segure OK para favoritar este canal
+            Segure OK para favoritar este canal · ↑ para buscar
           </span>
         </div>
       </div>
@@ -55,7 +55,7 @@ const FavoritesBar = ({ channels, favoriteIds, currentChannelId, visible, onSele
       <div className="px-4 sm:px-6 lg:px-8 mb-1.5 flex items-center gap-1.5">
         <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
         <span className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
-          Favoritos {focusedIndex != null && <span className="text-primary">• ↑↓ sair · ←→ navegar · OK assistir</span>}
+          Favoritos {focusedIndex != null && <span className="text-primary">• ↑ buscar · ←→ navegar · ↓ sair · OK assistir</span>}
         </span>
       </div>
       <div

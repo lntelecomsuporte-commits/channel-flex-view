@@ -109,6 +109,50 @@ const buildSignedProxyStreamUrl = async (
 };
 
 /**
+ * Resolve redirects (301/302/encurtadores) ANTES de entregar pro hls.js.
+ * Comportamento equivalente ao do VLC nativo: o player recebe a URL final
+ * já resolvida, em vez de uma URL de encurtador que o WebView Android
+ * frequentemente falha em seguir cross-origin.
+ *
+ * Cache em memória pra não fazer HEAD a cada zap. Falha silenciosa: se
+ * der erro (CORS, timeout, etc.), retorna a URL original e o player tenta
+ * normalmente (e cai pro fallback de proxy se precisar).
+ */
+const redirectCache = new Map<string, { url: string; expiresAt: number }>();
+const REDIRECT_CACHE_MS = 5 * 60_000;
+
+export const resolveRedirects = async (streamUrl: string, timeoutMs = 4000): Promise<string> => {
+  if (!streamUrl) return streamUrl;
+  const cached = redirectCache.get(streamUrl);
+  if (cached && cached.expiresAt > Date.now()) return cached.url;
+
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    // GET com Range pra baixar só os primeiros bytes — segue redirects
+    // server-side (igual VLC) e devolve a URL final em response.url.
+    const res = await fetch(streamUrl, {
+      method: "GET",
+      redirect: "follow",
+      headers: { range: "bytes=0-0" },
+      signal: ctrl.signal,
+    });
+    clearTimeout(t);
+    res.body?.cancel().catch(() => {});
+    const finalUrl = res.url || streamUrl;
+    redirectCache.set(streamUrl, { url: finalUrl, expiresAt: Date.now() + REDIRECT_CACHE_MS });
+    if (finalUrl !== streamUrl) {
+      console.log(`[stream] Redirect resolvido: ${streamUrl} → ${finalUrl}`);
+    }
+    return finalUrl;
+  } catch (e) {
+    // Falhou (CORS, timeout, rede) — devolve original. O player tentará
+    // direto e cairá no corsFallback se precisar.
+    return streamUrl;
+  }
+};
+
+/**
  * URL inicial do player.
  * - HTTP em página HTTPS: usa proxy imediatamente para evitar Mixed Content.
  * - HTTP no APK: também usa proxy. O WebView do Android (mesmo com
