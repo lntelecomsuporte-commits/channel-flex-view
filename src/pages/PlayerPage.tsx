@@ -487,10 +487,16 @@ const PlayerPage = () => {
         case "ArrowUp":
           e.preventDefault();
           comboRef.current = [];
-          if (showOSD && showFavoritesBar && favChannels.length > 0) {
-            const activeIdx = favChannels.findIndex((c) => c.id === currentChannel?.id);
-            setFavFocusIndex(activeIdx >= 0 ? activeIdx : 0);
-            showOSDTemporarily(true);
+          if (showOSD && showFavoritesBar) {
+            if (favChannels.length > 0) {
+              const activeIdx = favChannels.findIndex((c) => c.id === currentChannel?.id);
+              setFavFocusIndex(activeIdx >= 0 ? activeIdx : 0);
+              showOSDTemporarily(true);
+            } else {
+              // Sem favoritos — ↑ abre direto a busca
+              setSearchActive(true);
+              showOSDTemporarily(true);
+            }
             return;
           }
           if (e.repeat) {
