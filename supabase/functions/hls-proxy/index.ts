@@ -442,6 +442,17 @@ Deno.serve(async (request) => {
   const ip = getClientIp(request);
   const contentLength = parseInt(upstreamResponse.headers.get("content-length") ?? "0", 10) || 0;
 
+  // Quando a URL não tinha extensão de mídia, valida pelo content-type upstream.
+  // Permite MPEG-TS bruto via HTTP (ex.: http://host:porta/) que servidores
+  // tipo Flussonic/UDPxy retornam como video/mp2t ou application/octet-stream.
+  if (!hasMediaExtension) {
+    const allowed = allowedUpstreamContentTypes.some((t) => contentType.includes(t));
+    if (!allowed) {
+      console.warn(`[hls-proxy] bloqueado: URL sem extensão e content-type não-mídia: ${contentType} (${resolvedTarget})`);
+      return new Response("URL blocked by proxy policy (non-media content-type)", { status: 403, headers: corsHeaders });
+    }
+  }
+
   // Log assíncrono (não bloqueia resposta)
   logProxyAccess(userId, ip, resolvedTarget, contentLength).catch(() => {});
 
