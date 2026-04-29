@@ -18,13 +18,20 @@ export function useFavorites() {
     enabled: !!user?.id,
     staleTime: 60_000,
     queryFn: async (): Promise<Favorite[]> => {
+      if (!user?.id) return [];
       const { data, error } = await supabase
         .from("user_favorites")
         .select("id, channel_id, position")
+        .eq("user_id", user.id)
         .order("position", { ascending: true })
         .order("created_at", { ascending: true });
       if (error) throw error;
-      return data ?? [];
+      const seen = new Set<string>();
+      return (data ?? []).filter((favorite) => {
+        if (seen.has(favorite.channel_id)) return false;
+        seen.add(favorite.channel_id);
+        return true;
+      });
     },
   });
 
@@ -36,7 +43,8 @@ export function useFavorites() {
         const { error } = await supabase
           .from("user_favorites")
           .delete()
-          .eq("id", existing.id);
+          .eq("user_id", user.id)
+          .eq("channel_id", channelId);
         if (error) throw error;
         return { added: false };
       }
