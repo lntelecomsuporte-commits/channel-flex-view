@@ -307,7 +307,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         hlsRef.current = null;
       }
     };
-  }, [playableStreamUrl, autoPlay, streamUrl, useProxyFallback, proxyTokenFailure]);
+  }, [playableStreamUrl, autoPlay, activeStreamUrl, useProxyFallback, proxyTokenFailure]);
 
   // Unmute after first user interaction
   useEffect(() => {
