@@ -500,7 +500,16 @@ Deno.serve(async (request) => {
   });
 
   return new Response(upstreamResponse.body, {
-    status: upstreamResponse.status,
-    headers: responseHeaders,
-  });
+      status: upstreamResponse.status,
+      headers: responseHeaders,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes("aborted") || msg.includes("AbortError") || msg.includes("connection closed")) {
+      // Cliente fechou conexão — normal pra streams ao vivo
+      return new Response(null, { status: 499, headers: corsHeaders });
+    }
+    console.error(`[hls-proxy] handler crash: ${msg}`);
+    return new Response(`Proxy error: ${msg}`, { status: 500, headers: corsHeaders });
+  }
 });
