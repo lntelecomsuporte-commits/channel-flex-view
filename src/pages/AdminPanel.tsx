@@ -24,7 +24,7 @@ import EpgUrlPresetSelector from "@/components/admin/EpgUrlPresetSelector";
 import { getLocalFunctionUrl, LOCAL_SUPABASE_PUBLISHABLE_KEY } from "@/lib/localBackend";
 
 const emptyChannelForm = {
-  name: "", channel_number: "", stream_url: "", backup_stream_urls: "", logo_url: "", category_id: "", is_active: true,
+  name: "", channel_number: "", stream_url: "", stream_format: "auto", backup_stream_urls: "", logo_url: "", category_id: "", is_active: true,
   epg_type: "", epg_url: "", epg_alt_text: "", epg_channel_id: "", epg_grab_logo: false, epg_show_synopsis: false,
   use_proxy_token: false,
 };
@@ -143,6 +143,7 @@ const AdminPanel = () => {
     const payload = {
       name: channelForm.name, channel_number: parseInt(channelForm.channel_number),
       stream_url: channelForm.stream_url,
+      stream_format: channelForm.stream_format || "auto",
       backup_stream_urls: backupList,
       logo_url: logoUrl,
       category_id: channelForm.category_id || null, is_active: channelForm.is_active,
@@ -182,6 +183,7 @@ const AdminPanel = () => {
     setEditingChannelId(ch.id);
     setChannelForm({
       name: ch.name, channel_number: String(ch.channel_number), stream_url: ch.stream_url,
+      stream_format: ((ch as any).stream_format as string) || "auto",
       backup_stream_urls: (((ch as any).backup_stream_urls ?? []) as string[]).join("\n"),
       logo_url: ch.logo_url ?? "", category_id: ch.category_id ?? "", is_active: ch.is_active,
       epg_type: (() => {
@@ -328,8 +330,29 @@ const AdminPanel = () => {
                     <Input type="number" value={channelForm.channel_number} onChange={(e) => setChannelForm((f) => ({ ...f, channel_number: e.target.value }))} placeholder="Ex: 1" />
                   </div>
                   <div className="space-y-2 md:col-span-2">
-                    <Label>URL do Stream (HLS) <span className="text-destructive">*</span></Label>
+                    <Label>URL do Stream <span className="text-destructive">*</span></Label>
                     <Input value={channelForm.stream_url} onChange={(e) => setChannelForm((f) => ({ ...f, stream_url: e.target.value }))} placeholder="https://seu-flussonic.com/canal/index.m3u8" />
+                    <p className="text-xs text-muted-foreground">
+                      Suportado: HLS (.m3u8), MPEG-TS (.ts) e MP4. RTMP/RTSP <strong>não funcionam no navegador</strong> — transcodifique para HLS no Flussonic.
+                    </p>
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>Formato do Stream</Label>
+                    <Select
+                      value={channelForm.stream_format}
+                      onValueChange={(v) => setChannelForm((f) => ({ ...f, stream_format: v }))}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="auto">Auto (detectar pela URL)</SelectItem>
+                        <SelectItem value="hls">HLS (.m3u8)</SelectItem>
+                        <SelectItem value="ts">MPEG-TS (.ts)</SelectItem>
+                        <SelectItem value="mp4">MP4 progressivo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Use <strong>Auto</strong> na maioria dos casos. Force o formato apenas se a URL não tiver extensão padrão (ex.: <code>/stream</code> sem <code>.ts</code>/<code>.m3u8</code>).
+                    </p>
                   </div>
                   <div className="space-y-2 md:col-span-2">
                     <Label>URLs de Backup (opcional)</Label>

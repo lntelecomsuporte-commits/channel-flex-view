@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react";
 import Hls from "hls.js";
+import mpegts from "mpegts.js";
 import { Capacitor } from "@capacitor/core";
 import { getPlayableStreamUrl, getProxiedStreamUrl, resolveChannelStreamUrl } from "@/lib/stream";
 import { extractYouTubeVideoId } from "@/lib/youtube";
@@ -7,6 +8,20 @@ import { getDeviceProfile } from "@/lib/deviceProfile";
 import YouTubePlayer from "./YouTubePlayer";
 
 const IS_NATIVE_APK = Capacitor.isNativePlatform();
+
+export type StreamFormat = "auto" | "hls" | "ts" | "mp4";
+
+/** Detecta o engine a usar com base no formato escolhido + URL. */
+const detectEngine = (format: StreamFormat, url: string): "hls" | "ts" | "native" => {
+  if (format === "hls") return "hls";
+  if (format === "ts") return "ts";
+  if (format === "mp4") return "native";
+  // auto: olha a URL
+  const u = url.toLowerCase();
+  if (/\.m3u8(\?|$)/.test(u) || u.includes("hls-proxy")) return "hls";
+  if (/\.(ts|m2ts|mts)(\?|$)/.test(u) || u.includes("mpegts")) return "ts";
+  return "native";
+};
 
 interface VideoPlayerProps {
   streamUrl: string;
@@ -19,6 +34,9 @@ interface VideoPlayerProps {
    *  na URL principal (erro fatal não-recuperável), avança automaticamente
    *  para a próxima URL desta lista. */
   backupStreamUrls?: string[] | null;
+  /** Formato do stream — controla qual engine de player usar.
+   *  "auto" (padrão) detecta pela extensão da URL. */
+  streamFormat?: StreamFormat;
 }
 
 export interface VideoPlayerHandle {
@@ -26,9 +44,10 @@ export interface VideoPlayerHandle {
   getHls: () => Hls | null;
 }
 
-const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, backupStreamUrls = null }, ref) => {
+const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, backupStreamUrls = null, streamFormat = "auto" }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const mpegtsRef = useRef<mpegts.Player | null>(null);
   const [muted, setMuted] = useState(true);
   const [useProxyFallback, setUseProxyFallback] = useState(false);
   const [proxyTokenFailure, setProxyTokenFailure] = useState(false);
@@ -99,6 +118,10 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
+    if (mpegtsRef.current) {
+      try { mpegtsRef.current.destroy(); } catch { /* noop */ }
+      mpegtsRef.current = null;
+    }
 
     const isSignedProxyUrl = playableStreamUrl.includes("/functions/v1/hls-proxy") && playableStreamUrl.includes("st=");
     const forcedProxyUrl = getProxiedStreamUrl(activeStreamUrl);
@@ -106,14 +129,14 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     const canFallbackToProxy = !useProxyFallback && !isSignedProxyUrl && forcedProxyUrl !== activeStreamUrl && forcedProxyUrl !== playableStreamUrl;
     const fallbackToDirect = () => {
       if (!canFallbackToDirect) return false;
-      console.warn("[HLS] Proxy assinado falhou — tentando stream direto");
+      console.warn("[Player] Proxy assinado falhou — tentando stream direto");
       setProxyTokenFailure(true);
       return true;
     };
     const fallbackToProxy = () => {
       if (fallbackToDirect()) return true;
       if (!canFallbackToProxy) return false;
-      console.warn("[HLS] Stream direto falhou — tentando via proxy");
+      console.warn("[Player] Stream direto falhou — tentando via proxy");
       setUseProxyFallback(true);
       return true;
     };
@@ -128,15 +151,50 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     const isAppleDevice = /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent) &&
       video.canPlayType("application/vnd.apple.mpegurl");
 
-    // No APK Android, o WebView (Chromium) NÃO toca HLS nativo, então
-    // hls.js continua sendo necessário. Mas para .mp4 / progressive,
-    // usamos <video src> direto (zero overhead, decodificação nativa).
-    const isHls = /\.m3u8(\?|$)/i.test(playableStreamUrl) || playableStreamUrl.includes("hls-proxy");
+    // Detecta engine considerando o formato cadastrado no canal.
+    // - "auto" (padrão): olha extensão da URL.
+    // - "hls"/"ts"/"mp4": força o engine correspondente.
+    const engine = detectEngine(streamFormat, playableStreamUrl);
+    console.log(`[Player] engine=${engine} format=${streamFormat} url=${playableStreamUrl.slice(0, 80)}...`);
 
-    if (isAppleDevice || !isHls) {
-      video.src = playableStreamUrl;
-      if (autoPlay) video.play().catch(() => {});
-    } else if (Hls.isSupported()) {
+    if (engine === "ts" && mpegts.getFeatureList().mseLivePlayback) {
+      // === MPEG-TS via mpegts.js ===
+      const player = mpegts.createPlayer(
+        {
+          type: "mpegts",
+          isLive: true,
+          url: playableStreamUrl,
+          cors: true,
+        },
+        {
+          enableWorker: true,
+          enableStashBuffer: false, // baixa latência ao vivo
+          stashInitialSize: 128,
+          liveBufferLatencyChasing: true,
+          liveBufferLatencyMaxLatency: 3.0,
+          liveBufferLatencyMinRemain: 0.5,
+          autoCleanupSourceBuffer: true,
+        },
+      );
+      mpegtsRef.current = player;
+      player.attachMediaElement(video);
+      player.load();
+      player.on(mpegts.Events.ERROR, (errType: string, errDetail: string) => {
+        console.error("[mpegts] erro fatal:", errType, errDetail);
+        if (fallbackToProxy()) return;
+        tryNextBackup();
+      });
+      if (autoPlay) {
+        try {
+          const p = player.play() as unknown as Promise<void> | void;
+          if (p && typeof (p as Promise<void>).catch === "function") {
+            (p as Promise<void>).catch((e) => console.warn("[mpegts] play() rejeitado:", e));
+          }
+        } catch (e) {
+          console.warn("[mpegts] play() throw:", e);
+        }
+      }
+    } else if (engine === "hls" && !isAppleDevice && Hls.isSupported()) {
       const profile = getDeviceProfile();
       const hls = new Hls({
         enableWorker: true,
@@ -295,7 +353,8 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         if (waitingTimer) clearTimeout(waitingTimer);
         origDestroy();
       };
-    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+    } else if (engine === "native" || (engine === "hls" && isAppleDevice && video.canPlayType("application/vnd.apple.mpegurl"))) {
+      // Player nativo: MP4 progressivo ou HLS no Safari/iOS (AirPlay).
       video.src = playableStreamUrl;
       if (autoPlay) video.play().catch(() => {});
     }
@@ -306,8 +365,12 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
+      if (mpegtsRef.current) {
+        try { mpegtsRef.current.destroy(); } catch { /* noop */ }
+        mpegtsRef.current = null;
+      }
     };
-  }, [playableStreamUrl, autoPlay, activeStreamUrl, useProxyFallback, proxyTokenFailure]);
+  }, [playableStreamUrl, autoPlay, activeStreamUrl, useProxyFallback, proxyTokenFailure, streamFormat]);
 
   // Unmute after first user interaction
   useEffect(() => {
