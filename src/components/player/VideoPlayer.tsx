@@ -178,12 +178,20 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         },
         {
           enableWorker: true,
-          enableStashBuffer: false, // baixa latência ao vivo
-          stashInitialSize: 128,
-          liveBufferLatencyChasing: true,
-          liveBufferLatencyMaxLatency: 3.0,
-          liveBufferLatencyMinRemain: 0.5,
+          // Stash buffer pequeno mas habilitado: absorve jitter de rede do proxy
+          // sem segurar muito tempo. Com false + chasing, MPEG-TS bruto trava
+          // porque o player tenta "seek" pra alcançar o live edge — coisa que
+          // streams TS contínuos não suportam (sem index, sem byte-range).
+          enableStashBuffer: true,
+          stashInitialSize: 384, // ~384KB ≈ 1-2s de TS, baixa latência mas estável
+          // DESABILITA latency chasing: ele assume que dá pra "pular" no buffer,
+          // mas TS bruto via proxy não tem seek confiável — e o "chasing"
+          // agressivo causa exatamente o sintoma de travar (igual VLC funciona
+          // porque ele só segue o stream, não tenta cortar pra alcançar live).
+          liveBufferLatencyChasing: false,
           autoCleanupSourceBuffer: true,
+          // Reconexão automática em caso de queda de conexão upstream
+          reuseRedirectedURL: true,
         },
       );
       mpegtsRef.current = player;
