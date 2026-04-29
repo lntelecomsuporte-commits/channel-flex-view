@@ -13,6 +13,7 @@
 
 const KEY_CHANNELS = "lntv:cache:channels:v1";
 const KEY_EPG_JSON = "lntv:cache:epg-json:v1";
+const MAX_CHANNELS_CACHE_AGE_MS = 30_000;
 
 interface CacheEnvelope<T> {
   ts: number;
@@ -51,6 +52,13 @@ export const channelsCache = {
   age(): number | null {
     const env = safeGet(KEY_CHANNELS);
     return env ? Date.now() - env.ts : null;
+  },
+  isFresh(maxAgeMs = MAX_CHANNELS_CACHE_AGE_MS): boolean {
+    const age = this.age();
+    return age != null && age <= maxAgeMs;
+  },
+  clear() {
+    try { localStorage.removeItem(KEY_CHANNELS); } catch { /* noop */ }
   },
 };
 
