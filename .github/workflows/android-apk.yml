@@ -100,14 +100,29 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: Rename APK
+      - name: Rename APK + generate version.json
         run: |
           mkdir -p out
-          cp android/app/build/outputs/apk/debug/app-debug.apk out/lntv-debug-${{ github.run_number }}.apk
+          APK_NAME="lntv-debug-${{ github.run_number }}.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "out/${APK_NAME}"
+          # Cópia "latest" para URL estável usada pelo notificador
+          cp "out/${APK_NAME}" out/lntv-latest.apk
+          # version.json publicado junto ao APK em /downloads/ no nginx
+          cat > out/version.json <<EOF
+          {
+            "versionCode": ${VERSION_CODE},
+            "versionName": "${VERSION_NAME}",
+            "url": "https://tv2.lntelecom.net/downloads/lntv-latest.apk",
+            "notes": "Build #${{ github.run_number }} — ${{ github.event.head_commit.message }}"
+          }
+          EOF
+          cat out/version.json
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: lntv-debug-apk
-          path: out/*.apk
+          path: |
+            out/*.apk
+            out/version.json
           retention-days: 30
