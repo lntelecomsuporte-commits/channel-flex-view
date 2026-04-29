@@ -85,6 +85,13 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         // Fallback genérico: URL HTTPS direta falhou por CORS/302/rede.
         // Tenta UMA vez via proxy antes de pular pro próximo backup.
         url = buildProxyStreamUrl(activeStreamUrl) ?? getPlayableStreamUrl(activeStreamUrl);
+      } else {
+        url = getPlayableStreamUrl(activeStreamUrl);
+      }
+
+      if (isProxiedStreamUrl(url) && isHlsManifestUrl(activeStreamUrl)) {
+        // O proxy expõe o content-type final após redirects. Se uma URL .m3u8
+        // redirecionar para TS bruto, trocamos de hls.js para mpegts.js.
         try {
           const probe = await fetch(url, { method: "GET" });
           const contentType = probe.headers.get("x-lntv-final-content-type") || probe.headers.get("content-type") || "";
@@ -97,7 +104,6 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
           if (!cancelled) setResolvedContentType("");
         }
       } else {
-        url = getPlayableStreamUrl(activeStreamUrl);
         if (!cancelled) setResolvedContentType("");
       }
       if (!cancelled) setResolvedUrl(url);
