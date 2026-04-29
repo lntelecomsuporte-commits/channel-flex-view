@@ -19,6 +19,17 @@ interface ChannelPrefetchProps {
 const ChannelPrefetch = ({ nextStreamUrl, channelId = null, useProxyToken = false }: ChannelPrefetchProps) => {
   const lastFetchedRef = useRef<string | null>(null);
 
+  const canPrefetchWithoutCorsNoise = (url: string) => {
+    try {
+      const parsed = new URL(url);
+      // Só pré-busca URLs que já passaram pelo nosso origin/proxy. HTTPS externo
+      // direto fica por conta do player; fetch em background só gera erro de CORS.
+      return parsed.pathname.includes("/functions/v1/hls-proxy") || parsed.origin === window.location.origin;
+    } catch {
+      return false;
+    }
+  };
+
   useEffect(() => {
     if (!nextStreamUrl) return;
 
@@ -30,6 +41,7 @@ const ChannelPrefetch = ({ nextStreamUrl, channelId = null, useProxyToken = fals
           ? await resolveChannelStreamUrl(nextStreamUrl, channelId, true)
           : getPlayableStreamUrl(nextStreamUrl);
         if (!url || url === lastFetchedRef.current) return;
+        if (!canPrefetchWithoutCorsNoise(url)) return;
         lastFetchedRef.current = url;
         fetch(url, {
           signal: ctrl.signal,
