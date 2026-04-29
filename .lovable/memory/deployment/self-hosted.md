@@ -10,6 +10,7 @@ User runs production self-hosted at **tv2.lntelecom.net** but uses **Lovable Clo
 
 ## Server paths
 - Frontend repo: `/opt/lntv-frontend`
+- Web root: `/var/www/lntv`
 - Edge functions volume: `/opt/lntv/volumes/functions/<name>/index.ts`
 - Kong config: needs path discovery (likely under `/opt/lntv/volumes/api/kong.yml`)
 - Container names: `supabase-edge-functions`, `supabase-kong`, `supabase-storage`, etc.
@@ -20,8 +21,9 @@ User runs production self-hosted at **tv2.lntelecom.net** but uses **Lovable Clo
 cd /opt/lntv-frontend
 git fetch origin && git reset --hard origin/main
 
-# Frontend changed → rebuild
-npm run build   # or: bun run build
+# Frontend changed → rebuild + sync (PRESERVE logos and downloads)
+npm run build
+rsync -a --delete --exclude logos --exclude downloads dist/ /var/www/lntv/
 
 # Edge function changed → copy + restart
 cp supabase/functions/<name>/index.ts /opt/lntv/volumes/functions/<name>/index.ts
@@ -32,6 +34,14 @@ docker restart supabase-kong
 
 # DB migration → must be applied manually on self-hosted (Cloud auto-applies only to Cloud DB)
 ```
+
+## CRITICAL: rsync excludes
+The `--delete` flag wipes anything in `/var/www/lntv/` that isn't in `dist/`.
+ALWAYS exclude runtime/served folders that don't come from the build:
+- `logos` → synced by cron sync-logos
+- `downloads` → APK + version.json published by GitHub Actions
+
+If a new served folder is added, ADD it to the exclude list immediately.
 
 ## Critical exceptions — DO NOT pull from Cloud
 These values differ between Cloud and self-hosted; never make self-hosted fetch from Cloud or it breaks:
