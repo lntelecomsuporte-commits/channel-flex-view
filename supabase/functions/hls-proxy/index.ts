@@ -337,9 +337,10 @@ const logProxyAccess = async (
 };
 
 Deno.serve(async (request) => {
-  if (request.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  try {
+    if (request.method === "OPTIONS") {
+      return new Response(null, { headers: corsHeaders });
+    }
 
   const requestUrl = new URL(request.url);
   let target = requestUrl.searchParams.get("url");
