@@ -153,7 +153,7 @@ const LoginPage = () => {
               </Button>
             </form>
 
-            {isNative && (
+            {useVirtualKeyboard && (
               <VirtualKeyboard
                 onKeyPress={handleKeyPress}
                 onBackspace={handleBackspace}
