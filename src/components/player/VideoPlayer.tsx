@@ -206,12 +206,22 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       // tocando o que está no buffer (gera efeito "quadriculado" natural do H.264
       // em vez de imagem congelada).
       let mediaErrorRecoveryAttempts = 0;
+      let networkErrorRetries = 0;
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (!data.fatal) return;
         switch (data.type) {
           case Hls.ErrorTypes.NETWORK_ERROR:
             if (fallbackToProxy()) return;
-            console.warn("[HLS] Erro de rede fatal — tentando retomar:", data.details);
+            networkErrorRetries++;
+            // Após 2 retries do startLoad sem sucesso, considera URL morta
+            // e parte para o próximo backup (failover ~3s).
+            if (networkErrorRetries > 2) {
+              if (tryNextBackup()) return;
+              console.error("[HLS] Sem mais backups — desistindo:", data.details);
+              hls.destroy();
+              return;
+            }
+            console.warn(`[HLS] Erro de rede fatal (#${networkErrorRetries}) — tentando retomar:`, data.details);
             hls.startLoad();
             break;
           case Hls.ErrorTypes.MEDIA_ERROR:
@@ -226,6 +236,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
             break;
           default:
             console.error("[HLS] Erro fatal não recuperável:", data);
+            if (tryNextBackup()) return;
             hls.destroy();
             break;
         }
