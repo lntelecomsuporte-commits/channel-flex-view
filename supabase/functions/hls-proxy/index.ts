@@ -147,6 +147,47 @@ const allowedUpstreamContentTypes = [
   "image/",
 ];
 
+const isMpegTsChunk = (chunk: Uint8Array): boolean => {
+  if (chunk.length < 188) return false;
+  if (chunk[0] !== 0x47) return false;
+  if (chunk.length >= 376 && chunk[188] !== 0x47) return false;
+  if (chunk.length >= 564 && chunk[376] !== 0x47) return false;
+  return true;
+};
+
+const sniffMpegTsBody = async (body: ReadableStream<Uint8Array<ArrayBufferLike>> | null): Promise<{
+  isMpegTs: boolean;
+  body: ReadableStream<Uint8Array<ArrayBufferLike>> | null;
+}> => {
+  if (!body) return { isMpegTs: false, body: null };
+  const reader = body.getReader();
+  const first = await reader.read();
+  if (first.done || !first.value) {
+    return { isMpegTs: false, body: null };
+  }
+  const firstChunk = first.value;
+  const restoredBody = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(firstChunk);
+      const pump = (): void => {
+        reader.read().then(({ done, value }) => {
+          if (done) {
+            controller.close();
+            return;
+          }
+          if (value) controller.enqueue(value);
+          pump();
+        }).catch((error) => controller.error(error));
+      };
+      pump();
+    },
+    cancel(reason) {
+      return reader.cancel(reason);
+    },
+  });
+  return { isMpegTs: isMpegTsChunk(firstChunk), body: restoredBody };
+};
+
 const isPrivateHostname = (hostname: string) => {
   const normalized = hostname.toLowerCase();
   if (["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(normalized) || normalized.endsWith(".local")) return true;
@@ -477,13 +518,20 @@ Deno.serve(async (request) => {
   const proxyEndpoint = getProxyEndpoint(request, requestUrl);
   const ip = getClientIp(request);
   const contentLength = parseInt(upstreamResponse.headers.get("content-length") ?? "0", 10) || 0;
+  let responseBody: ReadableStream<Uint8Array<ArrayBufferLike>> | null = upstreamResponse.body;
+  let sniffedMpegTs = false;
 
   // Quando a URL não tinha extensão de mídia, valida pelo content-type upstream.
   // Permite MPEG-TS bruto via HTTP (ex.: http://host:porta/) que servidores
   // tipo Flussonic/UDPxy retornam como video/mp2t ou application/octet-stream.
   if (!hasMediaExtension) {
     const allowed = allowedUpstreamContentTypes.some((t) => contentType.includes(t));
-    if (!allowed) {
+    if (!allowed && contentType.includes("text/html")) {
+      const sniffed = await sniffMpegTsBody(responseBody);
+      sniffedMpegTs = sniffed.isMpegTs;
+      responseBody = sniffed.body;
+    }
+    if (!allowed && !sniffedMpegTs) {
       console.warn(`[hls-proxy] bloqueado: URL sem extensão e content-type não-mídia: ${contentType} (${resolvedTarget})`);
       try { upstreamResponse.body?.cancel(); } catch { /* noop */ }
       return new Response("URL blocked by proxy policy (non-media content-type)", { status: 403, headers: corsHeaders });
@@ -516,7 +564,7 @@ Deno.serve(async (request) => {
 
   const responseHeaders = new Headers(corsHeaders);
   responseHeaders.set("X-LNTV-Final-URL", upstreamResponse.url);
-  responseHeaders.set("X-LNTV-Final-Content-Type", contentType);
+  responseHeaders.set("X-LNTV-Final-Content-Type", sniffedMpegTs ? "video/mp2t" : contentType);
 
   // Detecta MPEG-TS bruto (live stream contínuo, sem extensão de mídia).
   // Para esses, NÃO repassamos content-length nem accept-ranges:
@@ -525,10 +573,11 @@ Deno.serve(async (request) => {
   // - accept-ranges induz o player a fazer range requests num live, o que
   //   o servidor de origem (UDPxy/xtream/etc) não suporta corretamente.
   const isRawMpegTs =
-    !hasMediaExtension &&
-    (contentType.includes("video/mp2t") ||
+    (!hasMediaExtension &&
+      (contentType.includes("video/mp2t") ||
       contentType.includes("video/mpeg") ||
-      contentType.includes("application/octet-stream"));
+      contentType.includes("application/octet-stream"))) ||
+    sniffedMpegTs;
 
   if (isRawMpegTs) {
     responseHeaders.set("Content-Type", "video/mp2t");
@@ -541,7 +590,7 @@ Deno.serve(async (request) => {
     });
   }
 
-  return new Response(upstreamResponse.body, {
+  return new Response(responseBody, {
       status: upstreamResponse.status,
       headers: responseHeaders,
     });
