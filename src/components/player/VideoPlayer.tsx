@@ -73,6 +73,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   const [useProxyFallback, setUseProxyFallback] = useState(false);
   const [proxyTokenFailure, setProxyTokenFailure] = useState(false);
   const [resolvedUrl, setResolvedUrl] = useState<string>("");
+  const [reconnectNonce, setReconnectNonce] = useState(0);
   // Índice da URL ativa: -1 = principal (streamUrl), 0..N = backupStreamUrls[i]
   const [backupIndex, setBackupIndex] = useState(-1);
   const backups = backupStreamUrls?.filter((u) => !!u && u.trim().length > 0) ?? [];
@@ -229,16 +230,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         if (stalledTicks >= 3) {
           stalledTicks = 0;
           console.warn("[mpegts] stream travado — reconectando");
-          try { player.unload(); } catch { /* noop */ }
-          try { player.load(); } catch { /* noop */ }
-          try {
-            const p = player.play() as unknown as Promise<void> | void;
-            if (p && typeof (p as Promise<void>).catch === "function") {
-              (p as Promise<void>).catch((e) => console.warn("[mpegts] play() rejeitado após reconnect:", e));
-            }
-          } catch (e) {
-            console.warn("[mpegts] play() throw após reconnect:", e);
-          }
+          setReconnectNonce((n) => n + 1);
         }
       }, 3000);
 
@@ -433,7 +425,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         mpegtsRef.current = null;
       }
     };
-  }, [playableStreamUrl, autoPlay, activeStreamUrl, useProxyFallback, proxyTokenFailure, streamFormat]);
+  }, [playableStreamUrl, autoPlay, activeStreamUrl, useProxyFallback, proxyTokenFailure, streamFormat, reconnectNonce]);
 
   // Unmute after first user interaction
   useEffect(() => {
