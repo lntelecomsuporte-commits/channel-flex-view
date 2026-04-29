@@ -20,11 +20,16 @@ export interface RemoteVersion {
   notes?: string;
 }
 
+export type UpdateStatus = "idle" | "downloading" | "installing" | "error";
+
 interface UseAppUpdateResult {
   available: RemoteVersion | null;
   currentVersionCode: number | null;
   dismiss: () => void;
   download: () => void;
+  status: UpdateStatus;
+  progress: number; // 0..100
+  error: string | null;
 }
 
 const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 min
@@ -79,6 +84,9 @@ async function fetchRemoteVersion(): Promise<RemoteVersion | null> {
 export function useAppUpdate(): UseAppUpdateResult {
   const [available, setAvailable] = useState<RemoteVersion | null>(null);
   const [currentVersionCode, setCurrentVersionCode] = useState<number | null>(null);
+  const [status, setStatus] = useState<UpdateStatus>("idle");
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   const check = useCallback(async () => {
     if (!(await isNativeApp())) return;
@@ -94,7 +102,6 @@ export function useAppUpdate(): UseAppUpdateResult {
       return;
     }
 
-    // Respeita o "dispensar" do usuário para esta mesma versão.
     try {
       const dismissed = parseInt(localStorage.getItem(DISMISSED_KEY) || "0", 10);
       if (dismissed === remote.versionCode) return;
@@ -143,16 +150,95 @@ export function useAppUpdate(): UseAppUpdateResult {
       }
     }
     setAvailable(null);
+    setStatus("idle");
+    setProgress(0);
+    setError(null);
   }, [available]);
 
   const download = useCallback(async () => {
     if (!available) return;
-    // Abre a URL do APK no navegador padrão. Após o download, o Android
-    // oferece instalar (na 1ª vez pede permissão "Instalar apps desconhecidos").
-    // Como o applicationId e a assinatura são iguais, o sistema faz UPGRADE
-    // preservando dados e login — não precisa desinstalar manualmente.
-    window.open(available.url, "_blank");
+
+    // Web (PWA): só abre no navegador.
+    if (!(await isNativeApp())) {
+      window.open(available.url, "_blank");
+      return;
+    }
+
+    setStatus("downloading");
+    setProgress(0);
+    setError(null);
+
+    try {
+      // 1) Baixa o APK em streaming pra acompanhar progresso.
+      const res = await fetch(available.url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const total = Number(res.headers.get("Content-Length") || 0);
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("Stream não suportado");
+
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          chunks.push(value);
+          received += value.length;
+          if (total > 0) {
+            setProgress(Math.min(99, Math.round((received / total) * 100)));
+          }
+        }
+      }
+
+      // 2) Concatena e converte pra base64 (em pedaços pra não estourar a stack).
+      const blob = new Blob(chunks as BlobPart[], { type: "application/vnd.android.package-archive" });
+      const base64 = await blobToBase64(blob);
+      setProgress(100);
+
+      // 3) Salva no cache do app.
+      const { Filesystem, Directory } = await import("@capacitor/filesystem");
+      const fileName = `lntv-update-${available.versionCode}.apk`;
+      const writeRes = await Filesystem.writeFile({
+        path: fileName,
+        data: base64,
+        directory: Directory.Cache,
+      });
+
+      // 4) Dispara o instalador nativo do Android.
+      setStatus("installing");
+      const { FileOpener } = await import("@capacitor-community/file-opener");
+      await FileOpener.open({
+        filePath: writeRes.uri,
+        contentType: "application/vnd.android.package-archive",
+      });
+      // Não voltamos pra "idle" — o sistema assume e mostra o prompt de install.
+    } catch (e) {
+      console.error("[useAppUpdate] download failed", e);
+      setError(e instanceof Error ? e.message : "Erro desconhecido");
+      setStatus("error");
+      // Fallback: abre no navegador pra usuário baixar manualmente.
+      try {
+        window.open(available.url, "_blank");
+      } catch {
+        /* noop */
+      }
+    }
   }, [available]);
 
-  return { available, currentVersionCode, dismiss, download };
+  return { available, currentVersionCode, dismiss, download, status, progress, error };
+}
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => {
+      const result = reader.result as string;
+      // result = "data:...;base64,XXXX" — pega só a parte XXXX
+      const idx = result.indexOf(",");
+      resolve(idx >= 0 ? result.slice(idx + 1) : result);
+    };
+    reader.readAsDataURL(blob);
+  });
 }
