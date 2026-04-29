@@ -270,6 +270,10 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
 
   const enterPressStartRef = useRef<number | null>(null);
   const enterFavoriteFiredRef = useRef(false);
+  // Throttle de 16ms (~60fps) para repetição de teclas de navegação
+  // (ArrowUp/Down e Page+/-) — evita acumular re-renders quando segura a tecla.
+  const lastNavTickRef = useRef(0);
+  const NAV_THROTTLE_MS = 16;
 
   const epgMap = useMultiEPG(
     channels.map((ch) => ({
