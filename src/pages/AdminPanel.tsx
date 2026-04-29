@@ -323,7 +323,19 @@ const AdminPanel = () => {
                     <Label>URL do Stream (HLS) <span className="text-destructive">*</span></Label>
                     <Input value={channelForm.stream_url} onChange={(e) => setChannelForm((f) => ({ ...f, stream_url: e.target.value }))} placeholder="https://seu-flussonic.com/canal/index.m3u8" />
                   </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>URLs de Backup (opcional)</Label>
+                    <Textarea
+                      rows={3}
+                      value={channelForm.backup_stream_urls}
+                      onChange={(e) => setChannelForm((f) => ({ ...f, backup_stream_urls: e.target.value }))}
+                      placeholder={"Uma URL por linha. Se a principal cair, o player tenta cada uma em ordem.\nhttps://backup1.exemplo.com/canal/index.m3u8\nhttps://backup2.exemplo.com/canal/index.m3u8"}
+                      className="font-mono text-xs"
+                    />
+                    <p className="text-xs text-muted-foreground">Uma URL por linha — testadas em ordem após esgotar tentativas na principal (~3s por URL).</p>
+                  </div>
                   <div className="space-y-2">
+                    <Label>URL do Logo (opcional)</Label></div>
                     <Label>URL do Logo (opcional)</Label>
                     <Input value={channelForm.logo_url} onChange={(e) => setChannelForm((f) => ({ ...f, logo_url: e.target.value }))} placeholder="https://..." />
                   </div>
