@@ -279,8 +279,16 @@ const lookupChannel = async (targetUrl: string): Promise<{ id: string | null; na
     let query = adminClient.from("channels").select("id, name, stream_url").ilike("stream_url", `%${u.host}%`);
     if (distinctive) query = query.ilike("stream_url", `%/${distinctive}/%`);
 
-    const { data } = await query.limit(1);
-    const ch = data?.[0];
+    const { data } = await query.limit(20);
+    const exact = data?.find((row) => {
+      try {
+        const stream = new URL(row.stream_url);
+        return stream.host === u.host && stream.pathname === u.pathname;
+      } catch {
+        return row.stream_url === targetUrl;
+      }
+    });
+    const ch = exact ?? data?.[0];
     const result = { id: ch?.id ?? null, name: ch?.name ?? null };
     channelCache.set(cacheKey, { ...result, expiresAt: Date.now() + 5 * 60_000 });
     return result;
