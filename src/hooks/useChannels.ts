@@ -15,6 +15,7 @@ export function useChannels() {
     // Stale-while-revalidate: usa o cache em disco como initialData pra
     // pintar a tela em < 100ms no boot do APK, e revalida em background.
     initialData: () => {
+      if (!channelsCache.isFresh()) return undefined;
       const cached = channelsCache.read<Channel[]>();
       return cached && cached.length > 0 ? cached : undefined;
     },
@@ -62,8 +63,10 @@ export function useChannels() {
           return list;
         }
         // No access records = no channels
+        channelsCache.clear();
         return [] as Channel[];
       }
+      channelsCache.clear();
       return [] as Channel[];
     },
   });
