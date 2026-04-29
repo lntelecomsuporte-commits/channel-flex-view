@@ -1,7 +1,8 @@
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react";
 import Hls from "hls.js";
 import mpegts from "mpegts.js";
-import { getPlayableStreamUrl, resolveChannelStreamUrl, buildProxyStreamUrl, isProxiedStreamUrl } from "@/lib/stream";
+import { getPlayableStreamUrl, resolveChannelStreamUrl, buildProxyStreamUrl, isProxiedStreamUrl, resolveRedirects } from "@/lib/stream";
+import { Capacitor } from "@capacitor/core";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 import { getDeviceProfile } from "@/lib/deviceProfile";
 import YouTubePlayer from "./YouTubePlayer";
@@ -87,6 +88,17 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         url = buildProxyStreamUrl(activeStreamUrl) ?? getPlayableStreamUrl(activeStreamUrl);
       } else {
         url = getPlayableStreamUrl(activeStreamUrl);
+        // No APK: se a URL é HTTPS direta (não-proxy) tenta resolver
+        // redirects (encurtadores 301/302) ANTES do hls.js, pra ficar
+        // equivalente ao VLC nativo. Se falhar, segue com a URL original.
+        if (
+          Capacitor.isNativePlatform() &&
+          !isProxiedStreamUrl(url) &&
+          /^https:\/\//i.test(url)
+        ) {
+          const resolved = await resolveRedirects(url);
+          if (!cancelled && resolved) url = resolved;
+        }
       }
 
       if (isProxiedStreamUrl(url) && isHlsManifestUrl(activeStreamUrl)) {
