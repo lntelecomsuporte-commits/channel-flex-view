@@ -27,6 +27,7 @@ interface UseAppUpdateResult {
   currentVersionCode: number | null;
   dismiss: () => void;
   download: () => void;
+  checkNow: () => void;
   status: UpdateStatus;
   progress: number; // 0..100
   error: string | null;
@@ -44,6 +45,16 @@ async function isNativeApp(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function normalizeApkUrl(remote: RemoteVersion): RemoteVersion {
+  if (!remote.url.includes("/downloads/lntv-latest.apk")) return remote;
+  // Compatibilidade com o script atual do servidor, que está publicando
+  // lntv-release.apk. O workflow novo continua gerando lntv-latest.apk.
+  return {
+    ...remote,
+    url: remote.url.replace("/downloads/lntv-latest.apk", "/downloads/lntv-release.apk"),
+  };
 }
 
 async function getCurrentVersionCode(): Promise<number | null> {
@@ -72,7 +83,7 @@ async function fetchRemoteVersion(): Promise<RemoteVersion | null> {
       if (!res.ok) continue;
       const data = (await res.json()) as RemoteVersion;
       if (typeof data.versionCode !== "number" || !data.url) continue;
-      return data;
+      return normalizeApkUrl(data);
     } catch {
       /* tenta a próxima URL */
     }
@@ -114,6 +125,8 @@ export function useAppUpdate(): UseAppUpdateResult {
 
   useEffect(() => {
     check();
+    const t1 = window.setTimeout(check, 3000);
+    const t2 = window.setTimeout(check, 15000);
     const id = window.setInterval(check, CHECK_INTERVAL_MS);
     let appStateListener: { remove: () => Promise<void> } | null = null;
 
@@ -135,6 +148,8 @@ export function useAppUpdate(): UseAppUpdateResult {
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", onVisible);
       appStateListener?.remove();
@@ -226,7 +241,7 @@ export function useAppUpdate(): UseAppUpdateResult {
     }
   }, [available]);
 
-  return { available, currentVersionCode, dismiss, download, status, progress, error };
+  return { available, currentVersionCode, dismiss, download, checkNow: check, status, progress, error };
 }
 
 async function blobToBase64(blob: Blob): Promise<string> {
