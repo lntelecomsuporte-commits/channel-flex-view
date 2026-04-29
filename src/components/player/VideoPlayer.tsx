@@ -47,6 +47,7 @@ export interface VideoPlayerHandle {
 const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, backupStreamUrls = null }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const mpegtsRef = useRef<mpegts.Player | null>(null);
   
   const [muted, setMuted] = useState(true);
   const [proxyTokenFailure, setProxyTokenFailure] = useState(false);
@@ -54,6 +55,9 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   // Quando uma URL HTTPS direta falha por CORS/302/rede no primeiro load,
   // tentamos UMA vez via proxy genérico (sem hardcode de host).
   const [corsFallback, setCorsFallback] = useState(false);
+  // Alguns encurtadores anunciam .m3u8, mas redirecionam para MPEG-TS bruto.
+  // Nesse caso o proxy entrega video/mp2t e o player precisa trocar de engine.
+  const [forceMpegTs, setForceMpegTs] = useState(false);
   
   // Índice da URL ativa: -1 = principal (streamUrl), 0..N = backupStreamUrls[i]
   const [backupIndex, setBackupIndex] = useState(-1);
@@ -98,6 +102,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     setProxyTokenFailure(false);
     setBackupIndex(-1);
     setCorsFallback(false);
+    setForceMpegTs(false);
   }, [streamUrl]);
 
   // Tenta avançar para a próxima URL de backup. Retorna true se houve avanço.
@@ -107,6 +112,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     console.warn(`[HLS] Falha total — trocando para backup #${next + 1}/${backups.length}: ${backups[next]}`);
     setProxyTokenFailure(false);
     setCorsFallback(false);
+    setForceMpegTs(false);
     setBackupIndex(next);
     return true;
   };
