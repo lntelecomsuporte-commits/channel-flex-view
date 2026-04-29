@@ -1,0 +1,1 @@
+UPDATE public.channels SET use_proxy_token = true WHERE channel_number IN (1, 101);
