@@ -374,7 +374,7 @@ const PlayerPage = () => {
       backPressRef.current.count = 0;
     }, 2000);
     return true;
-  }, [showStats, synopsisProgram, showChannelList, favFocusIndex, showPreview, previewTimeout, showOSD, showFavoritesBar, osdTimeout]);
+  }, [showStats, synopsisProgram, searchActive, showChannelList, favFocusIndex, showPreview, previewTimeout, showOSD, showFavoritesBar, osdTimeout]);
 
   useNativeBackButton(handleBackPress);
 
@@ -591,7 +591,7 @@ const PlayerPage = () => {
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
     };
-  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, setFavorite, isUpdatingFavorite, isFavorite, showOSDTemporarily, favFocusIndex, favorites, channels, currentChannel, showOSD, showFavoritesBar, handleBackPress, pushDigit, numBuffer, jumpToChannelNumber]);
+  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, searchActive, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, setFavorite, isUpdatingFavorite, isFavorite, showOSDTemporarily, favFocusIndex, favorites, channels, currentChannel, showOSD, showFavoritesBar, handleBackPress, pushDigit, numBuffer, jumpToChannelNumber]);
 
   useEffect(() => {
     if (!showFavoritesBar || !showOSD) setFavFocusIndex(null);
