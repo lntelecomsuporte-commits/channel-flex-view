@@ -124,11 +124,8 @@ export const getPlayableStreamUrl = (streamUrl: string): string => {
     const parsedUrl = new URL(streamUrl);
 
     if (Capacitor.isNativePlatform()) {
-      // MPEG-TS bruto HTTP (ex.: http://ip:porta/) precisa tocar direto no APK.
-      // Edge Function não é estável para stream infinito e congela após um tempo.
-      if (isLikelyRawHttpStream(parsedUrl)) return streamUrl;
-
-      // HLS HTTP continua pelo proxy para evitar mixed content/CORS em WebViews.
+      // HTTP no APK também precisa sair por HTTPS/proxy: mpegts.js roda via fetch/XHR
+      // no WebView e normalmente é bloqueado por CORS/cleartext quando vai direto.
       if (parsedUrl.protocol === "http:") return buildProxyStreamUrl(streamUrl) ?? streamUrl;
       return streamUrl;
     }
