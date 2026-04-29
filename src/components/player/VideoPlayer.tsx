@@ -122,10 +122,6 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
-    if (mpegtsRef.current) {
-      try { mpegtsRef.current.destroy(); } catch { /* noop */ }
-      mpegtsRef.current = null;
-    }
 
     const isSignedProxyUrl = playableStreamUrl.includes("/functions/v1/hls-proxy") && playableStreamUrl.includes("st=");
     const forcedProxyUrl = getProxiedStreamUrl(activeStreamUrl);
