@@ -390,12 +390,13 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
       focusedIndex,
       epgMap,
       favoriteIds,
+      showEpg: showEpgDetails,
       onSelect,
       onFocus: (i: number) => setFocusedIndex(i),
       onSynopsis: (p: EPGProgram) => setSynopsisProgram(p),
       setItemRef,
     }),
-    [filteredChannels, channelIndexMap, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect]
+    [filteredChannels, channelIndexMap, currentIndex, focusedIndex, epgMap, favoriteIds, showEpgDetails, onSelect]
   );
 
   useEffect(() => {
