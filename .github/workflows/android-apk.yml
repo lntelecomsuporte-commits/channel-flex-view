@@ -17,7 +17,7 @@ env:
 
 jobs:
   build:
-    name: Build Debug APK
+    name: Build Release APK
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -60,7 +60,6 @@ jobs:
           VERSION_NAME="1.0.${{ github.run_number }}"
           echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
           echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
-          # Atualiza android/app/build.gradle (já presente no repo)
           if [ -f android/app/build.gradle ]; then
             sed -i "s/versionCode [0-9]\+/versionCode $VERSION_CODE/" android/app/build.gradle
             sed -i "s/versionName \"[^\"]*\"/versionName \"$VERSION_NAME\"/" android/app/build.gradle
@@ -95,21 +94,40 @@ jobs:
             echo "No resources/icon.png found, skipping icon generation"
           fi
 
+      - name: Decode release keystore from secret
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 secret missing — cannot sign release APK."
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/lntv-release.keystore
+          cat > android/keystore.properties <<EOF
+          storeFile=app/lntv-release.keystore
+          storePassword=${KEYSTORE_PASSWORD}
+          keyAlias=${KEY_ALIAS}
+          keyPassword=${KEY_PASSWORD}
+          EOF
+          echo "Keystore SHA256:"
+          sha256sum android/app/lntv-release.keystore
+
       - name: Grant execute permission to gradlew
         run: chmod +x android/gradlew
 
-      - name: Build Debug APK
+      - name: Build Release APK (signed)
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleRelease --no-daemon
 
       - name: Rename APK + generate version.json
         run: |
           mkdir -p out
-          APK_NAME="lntv-debug-${{ github.run_number }}.apk"
-          cp android/app/build/outputs/apk/debug/app-debug.apk "out/${APK_NAME}"
-          # Cópia "latest" para URL estável usada pelo notificador
+          APK_NAME="lntv-release-${{ github.run_number }}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "out/${APK_NAME}"
           cp "out/${APK_NAME}" out/lntv-latest.apk
-          # version.json publicado junto ao APK em /downloads/ no nginx
           cat > out/version.json <<EOF
           {
             "versionCode": ${VERSION_CODE},
@@ -120,10 +138,15 @@ jobs:
           EOF
           cat out/version.json
 
+      - name: Cleanup keystore from runner
+        if: always()
+        run: |
+          rm -f android/app/lntv-release.keystore android/keystore.properties
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: lntv-debug-apk
+          name: lntv-release-apk
           path: |
             out/*.apk
             out/version.json
@@ -138,7 +161,7 @@ jobs:
             Build automático #${{ github.run_number }}
             Commit: ${{ github.event.head_commit.message }}
 
-            APK: lntv-latest.apk
+            APK: lntv-latest.apk (signed release)
             versionCode: ${{ env.VERSION_CODE }}
             versionName: ${{ env.VERSION_NAME }}
           files: |
