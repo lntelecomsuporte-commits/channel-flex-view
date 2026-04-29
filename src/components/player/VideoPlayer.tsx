@@ -41,7 +41,6 @@ interface VideoPlayerProps {
    *  na URL principal (erro fatal não-recuperável), avança automaticamente
    *  para a próxima URL desta lista. */
   backupStreamUrls?: string[] | null;
-  backupStreamUrls?: string[] | null;
 }
 
 export interface VideoPlayerHandle {
@@ -153,11 +152,9 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     const isAppleDevice = /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent) &&
       video.canPlayType("application/vnd.apple.mpegurl");
 
-    // Detecta engine considerando o formato cadastrado no canal.
-    // - "auto" (padrão): olha extensão da URL.
-    // - "hls"/"ts"/"mp4": força o engine correspondente.
-    const engine = detectEngine(streamFormat, playableStreamUrl, activeStreamUrl);
-    console.log(`[Player] engine=${engine} format=${streamFormat} url=${playableStreamUrl.slice(0, 80)}...`);
+    // Detecta engine pela extensão da URL: .m3u8 → hls.js, resto → tag <video>.
+    const engine = detectEngine(playableStreamUrl, activeStreamUrl);
+    console.log(`[Player] engine=${engine} url=${playableStreamUrl.slice(0, 80)}...`);
 
     if (engine === "hls" && !isAppleDevice && Hls.isSupported()) {
       const profile = getDeviceProfile();
