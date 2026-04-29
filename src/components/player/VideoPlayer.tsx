@@ -205,6 +205,48 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         if (fallbackToProxy()) return;
         tryNextBackup();
       });
+
+      // MPEG-TS bruto via HTTP/proxy às vezes congela sem disparar ERROR.
+      // Se a posição do vídeo não avança por alguns segundos, recriamos o player
+      // mantendo a mesma URL; isso força nova conexão upstream no proxy.
+      let lastTime = 0;
+      let stalledTicks = 0;
+      const watchdog = window.setInterval(() => {
+        if (video.paused || video.ended || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+          stalledTicks = 0;
+          lastTime = video.currentTime;
+          return;
+        }
+
+        const currentTime = video.currentTime;
+        if (Math.abs(currentTime - lastTime) < 0.05) {
+          stalledTicks++;
+        } else {
+          stalledTicks = 0;
+          lastTime = currentTime;
+        }
+
+        if (stalledTicks >= 3) {
+          stalledTicks = 0;
+          console.warn("[mpegts] stream travado — reconectando");
+          try { player.unload(); } catch { /* noop */ }
+          try { player.load(); } catch { /* noop */ }
+          try {
+            const p = player.play() as unknown as Promise<void> | void;
+            if (p && typeof (p as Promise<void>).catch === "function") {
+              (p as Promise<void>).catch((e) => console.warn("[mpegts] play() rejeitado após reconnect:", e));
+            }
+          } catch (e) {
+            console.warn("[mpegts] play() throw após reconnect:", e);
+          }
+        }
+      }, 3000);
+
+      const origDestroy = player.destroy.bind(player);
+      player.destroy = () => {
+        window.clearInterval(watchdog);
+        origDestroy();
+      };
       if (autoPlay) {
         try {
           const p = player.play() as unknown as Promise<void> | void;
