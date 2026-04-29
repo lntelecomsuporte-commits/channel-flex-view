@@ -504,10 +504,29 @@ Deno.serve(async (request) => {
   }
 
   const responseHeaders = new Headers(corsHeaders);
-  ["content-type", "content-length", "content-range", "accept-ranges", "cache-control", "etag", "last-modified"].forEach((h) => {
-    const v = upstreamResponse.headers.get(h);
-    if (v) responseHeaders.set(h, v);
-  });
+
+  // Detecta MPEG-TS bruto (live stream contínuo, sem extensão de mídia).
+  // Para esses, NÃO repassamos content-length nem accept-ranges:
+  // - content-length quebra streams infinitos (player espera fim que nunca chega
+  //   ou interpreta como tamanho fixo e trava ao atingir o byte count).
+  // - accept-ranges induz o player a fazer range requests num live, o que
+  //   o servidor de origem (UDPxy/xtream/etc) não suporta corretamente.
+  const isRawMpegTs =
+    !hasMediaExtension &&
+    (contentType.includes("video/mp2t") ||
+      contentType.includes("video/mpeg") ||
+      contentType.includes("application/octet-stream"));
+
+  if (isRawMpegTs) {
+    responseHeaders.set("Content-Type", "video/mp2t");
+    responseHeaders.set("Cache-Control", "no-store");
+    // Força chunked transfer (Deno faz isso por padrão quando não há content-length).
+  } else {
+    ["content-type", "content-length", "content-range", "accept-ranges", "cache-control", "etag", "last-modified"].forEach((h) => {
+      const v = upstreamResponse.headers.get(h);
+      if (v) responseHeaders.set(h, v);
+    });
+  }
 
   return new Response(upstreamResponse.body, {
       status: upstreamResponse.status,
