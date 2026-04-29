@@ -353,7 +353,8 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         if (waitingTimer) clearTimeout(waitingTimer);
         origDestroy();
       };
-    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+    } else if (engine === "native" || (engine === "hls" && isAppleDevice && video.canPlayType("application/vnd.apple.mpegurl"))) {
+      // Player nativo: MP4 progressivo ou HLS no Safari/iOS (AirPlay).
       video.src = playableStreamUrl;
       if (autoPlay) video.play().catch(() => {});
     }
@@ -363,6 +364,10 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
+      }
+      if (mpegtsRef.current) {
+        try { mpegtsRef.current.destroy(); } catch { /* noop */ }
+        mpegtsRef.current = null;
       }
     };
   }, [playableStreamUrl, autoPlay, activeStreamUrl, useProxyFallback, proxyTokenFailure]);
