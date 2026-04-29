@@ -27,7 +27,15 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [activeField, setActiveField] = useState<"email" | "password">("email");
+  const [isStandalone, setIsStandalone] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    setIsStandalone(detectStandalone());
+  }, []);
+
+  // Mostra teclado virtual no APK nativo OU no PWA instalado (standalone)
+  const useVirtualKeyboard = isNative || isStandalone;
 
   const handleKeyPress = (key: string) => {
     if (activeField === "email") setEmail((v) => v + key);
