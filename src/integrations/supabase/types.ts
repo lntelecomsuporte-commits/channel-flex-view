@@ -90,6 +90,7 @@ export type Database = {
           is_active: boolean
           logo_url: string | null
           name: string
+          stream_format: string
           stream_url: string
           updated_at: string
           use_proxy_token: boolean
@@ -109,6 +110,7 @@ export type Database = {
           is_active?: boolean
           logo_url?: string | null
           name: string
+          stream_format?: string
           stream_url: string
           updated_at?: string
           use_proxy_token?: boolean
@@ -128,6 +130,7 @@ export type Database = {
           is_active?: boolean
           logo_url?: string | null
           name?: string
+          stream_format?: string
           stream_url?: string
           updated_at?: string
           use_proxy_token?: boolean
