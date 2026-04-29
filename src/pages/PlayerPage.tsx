@@ -144,6 +144,7 @@ const PlayerPage = () => {
 
   const [synopsisProgram, setSynopsisProgram] = useState<EPGProgram | null>(null);
   const [favFocusIndex, setFavFocusIndex] = useState<number | null>(null);
+  const [searchActive, setSearchActive] = useState(false);
   const lastEnterRef = useRef<{ id: string; time: number }>({ id: "", time: 0 });
   const enterHandledRef = useRef(false);
   const enterLongPressFiredRef = useRef(false);
