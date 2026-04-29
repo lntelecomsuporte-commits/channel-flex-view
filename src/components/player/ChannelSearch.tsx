@@ -56,6 +56,8 @@ const ChannelSearch = ({ channels, visible, onSelect, onClose }: ChannelSearchPr
       if (e.key === "ArrowDown" && results.length > 0) {
         e.preventDefault();
         e.stopPropagation();
+        // Tira o foco do input pra não reabrir o IME ao apertar OK
+        inputRef.current?.blur();
         setFocusedResult((i) => (i < results.length - 1 ? i + 1 : 0));
         return;
       }
@@ -69,10 +71,19 @@ const ChannelSearch = ({ channels, visible, onSelect, onClose }: ChannelSearchPr
         }
         e.preventDefault();
         e.stopPropagation();
+        inputRef.current?.blur();
         setFocusedResult((i) => i - 1);
         return;
       }
       if (isSelectKey(e) && results.length > 0) {
+        // Se o input ainda tem foco, OK abriria o IME em vez de selecionar.
+        // Tira o foco e exige um segundo OK pra confirmar a seleção.
+        if (document.activeElement === inputRef.current) {
+          e.preventDefault();
+          e.stopPropagation();
+          inputRef.current?.blur();
+          return;
+        }
         e.preventDefault();
         e.stopPropagation();
         const ch = results[focusedResult];
