@@ -276,6 +276,7 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
   const isActive = next.data.currentIndex === realIdx;
   if (wasActive !== isActive) return false;
   // EPG da linha
+  if (prev.data.showEpg !== next.data.showEpg) return false;
   if (prev.data.epgMap.get(ch?.id ?? "") !== next.data.epgMap.get(ch?.id ?? "")) return false;
   // Favorito da linha
   const wasFav = prev.data.favoriteIds.has(prevCh?.id ?? "");
@@ -290,6 +291,7 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
   const [synopsisProgram, setSynopsisProgram] = useState<EPGProgram | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [listSize, setListSize] = useState({ width: 0, height: 0 });
+  const [showEpgDetails, setShowEpgDetails] = useState(!IS_NATIVE_APK);
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<FixedSizeList>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -312,7 +314,7 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
       epg_url: (ch as any).epg_url,
       epg_channel_id: (ch as any).epg_channel_id,
     })),
-    visible && preloadEpg
+    visible && preloadEpg && showEpgDetails
   );
 
   const filteredChannels = useMemo(() => {
@@ -326,18 +328,27 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
     if (visible) {
       setFocusedIndex(currentIndex);
       setSearchQuery("");
+      setShowEpgDetails(!IS_NATIVE_APK);
+      if (IS_NATIVE_APK && preloadEpg) {
+        const t = setTimeout(() => setShowEpgDetails(true), 350);
+        return () => clearTimeout(t);
+      }
     }
-  }, [visible, currentIndex]);
+  }, [visible, currentIndex, preloadEpg]);
 
   // Mede tamanho do container ANTES de renderizar a lista virtual.
   // Sem isso, no APK (WebView lento) a lista monta com height=0 e ignora
   // o scroll inicial, deixando a posição no canal 000.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!visible) return;
     const el = containerRef.current;
     if (!el) return;
     const update = () => setListSize({ width: el.clientWidth, height: el.clientHeight });
     update();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", update);
+      return () => window.removeEventListener("resize", update);
+    }
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
