@@ -1,15 +1,19 @@
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react";
 import Hls from "hls.js";
+import mpegts from "mpegts.js";
 import { getPlayableStreamUrl, resolveChannelStreamUrl, buildProxyStreamUrl, isProxiedStreamUrl } from "@/lib/stream";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 import { getDeviceProfile } from "@/lib/deviceProfile";
 import YouTubePlayer from "./YouTubePlayer";
 
 /** Detecta o engine a usar com base na URL (extensão). */
-const detectEngine = (url: string, sourceUrl = url): "hls" | "native" => {
+const detectEngine = (url: string, sourceUrl = url, forcedContentType = ""): "hls" | "mpegts" | "native" => {
+  const contentType = forcedContentType.toLowerCase();
+  if (contentType.includes("video/mp2t") || contentType.includes("video/mpeg")) return "mpegts";
   const source = sourceUrl.toLowerCase();
   const playable = url.toLowerCase();
   if (/\.m3u8(\?|$)/.test(source) || /\.m3u8(\?|$)/.test(playable)) return "hls";
+  if (/\.(ts|m2ts)(\?|$)/.test(source) || /\.(ts|m2ts)(\?|$)/.test(playable)) return "mpegts";
   return "native";
 };
 
