@@ -13,14 +13,6 @@ const detectEngine = (url: string, sourceUrl = url): "hls" | "native" => {
   return "native";
 };
 
-const isHttpStreamUrl = (url: string): boolean => {
-  try {
-    return new URL(url).protocol === "http:";
-  } catch {
-    return false;
-  }
-};
-
 const isHlsManifestUrl = (url: string): boolean => {
   try {
     const pathname = new URL(url).pathname;
