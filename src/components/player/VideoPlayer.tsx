@@ -115,6 +115,12 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     setResolvedContentType("");
   }, [streamUrl]);
 
+  // Se mudar de backup dentro do mesmo canal, cada URL precisa recomeçar limpa.
+  useEffect(() => {
+    setCorsFallback(false);
+    setResolvedContentType("");
+  }, [backupIndex]);
+
   // Tenta avançar para a próxima URL de backup. Retorna true se houve avanço.
   const tryNextBackup = (): boolean => {
     const next = backupIndex + 1;
@@ -335,6 +341,31 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         if (waitingTimer) clearTimeout(waitingTimer);
         origDestroy();
       };
+    } else if (engine === "mpegts" && mpegts.isSupported()) {
+      const tsPlayer = mpegts.createPlayer({
+        type: "mpegts",
+        url: playableStreamUrl,
+        isLive: true,
+        cors: true,
+      }, {
+        enableWorker: true,
+        enableStashBuffer: false,
+        isLive: true,
+        liveBufferLatencyChasing: true,
+        liveBufferLatencyMaxLatency: 3,
+        liveBufferLatencyMinRemain: 1,
+      });
+      mpegtsRef.current = tsPlayer;
+      tsPlayer.attachMediaElement(video);
+      tsPlayer.load();
+      tsPlayer.on(mpegts.Events.ERROR, (type, details) => {
+        console.warn("[MPEGTS] Erro no stream — tentando backup:", type, details);
+        tryNextBackup();
+      });
+      if (autoPlay) {
+        const result = tsPlayer.play();
+        if (result instanceof Promise) result.catch(() => {});
+      }
     } else if (engine === "native" || (engine === "hls" && isAppleDevice && video.canPlayType("application/vnd.apple.mpegurl"))) {
       // Player nativo: MP4 progressivo ou HLS no Safari/iOS (AirPlay).
       video.src = playableStreamUrl;
@@ -347,8 +378,12 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
+      if (mpegtsRef.current) {
+        mpegtsRef.current.destroy();
+        mpegtsRef.current = null;
+      }
     };
-  }, [playableStreamUrl, autoPlay, activeStreamUrl, proxyTokenFailure]);
+  }, [playableStreamUrl, autoPlay, activeStreamUrl, proxyTokenFailure, resolvedContentType]);
 
   // Unmute after first user interaction
   useEffect(() => {
