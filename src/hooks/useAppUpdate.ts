@@ -106,21 +106,34 @@ export function useAppUpdate(): UseAppUpdateResult {
   const dismissedVersionCodeRef = useRef<number | null>(null);
 
   const check = useCallback(async () => {
-    if (!(await isNativeApp())) return;
+    const native = await isNativeApp();
+    console.log("[useAppUpdate] check() start, native=", native);
+    if (!native) return;
     const current = await getCurrentVersionCode();
-    if (current === null) return;
+    if (current === null) {
+      console.warn("[useAppUpdate] currentVersionCode null, abortando");
+      return;
+    }
     setCurrentVersionCode(current);
 
     const remote = await fetchRemoteVersion();
-    if (!remote) return;
+    if (!remote) {
+      console.warn("[useAppUpdate] remote null, abortando");
+      return;
+    }
 
+    console.log("[useAppUpdate] compare", { current, remote: remote.versionCode });
     if (remote.versionCode <= current) {
       setAvailable(null);
       return;
     }
 
-    if (dismissedVersionCodeRef.current === remote.versionCode) return;
+    if (dismissedVersionCodeRef.current === remote.versionCode) {
+      console.log("[useAppUpdate] versão já dispensada nesta sessão");
+      return;
+    }
 
+    console.log("[useAppUpdate] ✅ update disponível, mostrando prompt");
     setAvailable(remote);
   }, []);
 
