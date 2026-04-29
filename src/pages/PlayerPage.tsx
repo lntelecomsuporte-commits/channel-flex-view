@@ -17,7 +17,7 @@ import StatsOverlay from "@/components/player/StatsOverlay";
 import FavoritesBar from "@/components/player/FavoritesBar";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useSessionHeartbeat } from "@/hooks/useSessionHeartbeat";
-import { isSelectKey } from "@/lib/remoteKeys";
+import { isSelectKey, isPageNextKey, isPagePrevKey } from "@/lib/remoteKeys";
 import { List, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseLocal";
