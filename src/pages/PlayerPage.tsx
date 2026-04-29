@@ -391,6 +391,8 @@ const PlayerPage = () => {
         return;
       }
       if (showChannelList) return;
+      // Busca aberta consome todos os eventos (componente trata internamente).
+      if (searchActive) return;
       if (showStats && (e.key === "Escape" || e.key === "Backspace")) {
         e.preventDefault();
         setShowStats(false);
@@ -434,6 +436,10 @@ const PlayerPage = () => {
             return;
           case "ArrowUp":
             e.preventDefault();
+            // Sai dos favoritos e abre a busca acima.
+            setFavFocusIndex(null);
+            setSearchActive(true);
+            showOSDTemporarily(true);
             return;
           default:
             if (isSelectKey(e)) {
