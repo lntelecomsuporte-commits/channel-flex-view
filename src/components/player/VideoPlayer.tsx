@@ -55,7 +55,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   const [useProxyFallback, setUseProxyFallback] = useState(false);
   const [proxyTokenFailure, setProxyTokenFailure] = useState(false);
   const [resolvedUrl, setResolvedUrl] = useState<string>("");
-  const [reconnectNonce, setReconnectNonce] = useState(0);
+  
   // Índice da URL ativa: -1 = principal (streamUrl), 0..N = backupStreamUrls[i]
   const [backupIndex, setBackupIndex] = useState(-1);
   const backups = backupStreamUrls?.filter((u) => !!u && u.trim().length > 0) ?? [];
