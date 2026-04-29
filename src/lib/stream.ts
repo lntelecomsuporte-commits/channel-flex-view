@@ -16,6 +16,11 @@ import { LOCAL_AUTH_STORAGE_KEY, getLocalFunctionUrl } from "@/lib/localBackend"
  */
 const PRODUCTION_HOST = "https://tv2.lntelecom.net";
 
+const isLikelyRawHttpStream = (url: URL): boolean => {
+  const path = url.pathname.toLowerCase();
+  return url.protocol === "http:" && !/\.(m3u8|mp4|m4a|aac|mp3|ts|m2ts|mts)(\?|$)/.test(path);
+};
+
 const getProxyBaseUrl = () => {
   let origin = PRODUCTION_HOST;
 
@@ -119,11 +124,12 @@ export const getPlayableStreamUrl = (streamUrl: string): string => {
     const parsedUrl = new URL(streamUrl);
 
     if (Capacitor.isNativePlatform()) {
-      // No APK só roteamos pelo proxy quando a stream é HTTP.
-      // HTTPS continua direto pra evitar overhead desnecessário.
-      if (parsedUrl.protocol === "http:") {
-        return buildProxyStreamUrl(streamUrl) ?? streamUrl;
-      }
+      // MPEG-TS bruto HTTP (ex.: http://ip:porta/) precisa tocar direto no APK.
+      // Edge Function não é estável para stream infinito e congela após um tempo.
+      if (isLikelyRawHttpStream(parsedUrl)) return streamUrl;
+
+      // HLS HTTP continua pelo proxy para evitar mixed content/CORS em WebViews.
+      if (parsedUrl.protocol === "http:") return buildProxyStreamUrl(streamUrl) ?? streamUrl;
       return streamUrl;
     }
 
