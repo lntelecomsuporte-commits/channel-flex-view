@@ -9,6 +9,7 @@ import AdminLogin from "./pages/AdminLogin";
 import AdminPanel from "./pages/AdminPanel";
 import LoginPage from "./pages/LoginPage";
 import NotFound from "./pages/NotFound";
+import { UpdateNotification } from "@/components/UpdateNotification";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +36,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <UpdateNotification />
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
