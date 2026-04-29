@@ -102,6 +102,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     if (next >= backups.length) return false;
     console.warn(`[HLS] Falha total — trocando para backup #${next + 1}/${backups.length}: ${backups[next]}`);
     setProxyTokenFailure(false);
+    setCorsFallback(false);
     setBackupIndex(next);
     return true;
   };
