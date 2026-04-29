@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/lib/supabaseLocal";
@@ -12,13 +12,30 @@ import { VirtualKeyboard } from "@/components/VirtualKeyboard";
 
 const isNative = Capacitor.isNativePlatform();
 
+// Detecta PWA instalado (standalone) — iOS e Android
+function detectStandalone(): boolean {
+  if (typeof window === "undefined") return false;
+  const mq = window.matchMedia?.("(display-mode: standalone)").matches;
+  // iOS Safari standalone flag (não-padrão)
+  const iosStandalone = (window.navigator as any).standalone === true;
+  return !!(mq || iosStandalone);
+}
+
 const LoginPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [activeField, setActiveField] = useState<"email" | "password">("email");
+  const [isStandalone, setIsStandalone] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    setIsStandalone(detectStandalone());
+  }, []);
+
+  // Mostra teclado virtual no APK nativo OU no PWA instalado (standalone)
+  const useVirtualKeyboard = isNative || isStandalone;
 
   const handleKeyPress = (key: string) => {
     if (activeField === "email") setEmail((v) => v + key);
@@ -102,7 +119,7 @@ const LoginPage = () => {
                   required
                   placeholder="seu@email.com"
                   autoComplete="username"
-                  className={`sm:h-12 sm:text-base ${activeField === "email" && isNative ? "ring-2 ring-primary" : ""}`}
+                  className={`sm:h-12 sm:text-base ${activeField === "email" && useVirtualKeyboard ? "ring-2 ring-primary" : ""}`}
                 />
               </div>
               <div className="space-y-1.5">
@@ -118,7 +135,7 @@ const LoginPage = () => {
                     readOnly={isNative}
                     required
                     autoComplete="current-password"
-                    className={`pr-11 sm:h-12 sm:text-base ${activeField === "password" && isNative ? "ring-2 ring-primary" : ""}`}
+                    className={`pr-11 sm:h-12 sm:text-base ${activeField === "password" && useVirtualKeyboard ? "ring-2 ring-primary" : ""}`}
                   />
                   <button
                     type="button"
@@ -136,7 +153,7 @@ const LoginPage = () => {
               </Button>
             </form>
 
-            {isNative && (
+            {useVirtualKeyboard && (
               <VirtualKeyboard
                 onKeyPress={handleKeyPress}
                 onBackspace={handleBackspace}
