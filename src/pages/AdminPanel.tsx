@@ -143,6 +143,7 @@ const AdminPanel = () => {
     const payload = {
       name: channelForm.name, channel_number: parseInt(channelForm.channel_number),
       stream_url: channelForm.stream_url,
+      stream_format: channelForm.stream_format || "auto",
       backup_stream_urls: backupList,
       logo_url: logoUrl,
       category_id: channelForm.category_id || null, is_active: channelForm.is_active,
