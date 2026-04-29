@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, memo } from "react";
+import { useState, useEffect, useRef, useMemo, memo, useLayoutEffect } from "react";
 import { FixedSizeList, type ListChildComponentProps } from "react-window";
 import type { Channel } from "@/hooks/useChannels";
 import { useMultiEPG } from "@/hooks/useMultiEPG";
@@ -19,6 +19,7 @@ interface ChannelListProps {
 }
 
 const LONG_PRESS_MS = 1500;
+const IS_NATIVE_APK = typeof window !== "undefined" && !!(window as any).Capacitor?.isNativePlatform?.();
 
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
@@ -196,6 +197,7 @@ interface RowData {
   focusedIndex: number;
   epgMap: Map<string, EPGProgram[]>;
   favoriteIds: Set<string>;
+  showEpg: boolean;
   onSelect: (index: number) => void;
   onFocus: (index: number) => void;
   onSynopsis: (p: EPGProgram) => void;
@@ -203,7 +205,7 @@ interface RowData {
 }
 
 const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
-  const { filteredChannels, channelIndexMap, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect, onFocus, onSynopsis, setItemRef } = data;
+  const { filteredChannels, channelIndexMap, currentIndex, focusedIndex, epgMap, favoriteIds, showEpg, onSelect, onFocus, onSynopsis, setItemRef } = data;
   const channel = filteredChannels[index];
   if (!channel) return null;
   const ch = channel as any;
@@ -246,9 +248,11 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
           <span className="text-lg sm:text-xl font-bold text-foreground">{String(channel.channel_number).padStart(3, "0")}</span>
           <p className="text-xs sm:text-sm text-muted-foreground truncate leading-tight">{channel.name}</p>
         </div>
-        <div className="flex-1 min-w-0 flex items-center">
-          <ChannelEPGInfo programs={programs} altText={altText} epgType={epgType} onClickSynopsis={onSynopsis} />
-        </div>
+        {showEpg && (
+          <div className="flex-1 min-w-0 flex items-center">
+            <ChannelEPGInfo programs={programs} altText={altText} epgType={epgType} onClickSynopsis={onSynopsis} />
+          </div>
+        )}
         {isActive && <span className="text-xs text-primary font-bold flex-shrink-0">● ATUAL</span>}
       </div>
     </div>
