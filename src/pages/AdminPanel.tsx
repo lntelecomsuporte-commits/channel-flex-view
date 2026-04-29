@@ -241,6 +241,9 @@ const AdminPanel = () => {
     setEditingCategoryId(cat.id);
     const includes = categoryIncludes?.filter((ci) => ci.category_id === cat.id).map((ci) => ci.included_category_id) || [];
     setCategoryForm({ name: cat.name, position: String(cat.position), includedCategoryIds: includes });
+    requestAnimationFrame(() => {
+      categoryFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   };
 
   const handleDeleteCategory = async (id: string) => {
