@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/lib/supabaseLocal";
@@ -11,6 +11,15 @@ import { Tv, Eye, EyeOff } from "lucide-react";
 import { VirtualKeyboard } from "@/components/VirtualKeyboard";
 
 const isNative = Capacitor.isNativePlatform();
+
+// Detecta PWA instalado (standalone) — iOS e Android
+function detectStandalone(): boolean {
+  if (typeof window === "undefined") return false;
+  const mq = window.matchMedia?.("(display-mode: standalone)").matches;
+  // iOS Safari standalone flag (não-padrão)
+  const iosStandalone = (window.navigator as any).standalone === true;
+  return !!(mq || iosStandalone);
+}
 
 const LoginPage = () => {
   const [email, setEmail] = useState("");
