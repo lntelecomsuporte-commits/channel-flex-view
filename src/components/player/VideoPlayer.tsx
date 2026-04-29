@@ -5,21 +5,16 @@ import { extractYouTubeVideoId } from "@/lib/youtube";
 import { getDeviceProfile } from "@/lib/deviceProfile";
 import YouTubePlayer from "./YouTubePlayer";
 
-export type StreamFormat = "auto" | "hls" | "ts" | "mp4";
+export type StreamFormat = "auto" | "hls" | "mp4";
 
 /** Detecta o engine a usar com base no formato escolhido + URL original. */
-const detectEngine = (format: StreamFormat, url: string, sourceUrl = url): "hls" | "ts" | "native" => {
+const detectEngine = (format: StreamFormat, url: string, sourceUrl = url): "hls" | "native" => {
   if (format === "hls") return "hls";
-  if (format === "ts") return "ts";
   if (format === "mp4") return "native";
   // auto: olha a URL
   const source = sourceUrl.toLowerCase();
   const playable = url.toLowerCase();
   if (/\.m3u8(\?|$)/.test(source) || /\.m3u8(\?|$)/.test(playable)) return "hls";
-  if (/\.(ts|m2ts|mts)(\?|$)/.test(source) || source.includes("mpegts")) return "ts";
-  // Streams HTTP sem extensão normalmente são MPEG-TS bruto; se passarem pelo
-  // hls-proxy, não podem ser tratados como playlist HLS.
-  if (isHttpStreamUrl(sourceUrl)) return "ts";
   return "native";
 };
 
