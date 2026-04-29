@@ -700,6 +700,18 @@ const PlayerPage = () => {
             />
           ) : (
             <>
+              <ChannelSearch
+                channels={channels}
+                visible={searchActive}
+                onSelect={(ch) => {
+                  const idx = channels.findIndex((c) => c.id === ch.id);
+                  if (idx >= 0) {
+                    setCurrentIndex(idx);
+                    showOSDTemporarily();
+                  }
+                }}
+                onClose={() => setSearchActive(false)}
+              />
               <FavoritesBar
                 channels={channels}
                 favoriteIds={favorites.map((f) => f.channel_id)}
