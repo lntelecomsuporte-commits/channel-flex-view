@@ -15,6 +15,10 @@ interface VideoPlayerProps {
    *  com token assinado (esconde a URL real do provedor no F12). */
   channelId?: string | null;
   useProxyToken?: boolean;
+  /** Lista ordenada de URLs de fallback. Quando o player esgota tentativas
+   *  na URL principal (erro fatal não-recuperável), avança automaticamente
+   *  para a próxima URL desta lista. */
+  backupStreamUrls?: string[] | null;
 }
 
 export interface VideoPlayerHandle {
