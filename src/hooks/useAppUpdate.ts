@@ -121,19 +121,10 @@ export function useAppUpdate(): UseAppUpdateResult {
 
   const download = useCallback(async () => {
     if (!available) return;
-    try {
-      const { Browser } = await import("@capacitor/browser").catch(() => ({ Browser: null as any }));
-      if (Browser) {
-        await Browser.open({ url: available.url });
-        return;
-      }
-    } catch {
-      /* fallback abaixo */
-    }
-    // Fallback: abre no navegador padrão. O Android vai oferecer instalar
-    // o APK depois do download (usuário aceita "Instalar apps desconhecidos"
-    // na primeira vez). Como o applicationId e a assinatura são iguais,
-    // o sistema faz UPGRADE preservando dados — não precisa desinstalar.
+    // Abre a URL do APK no navegador padrão. Após o download, o Android
+    // oferece instalar (na 1ª vez pede permissão "Instalar apps desconhecidos").
+    // Como o applicationId e a assinatura são iguais, o sistema faz UPGRADE
+    // preservando dados e login — não precisa desinstalar manualmente.
     window.open(available.url, "_blank");
   }, [available]);
 
