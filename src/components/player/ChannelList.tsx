@@ -203,13 +203,13 @@ interface RowData {
 }
 
 const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
-  const { filteredChannels, channels, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect, onFocus, onSynopsis, setItemRef } = data;
+  const { filteredChannels, channelIndexMap, currentIndex, focusedIndex, epgMap, favoriteIds, onSelect, onFocus, onSynopsis, setItemRef } = data;
   const channel = filteredChannels[index];
   const ch = channel as any;
   const programs = epgMap.get(channel.id) || [];
   const altText = ch.epg_alt_text as string | null;
   const epgType = ch.epg_type as string | null;
-  const realIndex = useMemo(() => channels.indexOf(channel), [channels, channel]);
+  const realIndex = channelIndexMap.get(channel.id) ?? -1;
   const isActive = realIndex === currentIndex;
   const isFocused = index === focusedIndex;
   const isFav = favoriteIds.has(channel.id);
