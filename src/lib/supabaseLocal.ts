@@ -5,10 +5,11 @@ import {
   LOCAL_BACKEND_ORIGIN,
   LOCAL_SUPABASE_PUBLISHABLE_KEY,
 } from "@/lib/localBackend";
+import { nativeAuthStorage } from "@/lib/nativeAuthStorage";
 
 export const supabase = createClient<Database>(LOCAL_BACKEND_ORIGIN, LOCAL_SUPABASE_PUBLISHABLE_KEY, {
   auth: {
-    storage: localStorage,
+    storage: nativeAuthStorage,
     storageKey: LOCAL_AUTH_STORAGE_KEY,
     persistSession: true,
     autoRefreshToken: true,
