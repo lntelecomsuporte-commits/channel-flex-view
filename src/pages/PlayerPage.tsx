@@ -7,6 +7,7 @@ import { useEPG, type EPGProgram } from "@/hooks/useEPG";
 import { useMultiEPG } from "@/hooks/useMultiEPG";
 import { useNativeBackButton } from "@/hooks/useNativeBackButton";
 import { useBackgroundPlayback } from "@/hooks/useBackgroundPlayback";
+import { startPlaybackKeepAlive, stopPlaybackKeepAlive } from "@/lib/playbackKeepAlive";
 import VideoPlayer, { type VideoPlayerHandle } from "@/components/player/VideoPlayer";
 import ChannelPrefetch from "@/components/player/ChannelPrefetch";
 import ChannelOSD from "@/components/player/ChannelOSD";
@@ -41,6 +42,13 @@ const PlayerPage = () => {
 
   // Mantém o vídeo tocando mesmo com a aba em segundo plano
   useBackgroundPlayback(true);
+
+  // No APK Android: inicia foreground service "media playback" pra impedir
+  // que o low-memory-killer feche o app depois de horas em ocioso.
+  useEffect(() => {
+    startPlaybackKeepAlive();
+    return () => { stopPlaybackKeepAlive(); };
+  }, []);
 
   // Boas-vindas ao abrir o app
   const welcomedRef = useRef(false);
