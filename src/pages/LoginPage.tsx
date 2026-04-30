@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Tv, Eye, EyeOff } from "lucide-react";
+import { Tv, Eye, EyeOff, ArrowLeft, ArrowRight } from "lucide-react";
 import { VirtualKeyboard } from "@/components/VirtualKeyboard";
 
 const isNative = Capacitor.isNativePlatform();
@@ -16,9 +16,18 @@ const isNative = Capacitor.isNativePlatform();
 function detectStandalone(): boolean {
   if (typeof window === "undefined") return false;
   const mq = window.matchMedia?.("(display-mode: standalone)").matches;
-  // iOS Safari standalone flag (não-padrão)
   const iosStandalone = (window.navigator as any).standalone === true;
   return !!(mq || iosStandalone);
+}
+
+// Detecta TV / tela grande landscape — usa layout wizard (1 campo por vez)
+function detectTvLayout(): boolean {
+  if (typeof window === "undefined") return false;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const landscape = w >= h;
+  // TV: tela grande E landscape
+  return landscape && w >= 900;
 }
 
 const LoginPage = () => {
@@ -28,14 +37,21 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [activeField, setActiveField] = useState<"email" | "password">("email");
   const [isStandalone, setIsStandalone] = useState(false);
+  const [isTvLayout, setIsTvLayout] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     setIsStandalone(detectStandalone());
+    const update = () => setIsTvLayout(detectTvLayout());
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
   }, []);
 
   // Mostra teclado virtual no APK nativo OU no PWA instalado (standalone)
   const useVirtualKeyboard = isNative || isStandalone;
+  // Layout wizard (1 campo por vez ao lado do teclado) só em TV com teclado virtual
+  const useWizardLayout = useVirtualKeyboard && isTvLayout;
 
   const handleKeyPress = (key: string) => {
     if (activeField === "email") setEmail((v) => v + key);
@@ -94,6 +110,105 @@ const LoginPage = () => {
     void doLogin();
   };
 
+  // ============= LAYOUT WIZARD (TV) =============
+  if (useWizardLayout) {
+    const isEmailStep = activeField === "email";
+    const currentValue = isEmailStep ? email : password;
+    const fieldLabel = isEmailStep ? "Email" : "Senha";
+    const displayValue = isEmailStep
+      ? (email || "seu@email.com")
+      : (showPassword ? password : "•".repeat(password.length));
+    const isPlaceholder = isEmailStep && !email;
+
+    return (
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center p-6">
+        <div className="w-full max-w-6xl grid grid-cols-[1fr_1.3fr] gap-8 items-center">
+          {/* Lado esquerdo: branding + campo atual */}
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <Tv className="h-12 w-12 text-primary" />
+              <h1 className="text-3xl font-bold">TV Login</h1>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-lg text-muted-foreground">{fieldLabel}</Label>
+              <div
+                className={`min-h-[60px] rounded-md border-2 px-4 py-3 text-2xl break-all ${
+                  isPlaceholder ? "text-muted-foreground" : "text-foreground"
+                } border-primary bg-card`}
+              >
+                {displayValue || "\u00A0"}
+              </div>
+              {!isEmailStep && (
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((s) => !s)}
+                  className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPassword ? "Ocultar" : "Mostrar"} senha
+                </button>
+              )}
+            </div>
+
+            {/* Indicador de etapa */}
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className={isEmailStep ? "text-primary font-medium" : ""}>1. Email</span>
+              <span>→</span>
+              <span className={!isEmailStep ? "text-primary font-medium" : ""}>2. Senha</span>
+            </div>
+
+            {/* Botões Voltar / Avançar / Entrar */}
+            <div className="flex gap-3">
+              {!isEmailStep && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-14 text-lg flex-1"
+                  onClick={() => setActiveField("email")}
+                >
+                  <ArrowLeft className="h-5 w-5 mr-2" /> Voltar
+                </Button>
+              )}
+              {isEmailStep ? (
+                <Button
+                  type="button"
+                  className="h-14 text-lg flex-1"
+                  onClick={() => setActiveField("password")}
+                  disabled={!email}
+                >
+                  Avançar <ArrowRight className="h-5 w-5 ml-2" />
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  className="h-14 text-lg flex-1"
+                  onClick={() => void doLogin()}
+                  disabled={loading || !password}
+                >
+                  {loading ? "Entrando..." : "Entrar"}
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Lado direito: teclado */}
+          <div>
+            <VirtualKeyboard
+              key={activeField}
+              onKeyPress={handleKeyPress}
+              onBackspace={handleBackspace}
+              onEnter={handleEnter}
+              mode={isEmailStep ? "email" : "text"}
+              autoFocus
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ============= LAYOUT MOBILE / DEFAULT =============
   return (
     <div className="min-h-[100dvh] bg-background p-3 sm:p-6 flex items-start sm:items-center justify-center overflow-y-auto">
       <div className="w-full max-w-sm sm:max-w-md lg:max-w-lg xl:max-w-xl py-4">
