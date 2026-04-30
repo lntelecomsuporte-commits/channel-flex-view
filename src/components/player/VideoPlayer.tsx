@@ -394,7 +394,46 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       if (autoPlay) video.play().catch(() => {});
     }
 
+    // === Watchdog global de playback ===
+    // Em live, currentTime deve avançar continuamente. Se ficar parado por
+    // >30s e o player não estiver pausado, força um reload completo do stream
+    // (recria hls.js / mpegts.js / native). Cobre o caso "trava após horas
+    // sem disparar erro" comum em devices fracos onde o decoder reinicializa
+    // mal após GC.
+    let lastTime = 0;
+    let lastTimeCheckedAt = Date.now();
+    const watchdog = window.setInterval(() => {
+      if (!video || video.paused || video.ended) {
+        lastTimeCheckedAt = Date.now();
+        lastTime = video?.currentTime ?? 0;
+        return;
+      }
+      const now = video.currentTime;
+      if (Math.abs(now - lastTime) > 0.25) {
+        lastTime = now;
+        lastTimeCheckedAt = Date.now();
+        return;
+      }
+      const stuckMs = Date.now() - lastTimeCheckedAt;
+      if (stuckMs > 30_000) {
+        console.warn(`[Watchdog] Playback travado por ${(stuckMs / 1000).toFixed(0)}s — recarregando stream`);
+        lastTimeCheckedAt = Date.now();
+        // Força reload: derruba engines atuais e re-dispara o effect via toggle no estado.
+        if (hlsRef.current) {
+          try { hlsRef.current.destroy(); } catch { /* ignore */ }
+          hlsRef.current = null;
+        }
+        if (mpegtsRef.current) {
+          try { mpegtsRef.current.destroy(); } catch { /* ignore */ }
+          mpegtsRef.current = null;
+        }
+        // Trigger re-mount do effect mexendo no resolvedUrl (vai voltar ao mesmo valor logo depois).
+        setResolvedContentType((c) => c + " ");
+      }
+    }, 5_000);
+
     return () => {
+      clearInterval(watchdog);
       video.removeEventListener("error", handleVideoError);
       if (hlsRef.current) {
         hlsRef.current.destroy();
