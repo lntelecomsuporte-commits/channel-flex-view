@@ -203,16 +203,19 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         maxBufferSize: 30 * 1000 * 1000, // 30MB
         // Pré-busca o primeiro fragmento enquanto o manifesto ainda processa
         startFragPrefetch: true,
-        // Retries agressivos para fragmentos e manifestos
-        fragLoadingMaxRetry: isSignedProxyUrl ? 1 : 8,
+        // Retries agressivos para fragmentos e manifestos.
+        // OBS: o modo "Ocultar URL" (signed proxy) usa os MESMOS valores do modo
+        // direto. Os retries baixos antigos (1x/1500ms) faziam o player desistir
+        // a qualquer hiccup de rede, derrubando o canal "depois de um pouco" no PWA.
+        fragLoadingMaxRetry: 8,
         fragLoadingRetryDelay: 500,
-        fragLoadingMaxRetryTimeout: isSignedProxyUrl ? 1500 : 16000,
-        manifestLoadingMaxRetry: isSignedProxyUrl ? 1 : 6,
+        fragLoadingMaxRetryTimeout: 16000,
+        manifestLoadingMaxRetry: 6,
         manifestLoadingRetryDelay: 500,
-        manifestLoadingMaxRetryTimeout: isSignedProxyUrl ? 1500 : 16000,
-        levelLoadingMaxRetry: isSignedProxyUrl ? 1 : 6,
+        manifestLoadingMaxRetryTimeout: 16000,
+        levelLoadingMaxRetry: 6,
         levelLoadingRetryDelay: 500,
-        levelLoadingMaxRetryTimeout: isSignedProxyUrl ? 1500 : 16000,
+        levelLoadingMaxRetryTimeout: 16000,
         // ABR conservador na subida pra evitar reflickar logo após startLevel:0
         abrEwmaDefaultEstimate: 500000,
         abrBandWidthFactor: 0.85,
