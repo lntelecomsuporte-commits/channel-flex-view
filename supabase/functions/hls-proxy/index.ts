@@ -41,9 +41,29 @@ const getAesKey = (): Promise<CryptoKey> => {
   return aesKeyPromise;
 };
 
+// IV determinístico por URL: mesmo segmento → mesma URL cifrada.
+// Isso é CRÍTICO: o hls.js identifica segmentos por URL. Se o IV for
+// aleatório, cada reload do manifest gera URLs diferentes pro MESMO
+// segmento (mesmo media-sequence-number), e o player descarta o buffer
+// e re-baixa. Em live, isso faz o canal travar após alguns reloads
+// porque o player se desorienta entre o que está no buffer vs no manifest.
+// Segurança: AES-GCM com IV fixo derivado da URL (HMAC-SHA256 truncado)
+// é seguro porque cada URL distinta tem IV único — não reusamos (IV,plaintext).
+const deriveIv = async (plain: string): Promise<Uint8Array> => {
+  const hashKey = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(STREAM_TOKEN_SECRET + ":iv"),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", hashKey, new TextEncoder().encode(plain));
+  return new Uint8Array(sig).slice(0, 12);
+};
+
 const encryptUrl = async (plain: string): Promise<string> => {
   const key = await getAesKey();
-  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const iv = await deriveIv(plain);
   const ct = new Uint8Array(
     await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(plain)),
   );
