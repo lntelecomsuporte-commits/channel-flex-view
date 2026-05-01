@@ -6,7 +6,11 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   android: {
     allowMixedContent: true,
+    // Força console.log do JS aparecer no logcat mesmo em build release
+    loggingBehavior: 'production',
   },
+  // Idem nível raiz (cobre iOS e overrides)
+  loggingBehavior: 'production',
   plugins: {
     Keyboard: {
       resize: 'body',
