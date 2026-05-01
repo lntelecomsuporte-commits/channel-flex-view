@@ -28,6 +28,26 @@ export function useAuth() {
     return false;
   }, []);
 
+  // Verifica no servidor se o admin pediu signout remoto desse usuário.
+  // Roda no boot da app e quando o app retorna do background.
+  const checkForceSignout = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("session-heartbeat", {
+        body: { action: "check" },
+      });
+      if (error) {
+        console.warn("[useAuth] checkForceSignout error (ignored):", error.message);
+        return;
+      }
+      if (data?.forceSignout) {
+        console.warn("[useAuth] Force signout no boot — deslogando");
+        await supabase.auth.signOut();
+      }
+    } catch (e) {
+      console.warn("[useAuth] checkForceSignout exception (ignored)", e);
+    }
+  }, []);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
