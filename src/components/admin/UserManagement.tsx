@@ -142,7 +142,7 @@ const UserManagement = () => {
 
   const handleToggleBlock = async (profileId: string, currentBlocked: boolean) => {
     // Ao bloquear, também força logout remoto imediato
-    const updates: Record<string, unknown> = { is_blocked: !currentBlocked };
+    const updates: { is_blocked: boolean; force_signout_at?: string } = { is_blocked: !currentBlocked };
     if (!currentBlocked) updates.force_signout_at = new Date().toISOString();
     const { error } = await supabase
       .from("profiles")
