@@ -21,6 +21,8 @@ type Session = {
   current_channel_name: string | null;
   is_watching: boolean;
   ip_address: string | null;
+  client_ipv4: string | null;
+  client_ipv6: string | null;
 };
 
 const ACTIVE_WINDOW_MS = 90_000;
