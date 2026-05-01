@@ -28,6 +28,26 @@ export function useAuth() {
     return false;
   }, []);
 
+  // Verifica no servidor se o admin pediu signout remoto desse usuário.
+  // Roda no boot da app e quando o app retorna do background.
+  const checkForceSignout = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("session-heartbeat", {
+        body: { action: "check" },
+      });
+      if (error) {
+        console.warn("[useAuth] checkForceSignout error (ignored):", error.message);
+        return;
+      }
+      if (data?.forceSignout) {
+        console.warn("[useAuth] Force signout no boot — deslogando");
+        await supabase.auth.signOut();
+      }
+    } catch (e) {
+      console.warn("[useAuth] checkForceSignout exception (ignored)", e);
+    }
+  }, []);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
@@ -85,6 +105,36 @@ export function useAuth() {
 
     return () => clearInterval(interval);
   }, [user, checkBlocked]);
+
+  // Boot/resume: verifica force-signout no servidor (admin pode ter pedido logout remoto).
+  // Roda quando o user aparece (boot), quando a aba volta a ficar visível, e no evento
+  // 'resume' do Capacitor (APK voltando do background — momento em que o app
+  // costuma re-buscar canais e checar updates).
+  useEffect(() => {
+    if (!user) return;
+
+    checkForceSignout();
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") checkForceSignout();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    let appResumeListener: { remove: () => Promise<void> } | null = null;
+    import("@capacitor/app")
+      .then(({ App }) => App.addListener("resume", () => checkForceSignout()))
+      .then((listener) => {
+        appResumeListener = listener;
+      })
+      .catch(() => {
+        /* web — sem Capacitor */
+      });
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      appResumeListener?.remove();
+    };
+  }, [user, checkForceSignout]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });

@@ -62,7 +62,27 @@ Deno.serve(async (req) => {
     const cIpv4 = sanitizeIp(clientIpv4);
     const cIpv6 = sanitizeIp(clientIpv6);
 
+    // Helper: verifica se admin pediu signout remoto após o início da sessão
+    const checkForceSignout = async (sessionStartedAt: string | null): Promise<boolean> => {
+      const { data: profile } = await adminClient
+        .from("profiles")
+        .select("force_signout_at")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (!profile?.force_signout_at) return false;
+      if (!sessionStartedAt) return true;
+      return new Date(profile.force_signout_at).getTime() > new Date(sessionStartedAt).getTime();
+    };
+
     if (action === "start") {
+      // Antes de criar sessão, checa se há force_signout pendente "no futuro" (qualquer valor)
+      // Como ainda não há sessão, comparamos com "agora menos 5s" pra evitar criar sessão de quem foi deslogado.
+      const justBefore = new Date(Date.now() - 5000).toISOString();
+      const shouldKick = await checkForceSignout(justBefore);
+      if (shouldKick) {
+        return json({ forceSignout: true });
+      }
+
       const { data, error } = await adminClient
         .from("user_sessions")
         .insert({
@@ -76,18 +96,25 @@ Deno.serve(async (req) => {
           client_ipv4: cIpv4,
           client_ipv6: cIpv6,
         })
-        .select("id")
+        .select("id, started_at")
         .single();
 
       if (error) return json({ error: error.message }, 400);
       return json({ id: data.id });
     }
 
+    if (action === "check") {
+      // Endpoint leve para o boot do app conferir se foi deslogado pelo admin
+      const justBefore = new Date(Date.now() - 5000).toISOString();
+      const shouldKick = await checkForceSignout(justBefore);
+      return json({ forceSignout: shouldKick });
+    }
+
     if (!sessionId) return json({ error: "sessionId é obrigatório" }, 400);
 
     const { data: session, error: sessionError } = await adminClient
       .from("user_sessions")
-      .select("id")
+      .select("id, started_at")
       .eq("id", sessionId)
       .eq("user_id", user.id)
       .maybeSingle();
@@ -96,6 +123,15 @@ Deno.serve(async (req) => {
     if (!session) return json({ error: "Sessão não encontrada" }, 404);
 
     if (action === "heartbeat") {
+      const shouldKick = await checkForceSignout(session.started_at);
+      if (shouldKick) {
+        await adminClient
+          .from("user_sessions")
+          .update({ ended_at: new Date().toISOString() })
+          .eq("id", sessionId);
+        return json({ forceSignout: true });
+      }
+
       const { error } = await adminClient
         .from("user_sessions")
         .update({

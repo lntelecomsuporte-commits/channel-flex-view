@@ -125,6 +125,15 @@ export const useSessionHeartbeat = ({ channelId, channelName, isWatching = false
       return ipsRef.current;
     };
 
+    const handleForceSignout = async () => {
+      console.warn("[useSessionHeartbeat] Force signout recebido do servidor — deslogando");
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {
+        console.warn("[useSessionHeartbeat] signOut falhou", e);
+      }
+    };
+
     const startSession = async () => {
       await refreshClientIps();
       if (cancelled) return;
@@ -143,13 +152,17 @@ export const useSessionHeartbeat = ({ channelId, channelName, isWatching = false
       });
 
       if (error || cancelled) return;
+      if (data?.forceSignout) {
+        await handleForceSignout();
+        return;
+      }
       sessionIdRef.current = data.id;
 
       intervalRef.current = setInterval(async () => {
         if (!sessionIdRef.current) return;
         // Re-detecta IPs periodicamente (rede pode ter mudado)
         await refreshClientIps();
-        await supabase.functions.invoke("session-heartbeat", {
+        const { data: hbData } = await supabase.functions.invoke("session-heartbeat", {
           body: {
             action: "heartbeat",
             sessionId: sessionIdRef.current,
@@ -160,6 +173,10 @@ export const useSessionHeartbeat = ({ channelId, channelName, isWatching = false
             clientIpv6: ipsRef.current.ipv6,
           },
         });
+        if (hbData?.forceSignout) {
+          if (intervalRef.current) clearInterval(intervalRef.current);
+          await handleForceSignout();
+        }
       }, HEARTBEAT_INTERVAL_MS);
     };
 

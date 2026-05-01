@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Plus, Trash2, ShieldOff, ShieldCheck, Pencil } from "lucide-react";
+import { Plus, Trash2, ShieldOff, ShieldCheck, Pencil, LogOut } from "lucide-react";
 import { useCategories } from "@/hooks/useChannels";
 import { UserStatusBadge } from "./UserStatusBadge";
 
@@ -168,6 +168,19 @@ const UserManagement = () => {
     }
   };
 
+  const handleForceSignout = async (profileId: string, displayName: string | null) => {
+    const { error } = await supabase
+      .from("profiles")
+      .update({ force_signout_at: new Date().toISOString() })
+      .eq("id", profileId);
+    if (error) {
+      toast.error("Erro ao deslogar: " + error.message);
+      return;
+    }
+    toast.success(`${displayName || "Usuário"} será deslogado em até 30s`);
+    queryClient.invalidateQueries({ queryKey: ["profiles"] });
+  };
+
   const CategoryCheckboxes = ({ selected, onToggle }: { selected: string[]; onToggle: (id: string) => void }) => (
     <div className="space-y-2">
       <Label>Categorias de Acesso</Label>
@@ -245,6 +258,9 @@ const UserManagement = () => {
                     </span>
                     <Button variant="ghost" size="sm" onClick={() => handleEdit(p as Profile)} title="Editar">
                       <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleForceSignout(p.id, p.display_name)} title="Deslogar usuário (forçar logout remoto)">
+                      <LogOut className="h-4 w-4 text-amber-500" />
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => handleToggleBlock(p.id, p.is_blocked)} title={p.is_blocked ? "Desbloquear" : "Bloquear"}>
                       {p.is_blocked ? <ShieldCheck className="h-4 w-4 text-primary" /> : <ShieldOff className="h-4 w-4 text-destructive" />}
