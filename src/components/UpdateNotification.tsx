@@ -1,12 +1,76 @@
+import { useEffect, useRef } from "react";
 import { useAppUpdate } from "@/hooks/useAppUpdate";
 import { Download, X, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { isSelectKey } from "@/lib/remoteKeys";
 
 export function UpdateNotification() {
   const { available, currentVersionCode, dismiss, download, status, progress, error } = useAppUpdate();
-
-  if (!available) return null;
+  const updateBtnRef = useRef<HTMLButtonElement>(null);
+  const dismissBtnRef = useRef<HTMLButtonElement>(null);
 
   const isBusy = status === "downloading" || status === "installing";
+  const isOpen = !!available;
+
+  // Foca o botão "Atualizar agora" assim que o modal abre
+  useEffect(() => {
+    if (!isOpen) return;
+    const t = setTimeout(() => updateBtnRef.current?.focus(), 50);
+    return () => clearTimeout(t);
+  }, [isOpen]);
+
+  // Captura TODAS as teclas do controle remoto enquanto o modal está aberto,
+  // impede que cheguem no player/lista de canais por trás, e implementa
+  // navegação esquerda/direita entre os dois botões.
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handler = (e: KeyboardEvent) => {
+      // Bloqueia tudo que não é input — modal é totalmente modal pro remote
+      const key = e.key;
+
+      // ESC / Back: dispensa (se não estiver baixando)
+      if ((key === "Escape" || key === "GoBack" || e.keyCode === 27 || e.keyCode === 4) && !isBusy) {
+        e.preventDefault();
+        e.stopPropagation();
+        (e as KeyboardEvent & { stopImmediatePropagation?: () => void }).stopImmediatePropagation?.();
+        dismiss();
+        return;
+      }
+
+      // Setas: alterna entre os 2 botões
+      if (key === "ArrowLeft" || key === "ArrowRight" || key === "ArrowUp" || key === "ArrowDown") {
+        e.preventDefault();
+        e.stopPropagation();
+        (e as KeyboardEvent & { stopImmediatePropagation?: () => void }).stopImmediatePropagation?.();
+        if (isBusy) return;
+        const active = document.activeElement;
+        if (active === updateBtnRef.current) {
+          dismissBtnRef.current?.focus();
+        } else {
+          updateBtnRef.current?.focus();
+        }
+        return;
+      }
+
+      // Enter/OK: deixa o botão focado tratar, mas impede propagação pra trás
+      if (isSelectKey(e)) {
+        e.stopPropagation();
+        (e as KeyboardEvent & { stopImmediatePropagation?: () => void }).stopImmediatePropagation?.();
+        return;
+      }
+
+      // Qualquer outra tecla (números, canal, etc.): bloqueia
+      e.preventDefault();
+      e.stopPropagation();
+      (e as KeyboardEvent & { stopImmediatePropagation?: () => void }).stopImmediatePropagation?.();
+    };
+
+    // capture=true pra interceptar ANTES dos handlers do player
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, [isOpen, isBusy, dismiss]);
+
+  if (!available) return null;
 
   return (
     <div
@@ -14,6 +78,7 @@ export function UpdateNotification() {
       role="dialog"
       aria-modal="true"
       aria-labelledby="update-title"
+      onClick={(e) => e.stopPropagation()}
     >
       <div className="bg-background border border-border rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
         <div className="flex items-start justify-between gap-3">
@@ -94,14 +159,16 @@ export function UpdateNotification() {
         {!isBusy && (
           <div className="flex gap-2 justify-end">
             <button
+              ref={dismissBtnRef}
               onClick={dismiss}
-              className="px-4 py-2 text-sm rounded-md border border-border hover:bg-muted/30 transition-colors"
+              className="px-4 py-2 text-sm rounded-md border border-border hover:bg-muted/30 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background transition-colors"
             >
               Mais tarde
             </button>
             <button
+              ref={updateBtnRef}
               onClick={download}
-              className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex items-center gap-2"
+              className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary-foreground focus:ring-offset-2 focus:ring-offset-primary transition-colors flex items-center gap-2"
             >
               <Download className="w-4 h-4" />
               {status === "error" ? "Tentar novamente" : "Atualizar agora"}
