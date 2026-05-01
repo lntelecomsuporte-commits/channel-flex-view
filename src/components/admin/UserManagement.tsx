@@ -141,21 +141,29 @@ const UserManagement = () => {
   };
 
   const handleToggleBlock = async (profileId: string, currentBlocked: boolean) => {
+    // Ao bloquear, também força logout remoto imediato
+    const updates: { is_blocked: boolean; force_signout_at?: string } = { is_blocked: !currentBlocked };
+    if (!currentBlocked) updates.force_signout_at = new Date().toISOString();
     const { error } = await supabase
       .from("profiles")
-      .update({ is_blocked: !currentBlocked })
+      .update(updates)
       .eq("id", profileId);
     if (error) {
       toast.error("Erro: " + error.message);
       return;
     }
-    toast.success(currentBlocked ? "Usuário desbloqueado" : "Usuário bloqueado");
+    toast.success(currentBlocked ? "Usuário desbloqueado" : "Usuário bloqueado e deslogado");
     queryClient.invalidateQueries({ queryKey: ["profiles"] });
   };
 
   const handleDelete = async (profileId: string, userId: string) => {
     if (deletingUserId) return;
     setDeletingUserId(userId);
+    // Força signout antes de deletar — garante que sessão ativa seja encerrada
+    await supabase
+      .from("profiles")
+      .update({ force_signout_at: new Date().toISOString() })
+      .eq("id", profileId);
     const { data, error } = await supabase.functions.invoke("manage-users", {
       body: { action: "delete", user_id: userId },
     });

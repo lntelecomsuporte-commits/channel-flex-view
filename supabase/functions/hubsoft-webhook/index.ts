@@ -275,8 +275,15 @@ Deno.serve(async (req) => {
           .eq("user_id", profile.user_id)
           .limit(1);
         if (!remainingAccess || remainingAccess.length === 0) {
-          await supabaseAdmin.from("profiles").update({ is_blocked: true }).eq("user_id", profile.user_id);
+          await supabaseAdmin.from("profiles")
+            .update({ is_blocked: true, force_signout_at: new Date().toISOString() })
+            .eq("user_id", profile.user_id);
           blocked.push(profile.user_id);
+        } else {
+          // Mesmo mantendo acesso por outra config, força re-checagem da sessão
+          await supabaseAdmin.from("profiles")
+            .update({ force_signout_at: new Date().toISOString() })
+            .eq("user_id", profile.user_id);
         }
       }
 
@@ -331,6 +338,10 @@ Deno.serve(async (req) => {
           .limit(1);
 
         if (!remainingAccess || remainingAccess.length === 0) {
+          // Força signout da sessão ativa antes de deletar
+          await supabaseAdmin.from("profiles")
+            .update({ force_signout_at: new Date().toISOString() })
+            .eq("user_id", profile.user_id);
           const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(profile.user_id);
           if (delErr) {
             console.error("deleteUser error:", profile.user_id, delErr);
@@ -340,6 +351,10 @@ Deno.serve(async (req) => {
             deleted.push(profile.user_id);
           }
         } else {
+          // Mantido em outra config — força re-login mesmo assim
+          await supabaseAdmin.from("profiles")
+            .update({ force_signout_at: new Date().toISOString() })
+            .eq("user_id", profile.user_id);
           console.log("User kept (still has access from other configs):", profile.user_id);
           kept.push(profile.user_id);
         }
