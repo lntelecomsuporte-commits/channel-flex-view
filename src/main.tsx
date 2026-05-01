@@ -2,6 +2,9 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { authStorageReady } from "./lib/nativeAuthStorage";
+import { installGlobalUpdatePromptGuard } from "./lib/updatePromptGuard";
+
+installGlobalUpdatePromptGuard();
 
 // No APK, espera a hidratação do storage nativo (Capacitor Preferences)
 // antes de montar o React. Sem isso, o Supabase lê o storage vazio na
