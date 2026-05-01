@@ -133,10 +133,26 @@ jobs:
             "versionCode": ${VERSION_CODE},
             "versionName": "${VERSION_NAME}",
             "url": "https://tv2.lntelecom.net/downloads/lntv-latest.apk",
+            "legacyUrl": "https://tv2.lntelecom.net/downloads/lntv-legacy.apk",
             "notes": "Build #${{ github.run_number }} — ${{ github.event.head_commit.message }}"
           }
           EOF
           cat out/version.json
+
+      - name: Build LEGACY APK (Android 5.0+ / minSdk 21)
+        working-directory: android
+        run: |
+          # Força minSdkVersion=21 só pra esse build extra (cobre Lollipop/5.x)
+          sed -i "s/minSdkVersion = [0-9]\+/minSdkVersion = 21/" variables.gradle
+          grep minSdkVersion variables.gradle
+          ./gradlew clean assembleRelease --no-daemon
+
+      - name: Copy LEGACY APK to out/
+        run: |
+          LEGACY_NAME="lntv-legacy-${{ github.run_number }}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "out/${LEGACY_NAME}"
+          cp "out/${LEGACY_NAME}" out/lntv-legacy.apk
+          ls -lh out/
 
       - name: Cleanup keystore from runner
         if: always()
@@ -161,11 +177,15 @@ jobs:
             Build automático #${{ github.run_number }}
             Commit: ${{ github.event.head_commit.message }}
 
-            APK: lntv-latest.apk (signed release)
+            APKs gerados:
+            - lntv-latest.apk (Android 7.0+ / minSdk 24) — recomendado
+            - lntv-legacy.apk (Android 5.0+ / minSdk 21) — TV boxes/dispositivos antigos
+
             versionCode: ${{ env.VERSION_CODE }}
             versionName: ${{ env.VERSION_NAME }}
           files: |
             out/lntv-latest.apk
+            out/lntv-legacy.apk
             out/version.json
           make_latest: "true"
         env:
