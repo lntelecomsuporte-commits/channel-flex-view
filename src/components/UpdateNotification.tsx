@@ -1,15 +1,42 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useAppUpdate } from "@/hooks/useAppUpdate";
 import { Download, X, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
-import { isSelectKey } from "@/lib/remoteKeys";
+import { setUpdatePromptController } from "@/lib/updatePromptGuard";
 
 export function UpdateNotification() {
   const { available, currentVersionCode, dismiss, download, status, progress, error } = useAppUpdate();
   const updateBtnRef = useRef<HTMLButtonElement>(null);
   const dismissBtnRef = useRef<HTMLButtonElement>(null);
+  const focusedActionRef = useRef<"update" | "dismiss">("update");
 
   const isBusy = status === "downloading" || status === "installing";
   const isOpen = !!available;
+
+  const focusUpdate = useCallback(() => {
+    focusedActionRef.current = "update";
+    updateBtnRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  const focusDismiss = useCallback(() => {
+    focusedActionRef.current = "dismiss";
+    dismissBtnRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  const moveFocus = useCallback(() => {
+    if (focusedActionRef.current === "update") {
+      focusDismiss();
+    } else {
+      focusUpdate();
+    }
+  }, [focusDismiss, focusUpdate]);
+
+  const activateFocused = useCallback(() => {
+    if (focusedActionRef.current === "dismiss") {
+      dismiss();
+    } else {
+      download();
+    }
+  }, [dismiss, download]);
 
   // Foca o botão "Atualizar agora" assim que o modal abre
   useEffect(() => {
@@ -18,80 +45,34 @@ export function UpdateNotification() {
       delete document.body.dataset.updatePromptOpen;
       return;
     }
-    const t = setTimeout(() => updateBtnRef.current?.focus(), 50);
+    focusUpdate();
+    requestAnimationFrame(focusUpdate);
+    const t = setTimeout(focusUpdate, 50);
+    const keepFocus = window.setInterval(() => {
+      const active = document.activeElement;
+      if (active !== updateBtnRef.current && active !== dismissBtnRef.current) {
+        if (focusedActionRef.current === "dismiss") focusDismiss();
+        else focusUpdate();
+      }
+    }, 250);
     return () => {
       clearTimeout(t);
+      clearInterval(keepFocus);
       delete document.body.dataset.updatePromptOpen;
     };
-  }, [isOpen]);
+  }, [focusDismiss, focusUpdate, isOpen]);
 
-  // Captura TODAS as teclas do controle remoto enquanto o modal está aberto,
-  // impede que cheguem no player/lista de canais por trás, e implementa
-  // navegação esquerda/direita entre os dois botões.
+  // Registra o modal no bloqueio global instalado antes do player.
   useEffect(() => {
-    if (!isOpen) return;
-
-    const stopRemoteEvent = (e: KeyboardEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      (e as KeyboardEvent & { stopImmediatePropagation?: () => void }).stopImmediatePropagation?.();
-    };
-
-    const handler = (e: KeyboardEvent) => {
-      // Bloqueia tudo que não é input — modal é totalmente modal pro remote
-      const key = e.key;
-
-      // ESC / Back: dispensa (se não estiver baixando)
-      if ((key === "Escape" || key === "GoBack" || e.keyCode === 27 || e.keyCode === 4) && !isBusy) {
-        stopRemoteEvent(e);
-        dismiss();
-        return;
-      }
-
-      // Setas: alterna entre os 2 botões
-      if (key === "ArrowLeft" || key === "ArrowRight" || key === "ArrowUp" || key === "ArrowDown") {
-        stopRemoteEvent(e);
-        if (isBusy) return;
-        const active = document.activeElement;
-        if (active === updateBtnRef.current) {
-          dismissBtnRef.current?.focus();
-        } else {
-          updateBtnRef.current?.focus();
-        }
-        return;
-      }
-
-      // Enter/OK: executa o botão focado aqui mesmo e não deixa o player receber keydown/keyup.
-      if (isSelectKey(e)) {
-        stopRemoteEvent(e);
-        if (isBusy) return;
-        const active = document.activeElement;
-        if (active === dismissBtnRef.current) {
-          dismiss();
-        } else {
-          download();
-        }
-        return;
-      }
-
-      // Qualquer outra tecla (números, canal, etc.): bloqueia
-      stopRemoteEvent(e);
-    };
-
-    const blockKeyUp = (e: KeyboardEvent) => {
-      stopRemoteEvent(e);
-    };
-
-    // capture=true pra interceptar ANTES dos handlers do player
-    window.addEventListener("keydown", handler, true);
-    window.addEventListener("keyup", blockKeyUp, true);
-    window.addEventListener("keypress", blockKeyUp, true);
+    if (!isOpen) {
+      setUpdatePromptController(null);
+      return;
+    }
+    setUpdatePromptController({ isOpen, isBusy, moveFocus, activateFocused, dismiss });
     return () => {
-      window.removeEventListener("keydown", handler, true);
-      window.removeEventListener("keyup", blockKeyUp, true);
-      window.removeEventListener("keypress", blockKeyUp, true);
+      setUpdatePromptController(null);
     };
-  }, [isOpen, isBusy, dismiss, download]);
+  }, [activateFocused, dismiss, isBusy, isOpen, moveFocus]);
 
   if (!available) return null;
 
