@@ -388,6 +388,13 @@ const PlayerPage = () => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.body.dataset.updatePromptOpen === "true") {
+        e.preventDefault();
+        e.stopPropagation();
+        (e as any).stopImmediatePropagation?.();
+        return;
+      }
+
       // FF/RW (MediaFastForward, MediaTrackNext, ChannelUp/Down): SEMPRE bloquear
       // a propagação ANTES de qualquer coisa. Sem isso, no Fire TV a Alexa fala
       // "não consigo pular essa transmissão" porque o sistema interpreta como
@@ -558,6 +565,13 @@ const PlayerPage = () => {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      if (document.body.dataset.updatePromptOpen === "true") {
+        e.preventDefault();
+        e.stopPropagation();
+        (e as any).stopImmediatePropagation?.();
+        return;
+      }
+
       if (!isSelectKey(e)) return;
       if (enterLongPressTimerRef.current) {
         clearTimeout(enterLongPressTimerRef.current);
