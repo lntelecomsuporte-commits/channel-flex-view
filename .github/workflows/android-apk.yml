@@ -155,11 +155,18 @@ jobs:
         run: |
           sed -i "s/minSdkVersion = [0-9]\+/minSdkVersion = 21/" android/variables.gradle
           grep minSdkVersion android/variables.gradle
-          # Re-sync sem os plugins SDK23+
           npx cap sync android
-          # Re-aplica versionCode/versionName (cap sync pode resetar)
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          text = manifest.read_text()
+          text = text.replace('android:name=".MainActivity"', 'android:name=".LegacyMainActivity"', 1)
+          text = text.replace('android:theme="@style/AppTheme.NoActionBarLaunch"', 'android:theme="@style/AppTheme.LegacyLaunch"', 1)
+          manifest.write_text(text)
+          PY
           sed -i "s/versionCode [0-9]\+/versionCode ${VERSION_CODE}/" android/app/build.gradle
           sed -i "s/versionName \"[^\"]*\"/versionName \"${VERSION_NAME}\"/" android/app/build.gradle
+          grep -E "LegacyMainActivity|AppTheme.LegacyLaunch" android/app/src/main/AndroidManifest.xml
           cd android && ./gradlew clean assembleRelease --no-daemon
 
       - name: Copy LEGACY APK to out/
