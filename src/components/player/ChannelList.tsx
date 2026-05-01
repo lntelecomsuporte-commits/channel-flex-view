@@ -387,6 +387,13 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
     if (!visible) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.body.dataset.updatePromptOpen === "true") {
+        e.preventDefault();
+        e.stopPropagation();
+        (e as any).stopImmediatePropagation?.();
+        return;
+      }
+
       if (synopsisProgram) {
         if (e.key === "Escape" || isSelectKey(e)) {
           e.preventDefault();
@@ -471,6 +478,13 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      if (document.body.dataset.updatePromptOpen === "true") {
+        e.preventDefault();
+        e.stopPropagation();
+        (e as any).stopImmediatePropagation?.();
+        return;
+      }
+
       // Soltou seta ↑/↓ depois de segurar → confirma o canal focado
       if ((e.key === "ArrowUp" || e.key === "ArrowDown") && arrowHeldRef.current) {
         arrowHeldRef.current = false;

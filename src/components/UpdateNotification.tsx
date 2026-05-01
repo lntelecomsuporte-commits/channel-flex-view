@@ -13,9 +13,16 @@ export function UpdateNotification() {
 
   // Foca o botão "Atualizar agora" assim que o modal abre
   useEffect(() => {
-    if (!isOpen) return;
+    document.body.dataset.updatePromptOpen = isOpen ? "true" : "false";
+    if (!isOpen) {
+      delete document.body.dataset.updatePromptOpen;
+      return;
+    }
     const t = setTimeout(() => updateBtnRef.current?.focus(), 50);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      delete document.body.dataset.updatePromptOpen;
+    };
   }, [isOpen]);
 
   // Captura TODAS as teclas do controle remoto enquanto o modal está aberto,
@@ -24,24 +31,26 @@ export function UpdateNotification() {
   useEffect(() => {
     if (!isOpen) return;
 
+    const stopRemoteEvent = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      (e as KeyboardEvent & { stopImmediatePropagation?: () => void }).stopImmediatePropagation?.();
+    };
+
     const handler = (e: KeyboardEvent) => {
       // Bloqueia tudo que não é input — modal é totalmente modal pro remote
       const key = e.key;
 
       // ESC / Back: dispensa (se não estiver baixando)
       if ((key === "Escape" || key === "GoBack" || e.keyCode === 27 || e.keyCode === 4) && !isBusy) {
-        e.preventDefault();
-        e.stopPropagation();
-        (e as KeyboardEvent & { stopImmediatePropagation?: () => void }).stopImmediatePropagation?.();
+        stopRemoteEvent(e);
         dismiss();
         return;
       }
 
       // Setas: alterna entre os 2 botões
       if (key === "ArrowLeft" || key === "ArrowRight" || key === "ArrowUp" || key === "ArrowDown") {
-        e.preventDefault();
-        e.stopPropagation();
-        (e as KeyboardEvent & { stopImmediatePropagation?: () => void }).stopImmediatePropagation?.();
+        stopRemoteEvent(e);
         if (isBusy) return;
         const active = document.activeElement;
         if (active === updateBtnRef.current) {
@@ -52,23 +61,37 @@ export function UpdateNotification() {
         return;
       }
 
-      // Enter/OK: deixa o botão focado tratar, mas impede propagação pra trás
+      // Enter/OK: executa o botão focado aqui mesmo e não deixa o player receber keydown/keyup.
       if (isSelectKey(e)) {
-        e.stopPropagation();
-        (e as KeyboardEvent & { stopImmediatePropagation?: () => void }).stopImmediatePropagation?.();
+        stopRemoteEvent(e);
+        if (isBusy) return;
+        const active = document.activeElement;
+        if (active === dismissBtnRef.current) {
+          dismiss();
+        } else {
+          download();
+        }
         return;
       }
 
       // Qualquer outra tecla (números, canal, etc.): bloqueia
-      e.preventDefault();
-      e.stopPropagation();
-      (e as KeyboardEvent & { stopImmediatePropagation?: () => void }).stopImmediatePropagation?.();
+      stopRemoteEvent(e);
+    };
+
+    const blockKeyUp = (e: KeyboardEvent) => {
+      stopRemoteEvent(e);
     };
 
     // capture=true pra interceptar ANTES dos handlers do player
     window.addEventListener("keydown", handler, true);
-    return () => window.removeEventListener("keydown", handler, true);
-  }, [isOpen, isBusy, dismiss]);
+    window.addEventListener("keyup", blockKeyUp, true);
+    window.addEventListener("keypress", blockKeyUp, true);
+    return () => {
+      window.removeEventListener("keydown", handler, true);
+      window.removeEventListener("keyup", blockKeyUp, true);
+      window.removeEventListener("keypress", blockKeyUp, true);
+    };
+  }, [isOpen, isBusy, dismiss, download]);
 
   if (!available) return null;
 
