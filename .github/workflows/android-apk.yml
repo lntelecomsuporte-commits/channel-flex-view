@@ -139,17 +139,28 @@ jobs:
           EOF
           cat out/version.json
 
-      - name: Build LEGACY APK (Android 5.0+ / minSdk 21)
-        working-directory: android
+      - name: Remove plugins incompatíveis com Android 5.x
         run: |
-          # Força minSdkVersion=21 e adiciona override pra ionfilesystem-android
-          # (que exige 23). Pode falhar em runtime no auto-update em Android 5.x,
-          # mas o app principal funciona normal — usuário baixa APK manualmente.
-          sed -i "s/minSdkVersion = [0-9]\+/minSdkVersion = 21/" variables.gradle
-          sed -i 's|tools:overrideLibrary="org.apache.cordova"|tools:overrideLibrary="org.apache.cordova,io.ionic.libs.ionfilesystemlib"|' app/src/main/AndroidManifest.xml
-          grep minSdkVersion variables.gradle
-          grep overrideLibrary app/src/main/AndroidManifest.xml
-          ./gradlew clean assembleRelease --no-daemon
+          # @capacitor/filesystem e @capacitor-community/file-opener exigem APIs SDK 23+
+          # e crasham no boot em Android 5.x mesmo com tools:overrideLibrary
+          # (porque o Capacitor registra os plugins nativos via reflection no startup).
+          # Desinstalando, o auto-update do APK fica indisponível no legacy
+          # (usuário baixa manualmente), mas o app abre normalmente.
+          npm uninstall @capacitor/filesystem @capacitor-community/file-opener --legacy-peer-deps || true
+          # Reset Android pra remover refs aos plugins removidos
+          rm -rf android/app/src/main/assets/capacitor.plugins.json || true
+          rm -rf android/capacitor-cordova-android-plugins || true
+
+      - name: Build LEGACY APK (Android 5.0+ / minSdk 21)
+        run: |
+          sed -i "s/minSdkVersion = [0-9]\+/minSdkVersion = 21/" android/variables.gradle
+          grep minSdkVersion android/variables.gradle
+          # Re-sync sem os plugins SDK23+
+          npx cap sync android
+          # Re-aplica versionCode/versionName (cap sync pode resetar)
+          sed -i "s/versionCode [0-9]\+/versionCode ${VERSION_CODE}/" android/app/build.gradle
+          sed -i "s/versionName \"[^\"]*\"/versionName \"${VERSION_NAME}\"/" android/app/build.gradle
+          cd android && ./gradlew clean assembleRelease --no-daemon
 
       - name: Copy LEGACY APK to out/
         run: |
