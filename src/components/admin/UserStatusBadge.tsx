@@ -21,6 +21,8 @@ type Session = {
   current_channel_name: string | null;
   is_watching: boolean;
   ip_address: string | null;
+  client_ipv4: string | null;
+  client_ipv6: string | null;
 };
 
 const ACTIVE_WINDOW_MS = 90_000;
@@ -177,6 +179,13 @@ export const UserStatusBadge = ({ userId }: UserStatusProps) => {
                 <Tv2 className="h-3 w-3 text-primary" /> {latest.current_channel_name}
               </p>
             )}
+            {isLoggedIn && latest && (latest.client_ipv4 || latest.client_ipv6) && (
+              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 flex-wrap">
+                <Globe className="h-3 w-3" />
+                {latest.client_ipv4 && <span>IPv4: {latest.client_ipv4}</span>}
+                {latest.client_ipv6 && <span className="ml-1">IPv6: {latest.client_ipv6}</span>}
+              </p>
+            )}
           </div>
 
           <div className="border-t border-border pt-2 space-y-2">
@@ -267,9 +276,12 @@ export const UserStatusBadge = ({ userId }: UserStatusProps) => {
                           📺 {s.current_channel_name}
                         </p>
                       )}
-                      {s.ip_address && (
-                        <p className="text-muted-foreground mt-0.5 ml-4 flex items-center gap-1">
-                          <Globe className="h-3 w-3" /> {s.ip_address}
+                      {(s.client_ipv4 || s.client_ipv6 || s.ip_address) && (
+                        <p className="text-muted-foreground mt-0.5 ml-4 flex items-center gap-1 flex-wrap">
+                          <Globe className="h-3 w-3" />
+                          {s.client_ipv4 && <span>IPv4: {s.client_ipv4}</span>}
+                          {s.client_ipv6 && <span>IPv6: {s.client_ipv6}</span>}
+                          {!s.client_ipv4 && !s.client_ipv6 && s.ip_address && <span>{s.ip_address}</span>}
                         </p>
                       )}
                     </div>
