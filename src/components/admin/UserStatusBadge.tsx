@@ -269,9 +269,12 @@ export const UserStatusBadge = ({ userId }: UserStatusProps) => {
                           📺 {s.current_channel_name}
                         </p>
                       )}
-                      {s.ip_address && (
-                        <p className="text-muted-foreground mt-0.5 ml-4 flex items-center gap-1">
-                          <Globe className="h-3 w-3" /> {s.ip_address}
+                      {(s.client_ipv4 || s.client_ipv6 || s.ip_address) && (
+                        <p className="text-muted-foreground mt-0.5 ml-4 flex items-center gap-1 flex-wrap">
+                          <Globe className="h-3 w-3" />
+                          {s.client_ipv4 && <span>IPv4: {s.client_ipv4}</span>}
+                          {s.client_ipv6 && <span>IPv6: {s.client_ipv6}</span>}
+                          {!s.client_ipv4 && !s.client_ipv6 && s.ip_address && <span>{s.ip_address}</span>}
                         </p>
                       )}
                     </div>
