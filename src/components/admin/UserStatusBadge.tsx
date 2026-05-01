@@ -179,6 +179,13 @@ export const UserStatusBadge = ({ userId }: UserStatusProps) => {
                 <Tv2 className="h-3 w-3 text-primary" /> {latest.current_channel_name}
               </p>
             )}
+            {isLoggedIn && latest && (latest.client_ipv4 || latest.client_ipv6) && (
+              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 flex-wrap">
+                <Globe className="h-3 w-3" />
+                {latest.client_ipv4 && <span>IPv4: {latest.client_ipv4}</span>}
+                {latest.client_ipv6 && <span className="ml-1">IPv6: {latest.client_ipv6}</span>}
+              </p>
+            )}
           </div>
 
           <div className="border-t border-border pt-2 space-y-2">
