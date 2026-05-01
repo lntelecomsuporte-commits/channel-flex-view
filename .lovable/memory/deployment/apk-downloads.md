@@ -22,18 +22,26 @@ type: feature
 location = /version.json {
     alias /opt/lntv-downloads/version.json;
     add_header Cache-Control "no-store" always;
+    add_header Access-Control-Allow-Origin "*" always;
+    add_header Access-Control-Allow-Methods "GET, OPTIONS" always;
     default_type application/json;
 }
 
 location ^~ /downloads/ {
     alias /opt/lntv-downloads/;
     add_header Cache-Control "no-store" always;
+    add_header Access-Control-Allow-Origin "*" always;
     autoindex off;
 }
 ```
 
-## ⚠️ ARMADILHA: alias + try_files
-NUNCA adicionar `try_files $uri =404;` em location com `alias` — bug clássico do nginx que retorna 404 mesmo com arquivo presente. Deixar sem `try_files`.
+## ⚠️ ARMADILHAS
+
+### 1. alias + try_files
+NUNCA adicionar `try_files $uri =404;` em location com `alias` — bug clássico do nginx que retorna 404 mesmo com arquivo presente.
+
+### 2. CORS obrigatório
+APK Capacitor roda em `https://localhost` (WebView). Fetch pra `https://tv2.lntelecom.net/version.json` é **cross-origin** → bloqueia sem `Access-Control-Allow-Origin`. Sem isso o auto-update silenciosamente falha (`useAppUpdate` loga "fetch falhou").
 
 ## URLs públicas
 - https://tv2.lntelecom.net/version.json
