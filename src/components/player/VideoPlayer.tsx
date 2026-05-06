@@ -53,6 +53,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   const [muted, setMuted] = useState(true);
   const [proxyTokenFailure, setProxyTokenFailure] = useState(false);
   const [resolvedUrl, setResolvedUrl] = useState<string>("");
+  const [resolvedSourceUrl, setResolvedSourceUrl] = useState<string>("");
   const [resolvedContentType, setResolvedContentType] = useState<string>("");
   // Quando uma URL HTTPS direta falha por CORS/302/rede no primeiro load,
   // tentamos UMA vez via proxy genérico (sem hardcode de host).
@@ -73,6 +74,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   useEffect(() => {
     if (youTubeVideoId) {
       setResolvedUrl("");
+      setResolvedSourceUrl("");
       return;
     }
     let cancelled = false;
@@ -118,12 +120,15 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       } else {
         if (!cancelled) setResolvedContentType("");
       }
-      if (!cancelled) setResolvedUrl(url);
+      if (!cancelled) {
+        setResolvedSourceUrl(activeStreamUrl);
+        setResolvedUrl(url);
+      }
     })();
     return () => { cancelled = true; };
   }, [activeStreamUrl, useProxyToken, channelId, youTubeVideoId, proxyTokenFailure, backupIndex, corsFallback]);
 
-  const playableStreamUrl = resolvedUrl;
+  const playableStreamUrl = resolvedSourceUrl === activeStreamUrl ? resolvedUrl : "";
 
   // Reset estado quando o canal (URL principal) muda.
   // O <video> tem key={streamUrl} então é remontado automaticamente — não
@@ -133,12 +138,16 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     setProxyTokenFailure(false);
     setBackupIndex(-1);
     setCorsFallback(false);
+    setResolvedUrl("");
+    setResolvedSourceUrl("");
     setResolvedContentType("");
   }, [streamUrl]);
 
   // Se mudar de backup dentro do mesmo canal, cada URL precisa recomeçar limpa.
   useEffect(() => {
     setCorsFallback(false);
+    setResolvedUrl("");
+    setResolvedSourceUrl("");
     setResolvedContentType("");
   }, [backupIndex]);
 
