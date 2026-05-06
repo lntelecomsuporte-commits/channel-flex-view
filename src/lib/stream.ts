@@ -168,9 +168,14 @@ export const getPlayableStreamUrl = (streamUrl: string): string => {
     const parsedUrl = new URL(streamUrl);
 
     if (Capacitor.isNativePlatform()) {
-      // HTTP no APK também precisa sair por HTTPS/proxy: mpegts.js roda via fetch/XHR
-      // no WebView e normalmente é bloqueado por CORS/cleartext quando vai direto.
-      if (parsedUrl.protocol === "http:") return buildProxyStreamUrl(streamUrl) ?? streamUrl;
+      // No APK, o WebView/HLS.js usa fetch/XHR e muitos provedores bloqueiam
+      // CORS mesmo em HTTPS. Para manter os canais sem "Ocultar URL" tocando
+      // de forma consistente, roteia HTTP e HTTPS pelo proxy genérico local.
+      // A URL original ainda fica visível no query param; só o modo
+      // `use_proxy_token` usa token assinado para ocultar a origem.
+      if (parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:") {
+        return buildProxyStreamUrl(streamUrl) ?? streamUrl;
+      }
       return streamUrl;
     }
 
