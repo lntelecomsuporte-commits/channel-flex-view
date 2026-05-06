@@ -486,7 +486,6 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       muted={muted}
       x-webkit-airplay="allow"
       webkit-playsinline="true"
-      crossOrigin="anonymous"
     />
   );
 });
