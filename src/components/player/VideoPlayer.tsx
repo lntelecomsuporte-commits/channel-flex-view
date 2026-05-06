@@ -126,22 +126,14 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   const playableStreamUrl = resolvedUrl;
 
   // Reset estado quando o canal (URL principal) muda.
-  // Para evitar "lampejo" do canal antigo durante o gap da resolução async,
-  // pausamos o <video> imediatamente e zeramos resolvedUrl (o effect de
-  // playback re-roda com URL vazia → early return + cleanup natural do hls/
-  // mpegts antigo). NÃO destruímos hls/mpegts manualmente aqui pra não causar
-  // race com o cleanup do effect de playback (que estava deixando canais
-  // HTTPS diretos sem reattach quando reset e novo resolve caíam no mesmo tick).
+  // O <video> tem key={streamUrl} então é remontado automaticamente — não
+  // precisamos zerar resolvedUrl manualmente (isso estava causando race que
+  // deixava canais HTTPS diretos sem reattach do hls.js).
   useEffect(() => {
     setProxyTokenFailure(false);
     setBackupIndex(-1);
     setCorsFallback(false);
     setResolvedContentType("");
-    setResolvedUrl("");
-    const video = videoRef.current;
-    if (video) {
-      try { video.pause(); } catch { /* ignore */ }
-    }
   }, [streamUrl]);
 
   // Se mudar de backup dentro do mesmo canal, cada URL precisa recomeçar limpa.
@@ -487,13 +479,13 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
 
   return (
     <video
+      key={streamUrl}
       ref={videoRef}
       className="absolute inset-0 w-full h-full object-contain"
       playsInline
       muted={muted}
       x-webkit-airplay="allow"
       webkit-playsinline="true"
-      crossOrigin="anonymous"
     />
   );
 });
