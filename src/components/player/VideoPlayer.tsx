@@ -179,10 +179,16 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       mpegtsRef.current = null;
     }
 
-    const isSignedProxyUrl = playableStreamUrl.includes("/functions/v1/hls-proxy") && playableStreamUrl.includes("st=");
     const handleVideoError = () => {
-      // Regra do projeto: HTTPS direto não cai para proxy automaticamente.
-      // Proxy só entra por HTTP/mixed-content ou quando "Ocultar URL" está ativo.
+      if (
+        !corsFallback &&
+        !isProxiedStreamUrl(playableStreamUrl) &&
+        !useProxyToken
+      ) {
+        console.warn("[Player] URL direta falhou — tentando via proxy genérico (1x)");
+        setCorsFallback(true);
+        return;
+      }
       tryNextBackup();
     };
     video.addEventListener("error", handleVideoError);
