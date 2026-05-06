@@ -479,6 +479,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
 
   return (
     <video
+      key={streamUrl}
       ref={videoRef}
       className="absolute inset-0 w-full h-full object-contain"
       playsInline
