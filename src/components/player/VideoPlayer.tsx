@@ -131,23 +131,20 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   const playableStreamUrl = resolvedSourceUrl === activeStreamUrl ? resolvedUrl : "";
 
   // Reset estado quando o canal (URL principal) muda.
-  // O <video> tem key={streamUrl} então é remontado automaticamente — não
-  // precisamos zerar resolvedUrl manualmente (isso estava causando race que
-  // deixava canais HTTPS diretos sem reattach do hls.js).
+  // Não zera resolvedUrl aqui: este effect roda após o effect de resolução.
+  // Em URLs diretas/síncronas ele pode apagar a URL recém-resolvida e deixar
+  // o canal sem src. O guard resolvedSourceUrl === activeStreamUrl já impede
+  // anexar a URL do canal anterior no <video> novo.
   useEffect(() => {
     setProxyTokenFailure(false);
     setBackupIndex(-1);
     setCorsFallback(false);
-    setResolvedUrl("");
-    setResolvedSourceUrl("");
     setResolvedContentType("");
   }, [streamUrl]);
 
   // Se mudar de backup dentro do mesmo canal, cada URL precisa recomeçar limpa.
   useEffect(() => {
     setCorsFallback(false);
-    setResolvedUrl("");
-    setResolvedSourceUrl("");
     setResolvedContentType("");
   }, [backupIndex]);
 
