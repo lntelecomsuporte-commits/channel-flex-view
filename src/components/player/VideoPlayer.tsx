@@ -126,9 +126,12 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   const playableStreamUrl = resolvedUrl;
 
   // Reset estado quando o canal (URL principal) muda.
-  // IMPORTANTE: corta o stream antigo IMEDIATAMENTE pra não tocar o canal anterior
-  // durante o gap (~100-800ms) da resolução assíncrona do novo URL (sign-stream-token /
-  // resolveRedirects). Sem isso o usuário vê "lampejo" do canal antigo antes do novo.
+  // Para evitar "lampejo" do canal antigo durante o gap da resolução async,
+  // pausamos o <video> imediatamente e zeramos resolvedUrl (o effect de
+  // playback re-roda com URL vazia → early return + cleanup natural do hls/
+  // mpegts antigo). NÃO destruímos hls/mpegts manualmente aqui pra não causar
+  // race com o cleanup do effect de playback (que estava deixando canais
+  // HTTPS diretos sem reattach quando reset e novo resolve caíam no mesmo tick).
   useEffect(() => {
     setProxyTokenFailure(false);
     setBackupIndex(-1);
@@ -138,16 +141,6 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     const video = videoRef.current;
     if (video) {
       try { video.pause(); } catch { /* ignore */ }
-      video.removeAttribute("src");
-      try { video.load(); } catch { /* ignore */ }
-    }
-    if (hlsRef.current) {
-      try { hlsRef.current.destroy(); } catch { /* ignore */ }
-      hlsRef.current = null;
-    }
-    if (mpegtsRef.current) {
-      try { mpegtsRef.current.destroy(); } catch { /* ignore */ }
-      mpegtsRef.current = null;
     }
   }, [streamUrl]);
 
