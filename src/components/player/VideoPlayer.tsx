@@ -125,12 +125,30 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
 
   const playableStreamUrl = resolvedUrl;
 
-  // Reset estado quando o canal (URL principal) muda
+  // Reset estado quando o canal (URL principal) muda.
+  // IMPORTANTE: corta o stream antigo IMEDIATAMENTE pra não tocar o canal anterior
+  // durante o gap (~100-800ms) da resolução assíncrona do novo URL (sign-stream-token /
+  // resolveRedirects). Sem isso o usuário vê "lampejo" do canal antigo antes do novo.
   useEffect(() => {
     setProxyTokenFailure(false);
     setBackupIndex(-1);
     setCorsFallback(false);
     setResolvedContentType("");
+    setResolvedUrl("");
+    const video = videoRef.current;
+    if (video) {
+      try { video.pause(); } catch { /* ignore */ }
+      video.removeAttribute("src");
+      try { video.load(); } catch { /* ignore */ }
+    }
+    if (hlsRef.current) {
+      try { hlsRef.current.destroy(); } catch { /* ignore */ }
+      hlsRef.current = null;
+    }
+    if (mpegtsRef.current) {
+      try { mpegtsRef.current.destroy(); } catch { /* ignore */ }
+      mpegtsRef.current = null;
+    }
   }, [streamUrl]);
 
   // Se mudar de backup dentro do mesmo canal, cada URL precisa recomeçar limpa.
