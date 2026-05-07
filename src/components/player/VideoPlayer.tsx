@@ -168,6 +168,11 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     const video = videoRef.current;
     if (!video || !playableStreamUrl) return;
 
+    setFirstFrameReady(false);
+    const onFirstPlaying = () => setFirstFrameReady(true);
+    video.addEventListener("playing", onFirstPlaying);
+    video.addEventListener("loadeddata", onFirstPlaying);
+
     video.pause();
     video.removeAttribute("src");
     video.load();
