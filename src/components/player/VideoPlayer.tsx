@@ -495,15 +495,25 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   }
 
   return (
-    <video
-      key={streamUrl}
-      ref={videoRef}
-      className="absolute inset-0 w-full h-full object-contain"
-      playsInline
-      muted={muted}
-      x-webkit-airplay="allow"
-      webkit-playsinline="true"
-    />
+    <>
+      <video
+        key={streamUrl}
+        ref={videoRef}
+        className="absolute inset-0 w-full h-full object-contain"
+        style={{ backgroundColor: "#000" }}
+        poster=""
+        playsInline
+        muted={muted}
+        x-webkit-airplay="allow"
+        webkit-playsinline="true"
+      />
+      {!firstFrameReady && (
+        <div
+          className="absolute inset-0 bg-black pointer-events-none"
+          aria-hidden="true"
+        />
+      )}
+    </>
   );
 });
 
