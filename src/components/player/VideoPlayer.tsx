@@ -58,6 +58,10 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   // Quando uma URL HTTPS direta falha por CORS/302/rede no primeiro load,
   // tentamos UMA vez via proxy genérico (sem hardcode de host).
   const [corsFallback, setCorsFallback] = useState(false);
+  // Cobre o flash do placeholder cinza do <video> da WebView entre destruir
+  // o engine antigo e o primeiro frame do novo. Reseta a cada nova URL e
+  // libera quando o evento `playing` dispara.
+  const [firstFrameReady, setFirstFrameReady] = useState(false);
   
   // Índice da URL ativa: -1 = principal (streamUrl), 0..N = backupStreamUrls[i]
   const [backupIndex, setBackupIndex] = useState(-1);
