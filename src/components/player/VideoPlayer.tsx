@@ -58,6 +58,10 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   // Quando uma URL HTTPS direta falha por CORS/302/rede no primeiro load,
   // tentamos UMA vez via proxy genérico (sem hardcode de host).
   const [corsFallback, setCorsFallback] = useState(false);
+  // Cobre o flash do placeholder cinza do <video> da WebView entre destruir
+  // o engine antigo e o primeiro frame do novo. Reseta a cada nova URL e
+  // libera quando o evento `playing` dispara.
+  const [firstFrameReady, setFirstFrameReady] = useState(false);
   
   // Índice da URL ativa: -1 = principal (streamUrl), 0..N = backupStreamUrls[i]
   const [backupIndex, setBackupIndex] = useState(-1);
@@ -163,6 +167,11 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !playableStreamUrl) return;
+
+    setFirstFrameReady(false);
+    const onFirstPlaying = () => setFirstFrameReady(true);
+    video.addEventListener("playing", onFirstPlaying);
+    video.addEventListener("loadeddata", onFirstPlaying);
 
     video.pause();
     video.removeAttribute("src");
@@ -450,6 +459,8 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     return () => {
       clearInterval(watchdog);
       video.removeEventListener("error", handleVideoError);
+      video.removeEventListener("playing", onFirstPlaying);
+      video.removeEventListener("loadeddata", onFirstPlaying);
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
@@ -484,15 +495,25 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   }
 
   return (
-    <video
-      key={streamUrl}
-      ref={videoRef}
-      className="absolute inset-0 w-full h-full object-contain"
-      playsInline
-      muted={muted}
-      x-webkit-airplay="allow"
-      webkit-playsinline="true"
-    />
+    <>
+      <video
+        key={streamUrl}
+        ref={videoRef}
+        className="absolute inset-0 w-full h-full object-contain"
+        style={{ backgroundColor: "#000" }}
+        poster=""
+        playsInline
+        muted={muted}
+        x-webkit-airplay="allow"
+        webkit-playsinline="true"
+      />
+      {!firstFrameReady && (
+        <div
+          className="absolute inset-0 bg-black pointer-events-none"
+          aria-hidden="true"
+        />
+      )}
+    </>
   );
 });
 
