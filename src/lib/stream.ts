@@ -199,14 +199,14 @@ export const resolveChannelStreamUrl = async (
   channelId: string | null | undefined,
   useProxyToken: boolean,
 ): Promise<string> => {
-  // Regra do admin: se "Ocultar URL" estiver marcado, força proxy + token
-  // assinado, independente de HTTP/HTTPS. Sem essa flag, HTTPS toca direto e
-  // HTTP usa proxy para evitar Mixed Content/CORS.
-  if (useProxyToken && channelId) {
+  // "Ocultar URL" só faz sentido no web (DevTools/F12). No APK não há como
+  // o usuário inspecionar a URL, então ignoramos a flag e usamos o fluxo
+  // padrão (HTTPS direto, HTTP pelo proxy) — melhor latência no zap.
+  if (useProxyToken && channelId && !Capacitor.isNativePlatform()) {
     const signed = await buildSignedProxyStreamUrl(streamUrl, channelId);
     if (signed) return signed;
-    // Segurança: se o admin marcou "Ocultar URL", nunca cai para URL direta
-    // nem para proxy legado com `url=` porque isso expõe a origem no F12.
+    // Segurança (web): se admin marcou "Ocultar URL" e o token falhou,
+    // bloqueia para não expor a origem no F12.
     console.error("[stream] Ocultar URL ativo, mas token assinado não foi gerado — bloqueando URL direta");
     return "";
   }
