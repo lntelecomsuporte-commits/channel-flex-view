@@ -459,6 +459,8 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     return () => {
       clearInterval(watchdog);
       video.removeEventListener("error", handleVideoError);
+      video.removeEventListener("playing", onFirstPlaying);
+      video.removeEventListener("loadeddata", onFirstPlaying);
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
