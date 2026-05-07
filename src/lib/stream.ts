@@ -168,12 +168,10 @@ export const getPlayableStreamUrl = (streamUrl: string): string => {
     const parsedUrl = new URL(streamUrl);
 
     if (Capacitor.isNativePlatform()) {
-      // No APK, o WebView/HLS.js usa fetch/XHR e muitos provedores bloqueiam
-      // CORS mesmo em HTTPS. Para manter os canais sem "Ocultar URL" tocando
-      // de forma consistente, roteia HTTP e HTTPS pelo proxy genérico local.
-      // A URL original ainda fica visível no query param; só o modo
-      // `use_proxy_token` usa token assinado para ocultar a origem.
-      if (parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:") {
+      // APK: HTTPS toca DIRETO (menor latência no zap, sem hop pelo edge).
+      // HTTP precisa do proxy porque WebView Android frequentemente bloqueia
+      // cleartext mesmo com allowMixedContent (varia por TV Box/versão).
+      if (parsedUrl.protocol === "http:") {
         return buildProxyStreamUrl(streamUrl) ?? streamUrl;
       }
       return streamUrl;
