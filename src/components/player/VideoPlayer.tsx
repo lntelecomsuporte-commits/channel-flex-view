@@ -133,7 +133,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       }
     })();
     return () => { cancelled = true; };
-  }, [activeStreamUrl, useProxyToken, channelId, youTubeVideoId, proxyTokenFailure, backupIndex, corsFallback]);
+  }, [activeStreamUrl, useProxyToken, forceProxyNative, channelId, youTubeVideoId, proxyTokenFailure, backupIndex, corsFallback]);
 
   const playableStreamUrl = resolvedSourceUrl === activeStreamUrl ? resolvedUrl : "";
 
