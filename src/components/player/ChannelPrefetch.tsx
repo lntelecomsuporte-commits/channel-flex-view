@@ -17,7 +17,7 @@ interface ChannelPrefetchProps {
  * NÃO usa <video> oculto (que custaria CPU/banda decodificando) — apenas
  * um fetch leve com cache do browser.
  */
-const ChannelPrefetch = ({ nextStreamUrl, channelId = null, useProxyToken = false }: ChannelPrefetchProps) => {
+const ChannelPrefetch = ({ nextStreamUrl, channelId = null, useProxyToken = false, forceProxyNative = false }: ChannelPrefetchProps) => {
   const lastFetchedRef = useRef<string | null>(null);
 
   const canPrefetchWithoutCorsNoise = (url: string) => {
@@ -38,8 +38,8 @@ const ChannelPrefetch = ({ nextStreamUrl, channelId = null, useProxyToken = fals
     // Pequeno atraso pra não disputar banda com o canal atual no início do zap
     const t = setTimeout(() => {
       (async () => {
-        const url = useProxyToken && channelId
-          ? await resolveChannelStreamUrl(nextStreamUrl, channelId, true)
+        const url = (useProxyToken || forceProxyNative) && channelId
+          ? await resolveChannelStreamUrl(nextStreamUrl, channelId, useProxyToken, forceProxyNative)
           : getPlayableStreamUrl(nextStreamUrl);
         if (!url || url === lastFetchedRef.current) return;
         if (!canPrefetchWithoutCorsNoise(url)) return;
@@ -58,7 +58,7 @@ const ChannelPrefetch = ({ nextStreamUrl, channelId = null, useProxyToken = fals
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [nextStreamUrl, channelId, useProxyToken]);
+  }, [nextStreamUrl, channelId, useProxyToken, forceProxyNative]);
 
   return null;
 };
