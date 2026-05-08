@@ -231,9 +231,12 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         // OBS: o modo "Ocultar URL" (signed proxy) usa os MESMOS valores do modo
         // direto. Os retries baixos antigos (1x/1500ms) faziam o player desistir
         // a qualquer hiccup de rede, derrubando o canal "depois de um pouco" no PWA.
-        fragLoadingMaxRetry: 8,
+        // Reduzido de 8→3: 404 em segmento (live edge sliding / token expirado)
+        // não se resolve repetindo o mesmo segmento — melhor recarregar o manifest
+        // (handler abaixo) ou pular pro backup.
+        fragLoadingMaxRetry: 3,
         fragLoadingRetryDelay: 500,
-        fragLoadingMaxRetryTimeout: 16000,
+        fragLoadingMaxRetryTimeout: 6000,
         manifestLoadingMaxRetry: 6,
         manifestLoadingRetryDelay: 500,
         manifestLoadingMaxRetryTimeout: 16000,
