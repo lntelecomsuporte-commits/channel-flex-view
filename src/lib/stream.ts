@@ -190,14 +190,18 @@ export const getPlayableStreamUrl = (streamUrl: string): string => {
 };
 
 /**
- * Resolve a URL final pro player considerando a flag `use_proxy_token` do canal.
- * Quando ativada, força o stream pelo hls-proxy com token assinado (esconde URL real).
- * Quando desativada, comportamento padrão (`getPlayableStreamUrl`).
+ * Resolve a URL final pro player considerando flags do canal:
+ *  - `useProxyToken`: força hls-proxy com token assinado (esconde URL real). Só web.
+ *  - `forceProxyNative`: força hls-proxy SEM esconder URL. Só APK.
+ *    Útil pra canais com cert ruim, HTTP cleartext, ou rotas instáveis —
+ *    o JWT continua na URL pra autenticar no hls-proxy, mas a URL real
+ *    do provedor fica visível em `?url=` (irrelevante no APK).
  */
 export const resolveChannelStreamUrl = async (
   streamUrl: string,
   channelId: string | null | undefined,
   useProxyToken: boolean,
+  forceProxyNative: boolean = false,
 ): Promise<string> => {
   // "Ocultar URL" só faz sentido no web (DevTools/F12). No APK não há como
   // o usuário inspecionar a URL, então ignoramos a flag e usamos o fluxo
@@ -209,6 +213,11 @@ export const resolveChannelStreamUrl = async (
     // bloqueia para não expor a origem no F12.
     console.error("[stream] Ocultar URL ativo, mas token assinado não foi gerado — bloqueando URL direta");
     return "";
+  }
+  // "Forçar proxy no APK": só atua em ambiente nativo. Mantém JWT mas sem
+  // assinatura HMAC (URL real visível em ?url=, irrelevante no APK).
+  if (forceProxyNative && Capacitor.isNativePlatform()) {
+    return buildProxyStreamUrl(streamUrl) ?? getPlayableStreamUrl(streamUrl);
   }
   return getPlayableStreamUrl(streamUrl);
 };
