@@ -6,6 +6,7 @@ interface ChannelPrefetchProps {
   nextStreamUrl: string | null;
   channelId?: string | null;
   useProxyToken?: boolean;
+  forceProxyNative?: boolean;
 }
 
 /**
