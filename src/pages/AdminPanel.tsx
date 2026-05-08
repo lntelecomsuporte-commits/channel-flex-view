@@ -441,10 +441,24 @@ const AdminPanel = () => {
                     onCheckedChange={(v) => setChannelForm((f) => ({ ...f, use_proxy_token: v }))}
                   />
                   <div className="space-y-1">
-                    <Label className="cursor-pointer">🔒 Ocultar URL do canal (proxy + token)</Label>
+                    <Label className="cursor-pointer">🔒 Ocultar URL do canal — Web (proxy + token)</Label>
                     <p className="text-xs text-muted-foreground">
-                      Força o stream pelo proxy local com URL temporária assinada (válida por 60s).
-                      A URL real do provedor não aparece no F12. Aumenta o uso de banda do servidor.
+                      Apenas no navegador (F12). Força o stream pelo proxy local com URL temporária assinada
+                      (válida por 60s). A URL real do provedor não aparece. <strong>Ignorado no APK.</strong>
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 rounded-md border border-border bg-muted/30 p-3">
+                  <Switch
+                    checked={channelForm.force_proxy_native}
+                    onCheckedChange={(v) => setChannelForm((f) => ({ ...f, force_proxy_native: v }))}
+                  />
+                  <div className="space-y-1">
+                    <Label className="cursor-pointer">📡 Forçar proxy no APK (sem token)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Apenas no APK. Passa o stream pelo proxy local sem assinatura — útil pra canais com
+                      certificado ruim, HTTP cleartext, ou rotas instáveis. <strong>Aumenta latência e banda
+                      do servidor.</strong> Ignorado na web.
                     </p>
                   </div>
                 </div>
