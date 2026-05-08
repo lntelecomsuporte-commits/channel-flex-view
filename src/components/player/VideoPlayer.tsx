@@ -34,6 +34,9 @@ interface VideoPlayerProps {
    *  com token assinado (esconde a URL real do provedor no F12). */
   channelId?: string | null;
   useProxyToken?: boolean;
+  /** Quando true, força o stream pelo hls-proxy no APK (sem token assinado).
+   *  Útil pra canais com cert ruim/HTTP/rotas instáveis. Ignorado na web. */
+  forceProxyNative?: boolean;
   /** Lista ordenada de URLs de fallback. Quando o player esgota tentativas
    *  na URL principal (erro fatal não-recuperável), avança automaticamente
    *  para a próxima URL desta lista. */
@@ -45,7 +48,7 @@ export interface VideoPlayerHandle {
   getHls: () => Hls | null;
 }
 
-const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, backupStreamUrls = null }, ref) => {
+const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, forceProxyNative = false, backupStreamUrls = null }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const mpegtsRef = useRef<mpegts.Player | null>(null);
