@@ -90,13 +90,13 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       if (useProxyToken && channelId && !proxyTokenFailure && backupIndex < 0) {
         // Token assinado só faz sentido na URL principal (cadastrada no admin).
         // Em backup, vai direto/proxy normal.
-        url = await resolveChannelStreamUrl(activeStreamUrl, channelId, true);
+        url = await resolveChannelStreamUrl(activeStreamUrl, channelId, true, forceProxyNative);
       } else if (corsFallback) {
         // Fallback genérico: URL HTTPS direta falhou por CORS/302/rede.
         // Tenta UMA vez via proxy antes de pular pro próximo backup.
         url = buildProxyStreamUrl(activeStreamUrl) ?? getPlayableStreamUrl(activeStreamUrl);
       } else {
-        url = getPlayableStreamUrl(activeStreamUrl);
+        url = await resolveChannelStreamUrl(activeStreamUrl, channelId, false, forceProxyNative);
         // No APK: se a URL é HTTPS direta (não-proxy) tenta resolver
         // redirects (encurtadores 301/302) ANTES do hls.js, pra ficar
         // equivalente ao VLC nativo. Se falhar, segue com a URL original.
