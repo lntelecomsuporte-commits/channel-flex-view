@@ -153,6 +153,7 @@ const AdminPanel = () => {
       epg_grab_logo: isXmltv ? channelForm.epg_grab_logo : false,
       epg_show_synopsis: channelForm.epg_show_synopsis,
       use_proxy_token: channelForm.use_proxy_token,
+      force_proxy_native: channelForm.force_proxy_native,
     };
     let error;
     if (editingChannelId) {
