@@ -197,6 +197,7 @@ const AdminPanel = () => {
       epg_grab_logo: (ch as any).epg_grab_logo ?? false,
       epg_show_synopsis: (ch as any).epg_show_synopsis ?? false,
       use_proxy_token: (ch as any).use_proxy_token ?? false,
+      force_proxy_native: (ch as any).force_proxy_native ?? false,
     });
     requestAnimationFrame(() => {
       channelFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
