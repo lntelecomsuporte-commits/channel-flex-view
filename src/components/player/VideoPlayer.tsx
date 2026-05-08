@@ -231,9 +231,12 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         // OBS: o modo "Ocultar URL" (signed proxy) usa os MESMOS valores do modo
         // direto. Os retries baixos antigos (1x/1500ms) faziam o player desistir
         // a qualquer hiccup de rede, derrubando o canal "depois de um pouco" no PWA.
-        fragLoadingMaxRetry: 8,
+        // Reduzido de 8→3: 404 em segmento (live edge sliding / token expirado)
+        // não se resolve repetindo o mesmo segmento — melhor recarregar o manifest
+        // (handler abaixo) ou pular pro backup.
+        fragLoadingMaxRetry: 3,
         fragLoadingRetryDelay: 500,
-        fragLoadingMaxRetryTimeout: 16000,
+        fragLoadingMaxRetryTimeout: 6000,
         manifestLoadingMaxRetry: 6,
         manifestLoadingRetryDelay: 500,
         manifestLoadingMaxRetryTimeout: 16000,
@@ -282,7 +285,37 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       // em vez de imagem congelada).
       let mediaErrorRecoveryAttempts = 0;
       let networkErrorRetries = 0;
+      let frag404ReloadAttempts = 0;
+      let lastFrag404ReloadAt = 0;
       hls.on(Hls.Events.ERROR, (_event, data) => {
+        // === Tratamento precoce de 404 em fragmento (NÃO-fatal) ===
+        // Causa típica: live edge sliding ou token de segmento expirado entre
+        // o load do manifest e o pedido do segmento. Repetir o mesmo segmento
+        // não resolve — recarrega o manifest pra pegar a janela atualizada.
+        if (
+          !data.fatal &&
+          data.details === "fragLoadError" &&
+          (data.response?.code === 404 || data.response?.code === 410)
+        ) {
+          const now = Date.now();
+          if (now - lastFrag404ReloadAt > 3000) {
+            lastFrag404ReloadAt = now;
+            frag404ReloadAttempts++;
+            if (frag404ReloadAttempts > 2) {
+              console.warn("[HLS] 404 persistente em fragmento — pulando pro backup");
+              if (tryNextBackup()) return;
+            } else {
+              console.warn(`[HLS] 404 em fragmento (#${frag404ReloadAttempts}) — recarregando manifest`);
+              try {
+                hls.stopLoad();
+                hls.startLoad(-1);
+              } catch (e) {
+                console.warn("[HLS] Falha ao recarregar manifest:", e);
+              }
+            }
+          }
+          return;
+        }
         if (!data.fatal) return;
         switch (data.type) {
           case Hls.ErrorTypes.NETWORK_ERROR: {
@@ -338,6 +371,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       hls.on(Hls.Events.FRAG_LOADED, () => {
         mediaErrorRecoveryAttempts = 0;
         networkErrorRetries = 0;
+        frag404ReloadAttempts = 0;
       });
 
       // === Plano C: auto-recovery quando travar imagem por >4s ===
