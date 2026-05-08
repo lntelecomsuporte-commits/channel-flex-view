@@ -86,6 +86,7 @@ export type Database = {
           epg_show_synopsis: boolean
           epg_type: string | null
           epg_url: string | null
+          force_proxy_native: boolean
           id: string
           is_active: boolean
           logo_url: string | null
@@ -106,6 +107,7 @@ export type Database = {
           epg_show_synopsis?: boolean
           epg_type?: string | null
           epg_url?: string | null
+          force_proxy_native?: boolean
           id?: string
           is_active?: boolean
           logo_url?: string | null
@@ -126,6 +128,7 @@ export type Database = {
           epg_show_synopsis?: boolean
           epg_type?: string | null
           epg_url?: string | null
+          force_proxy_native?: boolean
           id?: string
           is_active?: boolean
           logo_url?: string | null

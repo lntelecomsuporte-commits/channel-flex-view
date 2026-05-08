@@ -1,0 +1,1 @@
+ALTER TABLE public.channels ADD COLUMN force_proxy_native boolean NOT NULL DEFAULT false;
