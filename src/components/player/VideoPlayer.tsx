@@ -371,6 +371,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       hls.on(Hls.Events.FRAG_LOADED, () => {
         mediaErrorRecoveryAttempts = 0;
         networkErrorRetries = 0;
+        frag404ReloadAttempts = 0;
       });
 
       // === Plano C: auto-recovery quando travar imagem por >4s ===
