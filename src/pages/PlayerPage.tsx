@@ -674,6 +674,7 @@ const PlayerPage = () => {
             streamUrl={currentChannel.stream_url}
             channelId={currentChannel.id}
             useProxyToken={(currentChannel as any).use_proxy_token ?? false}
+            forceProxyNative={(currentChannel as any).force_proxy_native ?? false}
             backupStreamUrls={(currentChannel as any).backup_stream_urls ?? null}
           />
           {/* Pre-aquece o próximo canal (UP) e o anterior (DOWN) — corta o zap */}
@@ -693,6 +694,11 @@ const PlayerPage = () => {
                 ? ((channels[(currentIndex + 1) % channels.length] as any)?.use_proxy_token ?? false)
                 : false
             }
+            forceProxyNative={
+              channels && channels.length > 1
+                ? ((channels[(currentIndex + 1) % channels.length] as any)?.force_proxy_native ?? false)
+                : false
+            }
           />
           <ChannelPrefetch
             nextStreamUrl={
@@ -708,6 +714,11 @@ const PlayerPage = () => {
             useProxyToken={
               channels && channels.length > 1
                 ? ((channels[(currentIndex - 1 + channels.length) % channels.length] as any)?.use_proxy_token ?? false)
+                : false
+            }
+            forceProxyNative={
+              channels && channels.length > 1
+                ? ((channels[(currentIndex - 1 + channels.length) % channels.length] as any)?.force_proxy_native ?? false)
                 : false
             }
           />

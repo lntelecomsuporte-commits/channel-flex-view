@@ -26,7 +26,7 @@ import { getLocalFunctionUrl, LOCAL_SUPABASE_PUBLISHABLE_KEY } from "@/lib/local
 const emptyChannelForm = {
   name: "", channel_number: "", stream_url: "", backup_stream_urls: "", logo_url: "", category_id: "", is_active: true,
   epg_type: "", epg_url: "", epg_alt_text: "", epg_channel_id: "", epg_grab_logo: false, epg_show_synopsis: false,
-  use_proxy_token: false,
+  use_proxy_token: false, force_proxy_native: false,
 };
 
 const AdminPanel = () => {
@@ -153,6 +153,7 @@ const AdminPanel = () => {
       epg_grab_logo: isXmltv ? channelForm.epg_grab_logo : false,
       epg_show_synopsis: channelForm.epg_show_synopsis,
       use_proxy_token: channelForm.use_proxy_token,
+      force_proxy_native: channelForm.force_proxy_native,
     };
     let error;
     if (editingChannelId) {
@@ -196,6 +197,7 @@ const AdminPanel = () => {
       epg_grab_logo: (ch as any).epg_grab_logo ?? false,
       epg_show_synopsis: (ch as any).epg_show_synopsis ?? false,
       use_proxy_token: (ch as any).use_proxy_token ?? false,
+      force_proxy_native: (ch as any).force_proxy_native ?? false,
     });
     requestAnimationFrame(() => {
       channelFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -439,10 +441,24 @@ const AdminPanel = () => {
                     onCheckedChange={(v) => setChannelForm((f) => ({ ...f, use_proxy_token: v }))}
                   />
                   <div className="space-y-1">
-                    <Label className="cursor-pointer">🔒 Ocultar URL do canal (proxy + token)</Label>
+                    <Label className="cursor-pointer">🔒 Ocultar URL do canal — Web (proxy + token)</Label>
                     <p className="text-xs text-muted-foreground">
-                      Força o stream pelo proxy local com URL temporária assinada (válida por 60s).
-                      A URL real do provedor não aparece no F12. Aumenta o uso de banda do servidor.
+                      Apenas no navegador (F12). Força o stream pelo proxy local com URL temporária assinada
+                      (válida por 60s). A URL real do provedor não aparece. <strong>Ignorado no APK.</strong>
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 rounded-md border border-border bg-muted/30 p-3">
+                  <Switch
+                    checked={channelForm.force_proxy_native}
+                    onCheckedChange={(v) => setChannelForm((f) => ({ ...f, force_proxy_native: v }))}
+                  />
+                  <div className="space-y-1">
+                    <Label className="cursor-pointer">📡 Forçar proxy no APK (sem token)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Apenas no APK. Passa o stream pelo proxy local sem assinatura — útil pra canais com
+                      certificado ruim, HTTP cleartext, ou rotas instáveis. <strong>Aumenta latência e banda
+                      do servidor.</strong> Ignorado na web.
                     </p>
                   </div>
                 </div>

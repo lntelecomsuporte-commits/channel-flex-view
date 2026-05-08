@@ -34,6 +34,9 @@ interface VideoPlayerProps {
    *  com token assinado (esconde a URL real do provedor no F12). */
   channelId?: string | null;
   useProxyToken?: boolean;
+  /** Quando true, força o stream pelo hls-proxy no APK (sem token assinado).
+   *  Útil pra canais com cert ruim/HTTP/rotas instáveis. Ignorado na web. */
+  forceProxyNative?: boolean;
   /** Lista ordenada de URLs de fallback. Quando o player esgota tentativas
    *  na URL principal (erro fatal não-recuperável), avança automaticamente
    *  para a próxima URL desta lista. */
@@ -45,7 +48,7 @@ export interface VideoPlayerHandle {
   getHls: () => Hls | null;
 }
 
-const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, backupStreamUrls = null }, ref) => {
+const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, forceProxyNative = false, backupStreamUrls = null }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const mpegtsRef = useRef<mpegts.Player | null>(null);
@@ -87,13 +90,13 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       if (useProxyToken && channelId && !proxyTokenFailure && backupIndex < 0) {
         // Token assinado só faz sentido na URL principal (cadastrada no admin).
         // Em backup, vai direto/proxy normal.
-        url = await resolveChannelStreamUrl(activeStreamUrl, channelId, true);
+        url = await resolveChannelStreamUrl(activeStreamUrl, channelId, true, forceProxyNative);
       } else if (corsFallback) {
         // Fallback genérico: URL HTTPS direta falhou por CORS/302/rede.
         // Tenta UMA vez via proxy antes de pular pro próximo backup.
         url = buildProxyStreamUrl(activeStreamUrl) ?? getPlayableStreamUrl(activeStreamUrl);
       } else {
-        url = getPlayableStreamUrl(activeStreamUrl);
+        url = await resolveChannelStreamUrl(activeStreamUrl, channelId, false, forceProxyNative);
         // No APK: se a URL é HTTPS direta (não-proxy) tenta resolver
         // redirects (encurtadores 301/302) ANTES do hls.js, pra ficar
         // equivalente ao VLC nativo. Se falhar, segue com a URL original.
@@ -130,7 +133,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
       }
     })();
     return () => { cancelled = true; };
-  }, [activeStreamUrl, useProxyToken, channelId, youTubeVideoId, proxyTokenFailure, backupIndex, corsFallback]);
+  }, [activeStreamUrl, useProxyToken, forceProxyNative, channelId, youTubeVideoId, proxyTokenFailure, backupIndex, corsFallback]);
 
   const playableStreamUrl = resolvedSourceUrl === activeStreamUrl ? resolvedUrl : "";
 
