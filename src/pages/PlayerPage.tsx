@@ -165,6 +165,10 @@ const PlayerPage = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [unlockedAdult, setUnlockedAdult] = useState<Set<string>>(() => new Set());
   const [pendingAdult, setPendingAdult] = useState<{ id: string; revertIndex: number } | null>(null);
+  const modalOpenRef = useRef(false);
+  useEffect(() => {
+    modalOpenRef.current = settingsOpen || !!pendingAdult;
+  }, [settingsOpen, pendingAdult]);
   const lastSafeIndexRef = useRef(0);
   const [adultPin, setAdultPin] = useState("1234");
 
@@ -456,8 +460,12 @@ const PlayerPage = () => {
         return;
       }
 
-      // Settings menu / PIN modal capturam seus próprios eventos
-      if (settingsOpen || pendingAdult) return;
+      // Settings menu / PIN modal capturam seus próprios eventos.
+      // Usa ref pra evitar closure stale — qualquer modal aberto: ignora aqui
+      // (sem stopPropagation pra que o handler do modal processe normalmente).
+      if (modalOpenRef.current || settingsOpen || pendingAdult || document.body.dataset.modalOpen === "true") {
+        return;
+      }
 
       // FF/RW (MediaFastForward, MediaTrackNext, ChannelUp/Down): SEMPRE bloquear
       // a propagação ANTES de qualquer coisa. Sem isso, no Fire TV a Alexa fala
