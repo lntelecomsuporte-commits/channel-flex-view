@@ -4,7 +4,7 @@ interface PinPromptProps {
   title?: string;
   description?: string;
   expectedPin?: string; // se omitido, retorna o que o usuário digitou via onSubmit
-  onSubmit: (pin: string) => boolean | void; // retornar false = PIN errado
+  onSubmit: (pin: string) => boolean | void | Promise<unknown>;
   onCancel: () => void;
 }
 
