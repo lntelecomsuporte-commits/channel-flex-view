@@ -903,6 +903,36 @@ const PlayerPage = () => {
               onClose={() => setSynopsisProgram(null)}
             />
           )}
+
+          {pendingAdult && (
+            <PinPrompt
+              title="Canal restrito"
+              description="Digite o PIN parental pra liberar este canal"
+              expectedPin={adultPin}
+              onSubmit={() => {
+                setUnlockedAdult((prev) => {
+                  const next = new Set(prev);
+                  next.add(pendingAdult.id);
+                  return next;
+                });
+                setPendingAdult(null);
+              }}
+              onCancel={() => {
+                const revertTo = pendingAdult.revertIndex;
+                setPendingAdult(null);
+                setCurrentIndex(revertTo);
+              }}
+            />
+          )}
+
+          {settingsOpen && user && (
+            <SettingsMenu
+              userId={user.id}
+              userEmail={user.email}
+              onClose={() => setSettingsOpen(false)}
+              onLogout={signOut}
+            />
+          )}
         </>
       )}
     </div>
