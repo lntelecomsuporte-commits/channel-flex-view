@@ -44,7 +44,7 @@ const UserManagement = () => {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
-  const [editForm, setEditForm] = useState({ password: "", display_name: "" });
+  const [editForm, setEditForm] = useState({ password: "", display_name: "", adult_pin: "" });
   const [editCategories, setEditCategories] = useState<string[]>([]);
   const [updating, setUpdating] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
@@ -109,9 +109,14 @@ const UserManagement = () => {
     }
   };
 
-  const handleEdit = (profile: Profile) => {
+  const handleEdit = async (profile: Profile) => {
     setEditingUser(profile);
-    setEditForm({ password: "", display_name: profile.display_name || "" });
+    const { data } = await supabase
+      .from("profiles")
+      .select("adult_pin")
+      .eq("user_id", profile.user_id)
+      .maybeSingle();
+    setEditForm({ password: "", display_name: profile.display_name || "", adult_pin: (data as any)?.adult_pin || "" });
   };
 
   const handleUpdate = async () => {
@@ -126,6 +131,24 @@ const UserManagement = () => {
       const { data, error } = await supabase.functions.invoke("manage-users", { body });
       if (error || data?.error) {
         toast.error("Erro ao atualizar: " + (data?.error || error?.message));
+        setUpdating(false);
+        return;
+      }
+    }
+
+    // Update adult_pin if provided
+    if (editForm.adult_pin) {
+      if (!/^\d{4,8}$/.test(editForm.adult_pin)) {
+        toast.error("PIN parental deve ter 4 a 8 dígitos numéricos");
+        setUpdating(false);
+        return;
+      }
+      const { error: pinErr } = await supabase
+        .from("profiles")
+        .update({ adult_pin: editForm.adult_pin })
+        .eq("user_id", editingUser.user_id);
+      if (pinErr) {
+        toast.error("Erro ao atualizar PIN: " + pinErr.message);
         setUpdating(false);
         return;
       }
@@ -298,6 +321,18 @@ const UserManagement = () => {
             <div className="space-y-2">
               <Label>Nova Senha</Label>
               <Input type="password" value={editForm.password} onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))} placeholder="Deixe vazio para manter a atual" />
+            </div>
+            <div className="space-y-2">
+              <Label>PIN Parental (Conteúdo Adulto / Censurado)</Label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={8}
+                value={editForm.adult_pin}
+                onChange={(e) => setEditForm((f) => ({ ...f, adult_pin: e.target.value.replace(/\D/g, "") }))}
+                placeholder="4 a 8 dígitos (padrão: 1234)"
+              />
+              <p className="text-xs text-muted-foreground">Senha pedida ao abrir canais marcados como adulto.</p>
             </div>
             <CategoryCheckboxes
               selected={editCategories}
