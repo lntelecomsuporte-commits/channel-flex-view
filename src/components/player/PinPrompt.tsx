@@ -151,10 +151,10 @@ export default function PinPrompt({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-background/85 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-background/95 animate-fade-in"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="glass-panel p-6 w-[min(92vw,420px)] text-center">
+      <div className="p-6 w-[min(92vw,420px)] text-center bg-card border border-border rounded-xl">
         <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">🔞 Conteúdo restrito</p>
         <h2 className="text-2xl font-bold text-foreground mb-1">{title}</h2>
         {description && <p className="text-sm text-muted-foreground mb-3">{description}</p>}
