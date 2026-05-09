@@ -6,6 +6,7 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.KeyEvent;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
@@ -89,6 +90,25 @@ public class LegacyMainActivity extends Activity {
                 CookieSyncManager.getInstance().sync();
             }
         } catch (Exception ignored) {}
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_MENU
+                || keyCode == 172 /* KEYCODE_GUIDE */
+                || keyCode == KeyEvent.KEYCODE_TV_CONTENTS_MENU
+                || keyCode == KeyEvent.KEYCODE_TV_MEDIA_CONTEXT_MENU) {
+            try {
+                if (webView != null) {
+                    webView.evaluateJavascript(
+                        "window.dispatchEvent(new CustomEvent('remotemenu'));",
+                        null
+                    );
+                    return true;
+                }
+            } catch (Exception ignored) {}
+        }
+        return super.onKeyDown(keyCode, event);
     }
 
     @Override
