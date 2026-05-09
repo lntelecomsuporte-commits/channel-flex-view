@@ -123,11 +123,15 @@ const UserManagement = () => {
     if (!editingUser) return;
     setUpdating(true);
 
-    // Update user info if needed
-    if (editForm.password || editForm.display_name) {
+    // Só chama o edge function se senha mudou OU display_name foi alterado de fato
+    const displayNameChanged =
+      editForm.display_name.trim() !== (editingUser.display_name || "").trim();
+    const passwordChanged = editForm.password.length > 0;
+
+    if (passwordChanged || displayNameChanged) {
       const body: Record<string, string> = { action: "update", user_id: editingUser.user_id };
-      if (editForm.password) body.password = editForm.password;
-      if (editForm.display_name) body.display_name = editForm.display_name;
+      if (passwordChanged) body.password = editForm.password;
+      if (displayNameChanged) body.display_name = editForm.display_name;
       const { data, error } = await supabase.functions.invoke("manage-users", { body });
       if (error || data?.error) {
         toast.error("Erro ao atualizar: " + (data?.error || error?.message));
