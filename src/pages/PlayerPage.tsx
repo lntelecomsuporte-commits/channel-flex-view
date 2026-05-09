@@ -714,14 +714,23 @@ const PlayerPage = () => {
     >
       {currentChannel && (
         <>
-          <VideoPlayer
-            ref={playerRef}
-            streamUrl={currentChannel.stream_url}
-            channelId={currentChannel.id}
-            useProxyToken={(currentChannel as any).use_proxy_token ?? false}
-            forceProxyNative={(currentChannel as any).force_proxy_native ?? false}
-            backupStreamUrls={(currentChannel as any).backup_stream_urls ?? null}
-          />
+          {!pendingAdult ? (
+            <VideoPlayer
+              ref={playerRef}
+              streamUrl={currentChannel.stream_url}
+              channelId={currentChannel.id}
+              useProxyToken={(currentChannel as any).use_proxy_token ?? false}
+              forceProxyNative={(currentChannel as any).force_proxy_native ?? false}
+              backupStreamUrls={(currentChannel as any).backup_stream_urls ?? null}
+            />
+          ) : (
+            <div className="absolute inset-0 bg-background flex items-center justify-center z-[5]">
+              <div className="text-center text-muted-foreground">
+                <p className="text-6xl mb-4">🔞</p>
+                <p>Conteúdo restrito — digite o PIN parental</p>
+              </div>
+            </div>
+          )}
           {/* Pre-aquece o próximo canal (UP) e o anterior (DOWN) — corta o zap */}
           <ChannelPrefetch
             nextStreamUrl={
