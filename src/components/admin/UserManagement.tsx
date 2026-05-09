@@ -109,9 +109,14 @@ const UserManagement = () => {
     }
   };
 
-  const handleEdit = (profile: Profile) => {
+  const handleEdit = async (profile: Profile) => {
     setEditingUser(profile);
-    setEditForm({ password: "", display_name: profile.display_name || "" });
+    const { data } = await supabase
+      .from("profiles")
+      .select("adult_pin")
+      .eq("user_id", profile.user_id)
+      .maybeSingle();
+    setEditForm({ password: "", display_name: profile.display_name || "", adult_pin: (data as any)?.adult_pin || "" });
   };
 
   const handleUpdate = async () => {
