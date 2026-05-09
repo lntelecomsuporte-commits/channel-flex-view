@@ -117,10 +117,10 @@ export default function SettingsMenu({ onClose, onLogout, userId, userEmail }: S
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-background/85 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-background/95 animate-fade-in"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="glass-panel p-6 w-[min(92vw,560px)] max-h-[90vh] overflow-y-auto">
+      <div className="p-6 w-[min(92vw,560px)] max-h-[90vh] overflow-y-auto bg-card border border-border rounded-xl">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-foreground">⚙️ Configurações</h2>
           <button
