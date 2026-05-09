@@ -456,8 +456,15 @@ const PlayerPage = () => {
         return;
       }
 
-      // Settings menu / PIN modal capturam seus próprios eventos
-      if (settingsOpen || pendingAdult) return;
+      // Settings menu / PIN modal capturam seus próprios eventos.
+      // Bloqueia TUDO aqui pra evitar que setas/OK/voltar vazem pro player
+      // (troca de canal "fantasma" no fundo enquanto navega no modal).
+      if (settingsOpen || pendingAdult || document.body.dataset.modalOpen === "true") {
+        // Não chama preventDefault/stopPropagation: deixa o listener do modal
+        // (registrado em capture também) processar normalmente. Só impede
+        // o PlayerPage de reagir.
+        return;
+      }
 
       // FF/RW (MediaFastForward, MediaTrackNext, ChannelUp/Down): SEMPRE bloquear
       // a propagação ANTES de qualquer coisa. Sem isso, no Fire TV a Alexa fala
