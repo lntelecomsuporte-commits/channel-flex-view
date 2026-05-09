@@ -190,6 +190,7 @@ jobs:
           manifest = Path('android/app/src/main/AndroidManifest.xml')
           text = manifest.read_text()
           text = text.replace('android:name=".MainActivity"', 'android:name=".LegacyMainActivity"', 1)
+          text = text.replace('android:targetActivity=".MainActivity"', 'android:targetActivity=".LegacyMainActivity"', 1)
           text = text.replace('android:theme="@style/AppTheme.NoActionBarLaunch"', 'android:theme="@style/AppTheme.LegacyLaunch"', 1)
           manifest.write_text(text)
           PY
