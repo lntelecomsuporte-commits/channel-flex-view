@@ -44,7 +44,7 @@ const UserManagement = () => {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
-  const [editForm, setEditForm] = useState({ password: "", display_name: "" });
+  const [editForm, setEditForm] = useState({ password: "", display_name: "", adult_pin: "" });
   const [editCategories, setEditCategories] = useState<string[]>([]);
   const [updating, setUpdating] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
