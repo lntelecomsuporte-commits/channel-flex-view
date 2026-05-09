@@ -168,6 +168,15 @@ const PlayerPage = () => {
   const lastSafeIndexRef = useRef(0);
   const [adultPin, setAdultPin] = useState("1234");
 
+  // Evento nativo enviado pelo MainActivity quando o usuário aperta a tecla
+  // KEYCODE_MENU/GUIDE no controle do Fire TV (essas teclas não chegam
+  // diretamente ao WebView).
+  useEffect(() => {
+    const open = () => setSettingsOpen((s) => !s);
+    window.addEventListener("remotemenu", open);
+    return () => window.removeEventListener("remotemenu", open);
+  }, []);
+
   // Carrega o PIN parental do perfil
   useEffect(() => {
     if (!user) return;
