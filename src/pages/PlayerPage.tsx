@@ -644,6 +644,13 @@ const PlayerPage = () => {
         return;
       }
 
+      // Qualquer modal aberto (PIN/configurações) deve consumir o keyup também.
+      // Sem isso, o keydown fica no modal, mas o keyup ainda confirma preview/lista
+      // no player por trás em alguns controles de TV/Fire TV.
+      if (modalOpenRef.current || settingsOpen || pendingAdult || document.body.dataset.modalOpen === "true") {
+        return;
+      }
+
       if (!isSelectKey(e)) return;
       if (enterLongPressTimerRef.current) {
         clearTimeout(enterLongPressTimerRef.current);
