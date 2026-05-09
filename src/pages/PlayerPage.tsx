@@ -461,12 +461,9 @@ const PlayerPage = () => {
       }
 
       // Settings menu / PIN modal capturam seus próprios eventos.
-      // Bloqueia TUDO aqui pra evitar que setas/OK/voltar vazem pro player
-      // (troca de canal "fantasma" no fundo enquanto navega no modal).
-      if (settingsOpen || pendingAdult || document.body.dataset.modalOpen === "true") {
-        // Não chama preventDefault/stopPropagation: deixa o listener do modal
-        // (registrado em capture também) processar normalmente. Só impede
-        // o PlayerPage de reagir.
+      // Usa ref pra evitar closure stale — qualquer modal aberto: ignora aqui
+      // (sem stopPropagation pra que o handler do modal processe normalmente).
+      if (modalOpenRef.current || settingsOpen || pendingAdult || document.body.dataset.modalOpen === "true") {
         return;
       }
 
