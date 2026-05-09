@@ -85,6 +85,17 @@ jobs:
           sed -i "s/versionName \"[^\"]*\"/versionName \"${VERSION_NAME}\"/" android/app/build.gradle
           grep -E "versionCode|versionName" android/app/build.gradle
 
+      - name: Generate versioned Fire TV launcher Activity
+        run: |
+          cat > "android/app/src/main/java/tv/lntelecom/net/TvLauncherActivity${VERSION_CODE}.java" <<EOF
+          package tv.lntelecom.net;
+
+          /** Activity real e versionada para forçar o Fire OS a recarregar o ícone/banner do launcher. */
+          public class TvLauncherActivity${VERSION_CODE} extends MainActivity {
+          }
+          EOF
+          ls "android/app/src/main/java/tv/lntelecom/net/TvLauncherActivity${VERSION_CODE}.java"
+
       - name: Generate Android icons & splash from resources/
         run: |
           if [ -f resources/icon.png ]; then
@@ -190,13 +201,19 @@ jobs:
           manifest = Path('android/app/src/main/AndroidManifest.xml')
           text = manifest.read_text()
           text = text.replace('android:name=".MainActivity"', 'android:name=".LegacyMainActivity"', 1)
-          text = text.replace('android:targetActivity=".MainActivity"', 'android:targetActivity=".LegacyMainActivity"', 1)
           text = text.replace('android:theme="@style/AppTheme.NoActionBarLaunch"', 'android:theme="@style/AppTheme.LegacyLaunch"', 1)
           manifest.write_text(text)
           PY
+          cat > "android/app/src/main/java/tv/lntelecom/net/TvLauncherActivity${VERSION_CODE}.java" <<EOF
+          package tv.lntelecom.net;
+
+          /** Activity real e versionada para forçar o Fire OS a recarregar o ícone/banner do launcher legacy. */
+          public class TvLauncherActivity${VERSION_CODE} extends LegacyMainActivity {
+          }
+          EOF
           sed -i "s/versionCode [0-9]\+/versionCode ${VERSION_CODE}/" android/app/build.gradle
           sed -i "s/versionName \"[^\"]*\"/versionName \"${VERSION_NAME}\"/" android/app/build.gradle
-          grep -E "LegacyMainActivity|AppTheme.LegacyLaunch" android/app/src/main/AndroidManifest.xml
+          grep -E "LegacyMainActivity|TvLauncherActivity|AppTheme.LegacyLaunch" android/app/src/main/AndroidManifest.xml
           cd android && ./gradlew clean assembleRelease --no-daemon
 
       - name: Copy LEGACY APK to out/
