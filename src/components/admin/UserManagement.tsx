@@ -136,6 +136,24 @@ const UserManagement = () => {
       }
     }
 
+    // Update adult_pin if provided
+    if (editForm.adult_pin) {
+      if (!/^\d{4,8}$/.test(editForm.adult_pin)) {
+        toast.error("PIN parental deve ter 4 a 8 dígitos numéricos");
+        setUpdating(false);
+        return;
+      }
+      const { error: pinErr } = await supabase
+        .from("profiles")
+        .update({ adult_pin: editForm.adult_pin })
+        .eq("user_id", editingUser.user_id);
+      if (pinErr) {
+        toast.error("Erro ao atualizar PIN: " + pinErr.message);
+        setUpdating(false);
+        return;
+      }
+    }
+
     // Always save category access
     await saveCategoryAccess(editingUser.user_id, editCategories);
 
