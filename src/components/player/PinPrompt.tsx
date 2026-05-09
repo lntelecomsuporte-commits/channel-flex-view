@@ -90,6 +90,17 @@ export default function PinPrompt({
     }
   };
 
+  // Sinaliza body-level pra que o handler do PlayerPage ignore as setas
+  // enquanto o PIN modal está aberto (mesmo padrão do SettingsMenu).
+  useEffect(() => {
+    const prev = document.body.dataset.modalOpen;
+    document.body.dataset.modalOpen = "true";
+    return () => {
+      if (prev) document.body.dataset.modalOpen = prev;
+      else delete document.body.dataset.modalOpen;
+    };
+  }, []);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       // Bloqueia 100% do evento pra não vazar pra PlayerPage
