@@ -368,6 +368,16 @@ const PlayerPage = () => {
 
   const backPressRef = useRef<{ count: number; timer: ReturnType<typeof setTimeout> | null }>({ count: 0, timer: null });
   const handleBackPress = useCallback((): boolean => {
+    if (pendingAdult) {
+      const revertTo = pendingAdult.revertIndex;
+      setPendingAdult(null);
+      setCurrentIndex(revertTo);
+      return true;
+    }
+    if (settingsOpen) {
+      setSettingsOpen(false);
+      return true;
+    }
     if (showStats) {
       setShowStats(false);
       return true;
