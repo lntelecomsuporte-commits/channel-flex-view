@@ -213,19 +213,95 @@ Deno.serve(async (req) => {
 
       if (error) {
         if (error.message?.includes("already") || error.message?.includes("exists")) {
-          console.log("User already exists, ensuring unblocked and granting access");
-          // Find user profile
-          const { data: profile } = await supabaseAdmin.from("profiles")
-            .select("user_id")
-            .or(idCliente ? `hubsoft_client_id.eq.${idCliente}` : `username.eq.${userEmail}`)
-            .single();
-          
-          if (profile) {
-            await supabaseAdmin.from("profiles").update({ is_blocked: false, is_active: true }).eq("user_id", profile.user_id);
-            await grantCategoryAccess(profile.user_id);
+          console.log("createUser said 'already exists'. Reconciling auth.users + profile…");
+
+          // 1) Find the auth user by email (paginated)
+          let authUserId: string | null = null;
+          let page = 1;
+          while (page <= 20 && !authUserId) {
+            const { data: list, error: listErr } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 200 });
+            if (listErr) { console.error("listUsers error:", listErr); break; }
+            const found = list?.users?.find((u: any) => (u.email || "").toLowerCase() === userEmail.toLowerCase());
+            if (found) { authUserId = found.id; break; }
+            if (!list?.users || list.users.length < 200) break;
+            page++;
           }
-          return new Response(JSON.stringify({ success: true, message: "User reactivated", login: userEmail, senha: userPassword }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
+
+          // 2) Try to find an existing profile (by hubsoft_client_id OR username)
+          let profileUserId: string | null = null;
+          if (idCliente) {
+            const { data: p1 } = await supabaseAdmin.from("profiles").select("user_id").eq("hubsoft_client_id", idCliente).maybeSingle();
+            if (p1) profileUserId = p1.user_id;
+          }
+          if (!profileUserId) {
+            const { data: p2 } = await supabaseAdmin.from("profiles").select("user_id").eq("username", userEmail).maybeSingle();
+            if (p2) profileUserId = p2.user_id;
+          }
+
+          // 3) ORPHAN CASES — reconcile
+          // 3a) auth exists but profile missing → create profile
+          if (authUserId && !profileUserId) {
+            console.log("Orphan auth.user without profile — creating profile");
+            await supabaseAdmin.from("profiles").insert({
+              user_id: authUserId,
+              username: userEmail,
+              display_name: nome || userEmail,
+              hubsoft_client_id: idCliente,
+              is_blocked: false,
+              is_active: true,
+            });
+            profileUserId = authUserId;
+          }
+          // 3b) profile exists but auth missing → delete orphan profile and CREATE the auth user
+          if (!authUserId && profileUserId) {
+            console.log("Orphan profile without auth.user — deleting orphan and recreating");
+            await supabaseAdmin.from("user_category_access").delete().eq("user_id", profileUserId);
+            await supabaseAdmin.from("user_roles").delete().eq("user_id", profileUserId);
+            await supabaseAdmin.from("user_favorites").delete().eq("user_id", profileUserId);
+            await supabaseAdmin.from("user_sessions").delete().eq("user_id", profileUserId);
+            await supabaseAdmin.from("profiles").delete().eq("user_id", profileUserId);
+            profileUserId = null;
+
+            const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+              email: userEmail, password: userPassword, email_confirm: true,
+              user_metadata: { display_name: nome || userEmail },
+            });
+            if (createErr || !created?.user) {
+              console.error("Recreate failed:", createErr);
+              return new Response(JSON.stringify({ error: `recreate failed: ${createErr?.message}` }), {
+                status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+              });
+            }
+            authUserId = created.user.id;
+            // Ensure profile (handle_new_user trigger should create it; upsert hubsoft data anyway)
+            await supabaseAdmin.from("profiles").upsert({
+              user_id: authUserId,
+              username: userEmail,
+              display_name: nome || userEmail,
+              hubsoft_client_id: idCliente,
+              is_blocked: false,
+              is_active: true,
+            }, { onConflict: "user_id" });
+            profileUserId = authUserId;
+          }
+
+          // 4) Both exist → reset password (in case ERP CPF changed) + reactivate
+          if (authUserId && profileUserId) {
+            await supabaseAdmin.auth.admin.updateUserById(authUserId, { password: userPassword });
+            const profileUpdate: Record<string, unknown> = { is_blocked: false, is_active: true };
+            if (idCliente) profileUpdate.hubsoft_client_id = idCliente;
+            if (nome) profileUpdate.display_name = nome;
+            await supabaseAdmin.from("profiles").update(profileUpdate).eq("user_id", profileUserId);
+            await grantCategoryAccess(profileUserId);
+            return new Response(JSON.stringify({ success: true, message: "User reactivated", login: userEmail, senha: userPassword }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+
+          // 5) Neither exists yet — fall through and try createUser again (rare race)
+          console.warn("Reconcile reached fallthrough without authUserId — returning error");
+          return new Response(JSON.stringify({ error: "Could not reconcile user state", login: userEmail }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
         console.error("Error creating user:", error);
