@@ -162,6 +162,37 @@ const PlayerPage = () => {
   const enterPressLockedRef = useRef(false);
 
   const [showStats, setShowStats] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [unlockedAdult, setUnlockedAdult] = useState<Set<string>>(() => new Set());
+  const [pendingAdult, setPendingAdult] = useState<{ id: string; revertIndex: number } | null>(null);
+  const lastSafeIndexRef = useRef(0);
+  const [adultPin, setAdultPin] = useState("1234");
+
+  // Carrega o PIN parental do perfil
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("profiles")
+      .select("adult_pin")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.adult_pin) setAdultPin(data.adult_pin);
+      });
+  }, [user]);
+
+  // Guard: ao cair num canal adulto não-liberado, segura e pede PIN
+  useEffect(() => {
+    if (!currentChannel) return;
+    const isAdult = (currentChannel as any).is_adult;
+    if (!isAdult || unlockedAdult.has(currentChannel.id)) {
+      lastSafeIndexRef.current = currentIndex;
+      setPendingAdult((p) => (p && p.id === currentChannel.id ? null : p));
+      return;
+    }
+    setPendingAdult((prev) => prev ?? { id: currentChannel.id, revertIndex: lastSafeIndexRef.current });
+  }, [currentChannel?.id, unlockedAdult, currentIndex]);
+
   const playerRef = useRef<VideoPlayerHandle>(null);
   const comboRef = useRef<string[]>([]);
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
