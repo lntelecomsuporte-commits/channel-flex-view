@@ -394,6 +394,10 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
         return;
       }
 
+      if (document.body.dataset.modalOpen === "true") {
+        return;
+      }
+
       if (synopsisProgram) {
         if (e.key === "Escape" || isSelectKey(e)) {
           e.preventDefault();
@@ -482,6 +486,10 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
         e.preventDefault();
         e.stopPropagation();
         (e as any).stopImmediatePropagation?.();
+        return;
+      }
+
+      if (document.body.dataset.modalOpen === "true") {
         return;
       }
 
