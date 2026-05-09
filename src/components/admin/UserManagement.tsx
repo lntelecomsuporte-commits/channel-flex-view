@@ -322,6 +322,18 @@ const UserManagement = () => {
               <Label>Nova Senha</Label>
               <Input type="password" value={editForm.password} onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))} placeholder="Deixe vazio para manter a atual" />
             </div>
+            <div className="space-y-2">
+              <Label>PIN Parental (Conteúdo Adulto / Censurado)</Label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={8}
+                value={editForm.adult_pin}
+                onChange={(e) => setEditForm((f) => ({ ...f, adult_pin: e.target.value.replace(/\D/g, "") }))}
+                placeholder="4 a 8 dígitos (padrão: 1234)"
+              />
+              <p className="text-xs text-muted-foreground">Senha pedida ao abrir canais marcados como adulto.</p>
+            </div>
             <CategoryCheckboxes
               selected={editCategories}
               onToggle={(id) => toggleCategory(id, editCategories, setEditCategories)}
