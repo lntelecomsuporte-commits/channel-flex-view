@@ -26,7 +26,7 @@ import { getLocalFunctionUrl, LOCAL_SUPABASE_PUBLISHABLE_KEY } from "@/lib/local
 const emptyChannelForm = {
   name: "", channel_number: "", stream_url: "", backup_stream_urls: "", logo_url: "", category_id: "", is_active: true,
   epg_type: "", epg_url: "", epg_alt_text: "", epg_channel_id: "", epg_grab_logo: false, epg_show_synopsis: false,
-  use_proxy_token: false, force_proxy_native: false,
+  use_proxy_token: false, force_proxy_native: false, is_adult: false,
 };
 
 const AdminPanel = () => {
@@ -154,6 +154,7 @@ const AdminPanel = () => {
       epg_show_synopsis: channelForm.epg_show_synopsis,
       use_proxy_token: channelForm.use_proxy_token,
       force_proxy_native: channelForm.force_proxy_native,
+      is_adult: channelForm.is_adult,
     };
     let error;
     if (editingChannelId) {
@@ -198,6 +199,7 @@ const AdminPanel = () => {
       epg_show_synopsis: (ch as any).epg_show_synopsis ?? false,
       use_proxy_token: (ch as any).use_proxy_token ?? false,
       force_proxy_native: (ch as any).force_proxy_native ?? false,
+      is_adult: (ch as any).is_adult ?? false,
     });
     requestAnimationFrame(() => {
       channelFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -462,6 +464,19 @@ const AdminPanel = () => {
                     </p>
                   </div>
                 </div>
+                <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3">
+                  <Switch
+                    checked={channelForm.is_adult}
+                    onCheckedChange={(v) => setChannelForm((f) => ({ ...f, is_adult: v }))}
+                  />
+                  <div className="space-y-1">
+                    <Label className="cursor-pointer">🔞 Conteúdo adulto (censurado)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Quando ativado, o canal só abre depois que o usuário digitar o PIN parental
+                      (padrão <strong>1234</strong>, alterável pelo menu de configuração no controle).
+                    </p>
+                  </div>
+                </div>
                 <div className="flex gap-2">
                   <Button onClick={handleSaveChannel} disabled={saving}>
                     <Plus className="h-4 w-4 mr-1" /> {saving ? "Salvando..." : editingChannelId ? "Salvar" : "Adicionar"}
@@ -495,6 +510,9 @@ const AdminPanel = () => {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
+                          {(ch as any).is_adult && (
+                            <span className="text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive">🔞 Adulto</span>
+                          )}
                           <span className={`text-xs px-2 py-0.5 rounded ${ch.is_active ? "bg-primary/20 text-primary" : "bg-destructive/20 text-destructive"}`}>
                             {ch.is_active ? "Ativo" : "Inativo"}
                           </span>
