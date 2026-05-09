@@ -418,12 +418,19 @@ Deno.serve(async (req) => {
           await supabaseAdmin.from("profiles")
             .update({ force_signout_at: new Date().toISOString() })
             .eq("user_id", profile.user_id);
+
+          // Limpa todas as tabelas públicas relacionadas (não há FK cascade)
+          for (const table of ["user_category_access", "user_roles", "user_sessions", "user_favorites", "profiles"]) {
+            const { error: cleanupErr } = await supabaseAdmin.from(table).delete().eq("user_id", profile.user_id);
+            if (cleanupErr) console.error(`cleanup ${table} failed:`, cleanupErr);
+          }
+
           const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(profile.user_id);
-          if (delErr) {
+          if (delErr && !String(delErr.message || "").toLowerCase().includes("not found")) {
             console.error("deleteUser error:", profile.user_id, delErr);
             errors.push({ user_id: profile.user_id, error: delErr.message });
           } else {
-            console.log("User deleted:", profile.user_id);
+            console.log("User fully deleted:", profile.user_id);
             deleted.push(profile.user_id);
           }
         } else {
