@@ -102,11 +102,14 @@ export default function PinPrompt({
   }, []);
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
+    const blockEvent = (e: KeyboardEvent) => {
       // Bloqueia 100% do evento pra não vazar pra PlayerPage
       e.preventDefault();
       e.stopPropagation();
       (e as KeyboardEvent & { stopImmediatePropagation?: () => void }).stopImmediatePropagation?.();
+
+      // keyup/keypress existem só pra cancelar comandos residuais do player.
+      if (e.type !== "keydown") return;
 
       const key = e.key;
       const code = e.keyCode || 0;
@@ -156,8 +159,21 @@ export default function PinPrompt({
     };
 
     // capture + bubble pra garantir prioridade sobre PlayerPage
-    window.addEventListener("keydown", handler, true);
-    return () => window.removeEventListener("keydown", handler, true);
+    const options: AddEventListenerOptions = { capture: true, passive: false };
+    window.addEventListener("keydown", blockEvent, options);
+    window.addEventListener("keyup", blockEvent, options);
+    window.addEventListener("keypress", blockEvent, options);
+    document.addEventListener("keydown", blockEvent, options);
+    document.addEventListener("keyup", blockEvent, options);
+    document.addEventListener("keypress", blockEvent, options);
+    return () => {
+      window.removeEventListener("keydown", blockEvent, options);
+      window.removeEventListener("keyup", blockEvent, options);
+      window.removeEventListener("keypress", blockEvent, options);
+      document.removeEventListener("keydown", blockEvent, options);
+      document.removeEventListener("keyup", blockEvent, options);
+      document.removeEventListener("keypress", blockEvent, options);
+    };
   }, [pin, focus, expectedPin, onSubmit, onCancel]);
 
   return (
