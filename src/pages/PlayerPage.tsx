@@ -428,6 +428,18 @@ const PlayerPage = () => {
         return;
       }
 
+      // Tecla Menu/Configuração do controle: abre o menu de configurações
+      if (isMenuKey(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+        (e as any).stopImmediatePropagation?.();
+        setSettingsOpen((s) => !s);
+        return;
+      }
+
+      // Settings menu / PIN modal capturam seus próprios eventos
+      if (settingsOpen || pendingAdult) return;
+
       // FF/RW (MediaFastForward, MediaTrackNext, ChannelUp/Down): SEMPRE bloquear
       // a propagação ANTES de qualquer coisa. Sem isso, no Fire TV a Alexa fala
       // "não consigo pular essa transmissão" porque o sistema interpreta como
