@@ -425,7 +425,7 @@ const PlayerPage = () => {
       backPressRef.current.count = 0;
     }, 2000);
     return true;
-  }, [showStats, synopsisProgram, searchActive, showChannelList, favFocusIndex, showPreview, previewTimeout, showOSD, showFavoritesBar, osdTimeout]);
+  }, [pendingAdult, settingsOpen, showStats, synopsisProgram, searchActive, showChannelList, favFocusIndex, showPreview, previewTimeout, showOSD, showFavoritesBar, osdTimeout]);
 
   useNativeBackButton(handleBackPress);
 
