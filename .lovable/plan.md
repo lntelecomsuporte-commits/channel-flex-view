@@ -1,58 +1,38 @@
-## Diagnóstico
+## Melhorias de ícone/banner para Fire TV
 
-O stack do erro mostra:
-```
-openAndSendXhr → load → _doFragLoad → _loadFragForPlayback → loadFragment
-```
-+ `onFragBuffered` aparece no stack (segmentos anteriores passaram).
+Aplicar 4 etapas para reduzir o problema do ícone sumir após update no Fire TV.
 
-**Conclusão:** o manifest `.m3u8` carregou OK, vários segmentos passaram, e então um segmento específico devolveu 404. Padrões típicos do upstream `s2.micineovs.com`:
-- **Live edge sliding**: a playlist ainda lista um segmento que o servidor já apagou da janela.
-- **Token de segmento expirado** entre o load do manifest e o pedido do segmento.
-- **Balanceador inconsistente** no upstream.
+### Etapa 1 — AndroidManifest.xml
+Em `android/app/src/main/AndroidManifest.xml`, adicionar no `<application>`:
+- `android:logo="@drawable/tv_banner"` (fallback usado por algumas telas do Fire OS)
+- `android:appCategory="video"` (categoriza na trilha "Vídeo" do launcher)
 
-## Comportamento atual
+### Etapa 2 — Banner xxxhdpi (Fire TV 4K)
+Criar `android/app/src/main/res/drawable-xxxhdpi/tv_banner.png` em **640x360**, redimensionado a partir do banner existente (`drawable-xxhdpi/tv_banner.png` 960x540 ou do PNG fonte).
 
-`VideoPlayer.tsx` (linhas 234-340):
-- `fragLoadingMaxRetry: 8`, `fragLoadingRetryDelay: 500` → hls.js tenta o **mesmo segmento** 8x com backoff (~16s gastos no pior caso).
-- Só dispara o handler de ERROR quando vira **fatal**, e aí cai em `networkErrorRetries`.
-- O watchdog separado de freeze (4s) acaba disparando `recoverMediaError` antes do erro virar fatal — mas isso não resolve 404 de segmento, só mexe no buffer.
+### Etapa 3 — Mipmap 432x432
+Substituir em `android/app/src/main/res/mipmap-xxxhdpi/`:
+- `ic_launcher.png` → 432x432
+- `ic_launcher_round.png` → 432x432 (mesmo PNG, máscara redonda já é aplicada via XML adaptive)
+- `ic_launcher_foreground.png` → 432x432
 
-Resultado: a TV congela uns segundos, o usuário vê freeze, e só depois recupera (ou pula pro backup).
+Gerados a partir de `resources/icon.png` (1024x1024) via redimensionamento.
 
-## Mudança proposta
+### Etapa 4 — Workflow GitHub Actions
+Em `.github/workflows/android-apk.yml`, após o passo `Generate Android icons & splash from resources/` (que roda `@capacitor/assets generate` e sobrescreve mipmaps), adicionar passo que **regrava** os arquivos xxxhdpi 432x432 e o banner xxxhdpi 640x360 — para que a otimização do Capacitor não os volte a 192x192.
 
-Adicionar **handler para erros NÃO-fatais de fragmento** no listener `Hls.Events.ERROR` em `VideoPlayer.tsx` (perto da linha 285). Antes do `if (!data.fatal) return;`, interceptar:
+Implementação: adicionar um step com Python+Pillow (já disponível no runner) que:
+1. Pega `resources/icon.png` e gera `mipmap-xxxhdpi/{ic_launcher,ic_launcher_round,ic_launcher_foreground}.png` em 432x432
+2. Pega o banner fonte e gera `drawable-xxxhdpi/tv_banner.png` em 640x360
 
-```text
-data.details === "fragLoadError"
-&& data.response?.code === 404
-```
+Esse step roda **depois** do `cap sync` e **antes** do `gradlew assembleRelease`, tanto no build principal quanto no LEGACY.
 
-Ação:
-1. Logar uma vez (com cooldown de 3s pra não floodar).
-2. Chamar `hls.trigger(Hls.Events.LEVEL_LOADED, ...)` não — usar a abordagem oficial: `hls.nextLoadLevel = hls.loadLevel` e `hls.startLoad(-1)` para forçar **recarregamento do manifest** (pega janela live atualizada / token novo).
-3. Limitar a 2 tentativas por canal; se persistir, escalar pra `tryNextBackup()`.
+---
 
-Também reduzir `fragLoadingMaxRetry` de 8 → 3 para não desperdiçar 16s tentando o mesmo segmento morto.
+### Resultado esperado
+- APK novo com ícone e banner em alta resolução para Fire TV 4K
+- Menor incidência de "ícone genérico" após update (não elimina 100% — é bug do Fire OS launcher; workaround manual continua sendo "Forçar parar" o app nas configurações)
+- Sem mudança em backend, frontend web, ou banco
 
-## Arquivo afetado
-
-- `src/components/player/VideoPlayer.tsx` — adicionar bloco antes do `if (!data.fatal) return;` no listener de ERROR e ajustar config inicial.
-
-## Não vou mexer
-
-- `hls-proxy` edge function: ela já está repassando corretamente o 404 do upstream; mudar para devolver 200+JSON quebraria o contrato com hls.js (ele espera segmento binário).
-- Watchdog de freeze de 4s: continua útil pra outros cenários (decoder travado).
-- Lógica de backup / corsFallback: já funciona, só vamos acioná-la mais cedo nesse caso.
-
-## Resultado esperado
-
-- 404 isolado de segmento: recuperação em ~500ms (reload do manifest) em vez de 4s de freeze.
-- 404 persistente: failover pro backup em ~1.5s em vez de ~16s.
-
-## Comandos pro servidor (depois de aplicar)
-
-```bash
-cd /opt/lntv-frontend && git pull && npm run build && rsync -a --delete --exclude logos dist/ /var/www/lntv/
-```
+### Comandos pro servidor após o build
+Nenhum no servidor — o GitHub Actions gera o APK automaticamente. Usuário baixa via auto-update do app ou manualmente em `https://tv2.lntelecom.net/downloads/lntv-latest.apk`.
