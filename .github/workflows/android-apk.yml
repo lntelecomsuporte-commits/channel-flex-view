@@ -94,6 +94,35 @@ jobs:
             echo "No resources/icon.png found, skipping icon generation"
           fi
 
+      - name: Override Fire TV / 4K assets (mipmap 432x432 + banner xxxhdpi 640x360)
+        run: |
+          python3 -m pip install --quiet --no-cache-dir Pillow
+          python3 <<'PY'
+          from PIL import Image
+          import os
+          icon = Image.open('resources/icon.png').convert('RGBA')
+          fg_path = 'resources/icon-foreground.png'
+          icon_fg = Image.open(fg_path).convert('RGBA') if os.path.exists(fg_path) else icon
+          out = 'android/app/src/main/res/mipmap-xxxhdpi'
+          os.makedirs(out, exist_ok=True)
+          icon.resize((432,432), Image.LANCZOS).save(f'{out}/ic_launcher.png', optimize=True)
+          icon.resize((432,432), Image.LANCZOS).save(f'{out}/ic_launcher_round.png', optimize=True)
+          icon_fg.resize((432,432), Image.LANCZOS).save(f'{out}/ic_launcher_foreground.png', optimize=True)
+          # Banner xxxhdpi a partir do maior banner disponível
+          banner_src = None
+          for d in ['drawable-xxhdpi','drawable-xhdpi','drawable-hdpi','drawable']:
+              p = f'android/app/src/main/res/{d}/tv_banner.png'
+              if os.path.exists(p):
+                  banner_src = p; break
+          if banner_src:
+              banner = Image.open(banner_src).convert('RGBA')
+              os.makedirs('android/app/src/main/res/drawable-xxxhdpi', exist_ok=True)
+              banner.resize((640,360), Image.LANCZOS).save('android/app/src/main/res/drawable-xxxhdpi/tv_banner.png', optimize=True)
+              print('banner src:', banner_src)
+          for p in [f'{out}/ic_launcher.png', 'android/app/src/main/res/drawable-xxxhdpi/tv_banner.png']:
+              im = Image.open(p); print(p, im.size)
+          PY
+
       - name: Decode release keystore from secret
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
