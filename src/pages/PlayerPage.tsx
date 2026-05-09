@@ -165,6 +165,10 @@ const PlayerPage = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [unlockedAdult, setUnlockedAdult] = useState<Set<string>>(() => new Set());
   const [pendingAdult, setPendingAdult] = useState<{ id: string; revertIndex: number } | null>(null);
+  const modalOpenRef = useRef(false);
+  useEffect(() => {
+    modalOpenRef.current = settingsOpen || !!pendingAdult;
+  }, [settingsOpen, pendingAdult]);
   const lastSafeIndexRef = useRef(0);
   const [adultPin, setAdultPin] = useState("1234");
 
