@@ -46,6 +46,12 @@ export default function SettingsMenu({ onClose, onLogout, userId, userEmail }: S
       .catch(() => setAppInfo({ version: "web", build: "-" }));
   }, [userId]);
 
+  // Marca modal aberto pra bloquear listeners do PlayerPage
+  useEffect(() => {
+    document.body.dataset.modalOpen = "true";
+    return () => { delete document.body.dataset.modalOpen; };
+  }, []);
+
   // Captura teclas do menu (não na sub-view de PIN — PinPrompt cuida)
   useEffect(() => {
     if (view === "change-pin-current" || view === "change-pin-new") return;
