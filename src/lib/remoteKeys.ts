@@ -20,6 +20,25 @@ export function isSelectKey(event: KeyboardEvent) {
 }
 
 /**
+ * Detecta o botão "Menu" / "Configuração" do controle (3 traços).
+ * Em Fire TV / Android TV o KEYCODE_MENU é 82. Alguns controles mandam
+ * "ContextMenu", "Settings" ou "AppSwitch".
+ */
+export function isMenuKey(event: KeyboardEvent) {
+  const key = event.key;
+  const keyCode = event.keyCode || 0;
+  return (
+    key === "ContextMenu" ||
+    key === "Menu" ||
+    key === "Settings" ||
+    key === "AppSwitch" ||
+    keyCode === 82 ||  // KEYCODE_MENU
+    keyCode === 93 ||  // KEYCODE_GUIDE (alguns Smart TVs)
+    keyCode === 18     // KEYCODE_SETTINGS (raro)
+  );
+}
+
+/**
  * Detects fast-forward / channel-up keys across remotes
  * (FireTV, AndroidTV, generic media keys).
  */

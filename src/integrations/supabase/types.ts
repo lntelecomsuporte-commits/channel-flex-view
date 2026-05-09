@@ -89,6 +89,7 @@ export type Database = {
           force_proxy_native: boolean
           id: string
           is_active: boolean
+          is_adult: boolean
           logo_url: string | null
           name: string
           stream_format: string
@@ -110,6 +111,7 @@ export type Database = {
           force_proxy_native?: boolean
           id?: string
           is_active?: boolean
+          is_adult?: boolean
           logo_url?: string | null
           name: string
           stream_format?: string
@@ -131,6 +133,7 @@ export type Database = {
           force_proxy_native?: boolean
           id?: string
           is_active?: boolean
+          is_adult?: boolean
           logo_url?: string | null
           name?: string
           stream_format?: string
@@ -252,6 +255,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          adult_pin: string
           created_at: string
           display_name: string | null
           force_signout_at: string | null
@@ -264,6 +268,7 @@ export type Database = {
           username: string | null
         }
         Insert: {
+          adult_pin?: string
           created_at?: string
           display_name?: string | null
           force_signout_at?: string | null
@@ -276,6 +281,7 @@ export type Database = {
           username?: string | null
         }
         Update: {
+          adult_pin?: string
           created_at?: string
           display_name?: string | null
           force_signout_at?: string | null

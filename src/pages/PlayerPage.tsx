@@ -19,7 +19,9 @@ import FavoritesBar from "@/components/player/FavoritesBar";
 import ChannelSearch from "@/components/player/ChannelSearch";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useSessionHeartbeat } from "@/hooks/useSessionHeartbeat";
-import { isSelectKey, isPageNextKey, isPagePrevKey } from "@/lib/remoteKeys";
+import { isSelectKey, isPageNextKey, isPagePrevKey, isMenuKey } from "@/lib/remoteKeys";
+import SettingsMenu from "@/components/player/SettingsMenu";
+import PinPrompt from "@/components/player/PinPrompt";
 import { List, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseLocal";
@@ -160,6 +162,37 @@ const PlayerPage = () => {
   const enterPressLockedRef = useRef(false);
 
   const [showStats, setShowStats] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [unlockedAdult, setUnlockedAdult] = useState<Set<string>>(() => new Set());
+  const [pendingAdult, setPendingAdult] = useState<{ id: string; revertIndex: number } | null>(null);
+  const lastSafeIndexRef = useRef(0);
+  const [adultPin, setAdultPin] = useState("1234");
+
+  // Carrega o PIN parental do perfil
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("profiles")
+      .select("adult_pin")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.adult_pin) setAdultPin(data.adult_pin);
+      });
+  }, [user]);
+
+  // Guard: ao cair num canal adulto não-liberado, segura e pede PIN
+  useEffect(() => {
+    if (!currentChannel) return;
+    const isAdult = (currentChannel as any).is_adult;
+    if (!isAdult || unlockedAdult.has(currentChannel.id)) {
+      lastSafeIndexRef.current = currentIndex;
+      setPendingAdult((p) => (p && p.id === currentChannel.id ? null : p));
+      return;
+    }
+    setPendingAdult((prev) => prev ?? { id: currentChannel.id, revertIndex: lastSafeIndexRef.current });
+  }, [currentChannel?.id, unlockedAdult, currentIndex]);
+
   const playerRef = useRef<VideoPlayerHandle>(null);
   const comboRef = useRef<string[]>([]);
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -395,6 +428,18 @@ const PlayerPage = () => {
         return;
       }
 
+      // Tecla Menu/Configuração do controle: abre o menu de configurações
+      if (isMenuKey(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+        (e as any).stopImmediatePropagation?.();
+        setSettingsOpen((s) => !s);
+        return;
+      }
+
+      // Settings menu / PIN modal capturam seus próprios eventos
+      if (settingsOpen || pendingAdult) return;
+
       // FF/RW (MediaFastForward, MediaTrackNext, ChannelUp/Down): SEMPRE bloquear
       // a propagação ANTES de qualquer coisa. Sem isso, no Fire TV a Alexa fala
       // "não consigo pular essa transmissão" porque o sistema interpreta como
@@ -619,7 +664,7 @@ const PlayerPage = () => {
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
     };
-  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, searchActive, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, setFavorite, isUpdatingFavorite, isFavorite, showOSDTemporarily, favFocusIndex, favorites, channels, currentChannel, showOSD, showFavoritesBar, handleBackPress, pushDigit, numBuffer, jumpToChannelNumber]);
+  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, searchActive, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, setFavorite, isUpdatingFavorite, isFavorite, showOSDTemporarily, favFocusIndex, favorites, channels, currentChannel, showOSD, showFavoritesBar, handleBackPress, pushDigit, numBuffer, jumpToChannelNumber, settingsOpen, pendingAdult]);
 
   useEffect(() => {
     if (!showFavoritesBar || !showOSD) setFavFocusIndex(null);
@@ -669,14 +714,23 @@ const PlayerPage = () => {
     >
       {currentChannel && (
         <>
-          <VideoPlayer
-            ref={playerRef}
-            streamUrl={currentChannel.stream_url}
-            channelId={currentChannel.id}
-            useProxyToken={(currentChannel as any).use_proxy_token ?? false}
-            forceProxyNative={(currentChannel as any).force_proxy_native ?? false}
-            backupStreamUrls={(currentChannel as any).backup_stream_urls ?? null}
-          />
+          {!pendingAdult ? (
+            <VideoPlayer
+              ref={playerRef}
+              streamUrl={currentChannel.stream_url}
+              channelId={currentChannel.id}
+              useProxyToken={(currentChannel as any).use_proxy_token ?? false}
+              forceProxyNative={(currentChannel as any).force_proxy_native ?? false}
+              backupStreamUrls={(currentChannel as any).backup_stream_urls ?? null}
+            />
+          ) : (
+            <div className="absolute inset-0 bg-background flex items-center justify-center z-[5]">
+              <div className="text-center text-muted-foreground">
+                <p className="text-6xl mb-4">🔞</p>
+                <p>Conteúdo restrito — digite o PIN parental</p>
+              </div>
+            </div>
+          )}
           {/* Pre-aquece o próximo canal (UP) e o anterior (DOWN) — corta o zap */}
           <ChannelPrefetch
             nextStreamUrl={
@@ -847,6 +901,36 @@ const PlayerPage = () => {
               program={synopsisProgram}
               channelName={focusedChannel?.name}
               onClose={() => setSynopsisProgram(null)}
+            />
+          )}
+
+          {pendingAdult && (
+            <PinPrompt
+              title="Canal restrito"
+              description="Digite o PIN parental pra liberar este canal"
+              expectedPin={adultPin}
+              onSubmit={() => {
+                setUnlockedAdult((prev) => {
+                  const next = new Set(prev);
+                  next.add(pendingAdult.id);
+                  return next;
+                });
+                setPendingAdult(null);
+              }}
+              onCancel={() => {
+                const revertTo = pendingAdult.revertIndex;
+                setPendingAdult(null);
+                setCurrentIndex(revertTo);
+              }}
+            />
+          )}
+
+          {settingsOpen && user && (
+            <SettingsMenu
+              userId={user.id}
+              userEmail={user.email}
+              onClose={() => setSettingsOpen(false)}
+              onLogout={signOut}
             />
           )}
         </>
