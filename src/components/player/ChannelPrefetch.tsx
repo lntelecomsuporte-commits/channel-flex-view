@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { getPlayableStreamUrl, resolveChannelStreamUrl } from "@/lib/stream";
+import { getPlayableStreamUrl, resolveChannelStreamUrl, resolveRedirects } from "@/lib/stream";
 
 interface ChannelPrefetchProps {
   /** URL do próximo canal (já resolvido). Se nulo, não prefetcha. */
@@ -10,49 +10,76 @@ interface ChannelPrefetchProps {
 }
 
 /**
- * Pré-aquece o próximo canal baixando o manifest m3u8 (ou os primeiros bytes
- * do MP4) em segundo plano. Quando o usuário aperta UP/DOWN, o WebView já
- * tem manifest + cookies + DNS resolvidos — corta ~500ms a 1s do zap.
+ * Pré-aquece o próximo/anterior canal:
+ *  1. Popula o redirectCache (resolveRedirects) — corta o HEAD/GET de ~300-800ms
+ *     que rodaria DENTRO do zap quando o player abrir a stream nova.
+ *  2. Faz fetch leve no manifest m3u8 / primeiros bytes do MP4 pra warm-up
+ *     de DNS + TCP + TLS + cache HTTP. Usa `mode: "no-cors"` em origens
+ *     externas pra evitar CORS errors no console mantendo o benefício de rede.
  *
- * NÃO usa <video> oculto (que custaria CPU/banda decodificando) — apenas
- * um fetch leve com cache do browser.
+ * NÃO usa <video> oculto (custaria CPU/banda decodificando) — apenas warm-up
+ * de rede, que é o que realmente faz diferença no tempo de troca de canal.
  */
-const ChannelPrefetch = ({ nextStreamUrl, channelId = null, useProxyToken = false, forceProxyNative = false }: ChannelPrefetchProps) => {
+const ChannelPrefetch = ({
+  nextStreamUrl,
+  channelId = null,
+  useProxyToken = false,
+  forceProxyNative = false,
+}: ChannelPrefetchProps) => {
   const lastFetchedRef = useRef<string | null>(null);
-
-  const canPrefetchWithoutCorsNoise = (url: string) => {
-    try {
-      const parsed = new URL(url);
-      // Só pré-busca URLs que já passaram pelo nosso origin/proxy. HTTPS externo
-      // direto fica por conta do player; fetch em background só gera erro de CORS.
-      return parsed.pathname.includes("/functions/v1/hls-proxy") || parsed.origin === window.location.origin;
-    } catch {
-      return false;
-    }
-  };
 
   useEffect(() => {
     if (!nextStreamUrl) return;
 
     const ctrl = new AbortController();
-    // Pequeno atraso pra não disputar banda com o canal atual no início do zap
+    // Delay curto pra não disputar banda com o canal atual logo no início do zap,
+    // mas curto o bastante pra que UP/DOWN consecutivos já achem cache pronto.
     const t = setTimeout(() => {
       (async () => {
-        const url = (useProxyToken || forceProxyNative) && channelId
-          ? await resolveChannelStreamUrl(nextStreamUrl, channelId, useProxyToken, forceProxyNative)
-          : getPlayableStreamUrl(nextStreamUrl);
+        // 1) Pré-aquece o redirectCache (essa é a maior economia no zap real).
+        //    resolveRedirects faz GET com Range bytes=0-0 e segue redirect.
+        //    Em caso de CORS/timeout, falha silenciosamente e devolve a URL
+        //    original — sem ruído no console.
+        resolveRedirects(nextStreamUrl).catch(() => {});
+
+        // 2) Resolve a URL final que o player usaria (proxy, token assinado, etc.)
+        const url =
+          (useProxyToken || forceProxyNative) && channelId
+            ? await resolveChannelStreamUrl(nextStreamUrl, channelId, useProxyToken, forceProxyNative)
+            : getPlayableStreamUrl(nextStreamUrl);
         if (!url || url === lastFetchedRef.current) return;
-        if (!canPrefetchWithoutCorsNoise(url)) return;
         lastFetchedRef.current = url;
-        fetch(url, {
+
+        let isSameOriginOrProxy = false;
+        try {
+          const parsed = new URL(url);
+          isSameOriginOrProxy =
+            parsed.pathname.includes("/functions/v1/hls-proxy") ||
+            parsed.origin === window.location.origin;
+        } catch {
+          /* fall back to no-cors */
+        }
+
+        // 3) Warm-up de rede:
+        //  - same-origin / proxy → fetch normal (lê resposta, popula cache HTTP)
+        //  - cross-origin → no-cors (opaque): aquece DNS/TLS/cache do browser
+        //    sem disparar erro de CORS no console
+        const isMp4 = /\.mp4(\?|$)/i.test(url);
+        const init: RequestInit = {
           signal: ctrl.signal,
           method: "GET",
           cache: "force-cache",
-          // Range pra MP4: pega só o primeiro chunk (cabeçalho + moov)
-          headers: /\.mp4(\?|$)/i.test(url) ? { Range: "bytes=0-262143" } : undefined,
-        }).catch(() => { /* prefetch best-effort */ });
-      })().catch(() => { /* prefetch best-effort */ });
-    }, 800);
+          mode: isSameOriginOrProxy ? "cors" : "no-cors",
+          credentials: "omit",
+          headers: isMp4 && isSameOriginOrProxy ? { Range: "bytes=0-262143" } : undefined,
+        };
+        fetch(url, init).catch(() => {
+          /* prefetch best-effort */
+        });
+      })().catch(() => {
+        /* prefetch best-effort */
+      });
+    }, 250);
 
     return () => {
       clearTimeout(t);
