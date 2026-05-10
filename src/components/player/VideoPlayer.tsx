@@ -535,20 +535,30 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     return <YouTubePlayer videoId={youTubeVideoId} autoPlay={autoPlay} />;
   }
 
+  const shouldConcealNativeVideo = !firstFrameReady || resolvedSourceUrl !== activeStreamUrl || !playableStreamUrl;
+
   return (
     <>
       <video
         key={streamUrl}
         ref={videoRef}
         className="absolute inset-0 w-full h-full object-contain"
-        style={{ backgroundColor: "#000" }}
+        style={{
+          backgroundColor: "#000",
+          opacity: shouldConcealNativeVideo ? 0 : 1,
+          visibility: shouldConcealNativeVideo ? "hidden" : "visible",
+        }}
         poster=""
+        controls={false}
+        controlsList="nodownload noplaybackrate noremoteplayback"
+        disablePictureInPicture
+        disableRemotePlayback
         playsInline
         muted={muted}
         x-webkit-airplay="allow"
         webkit-playsinline="true"
       />
-      {(!firstFrameReady || resolvedSourceUrl !== streamUrl || !playableStreamUrl) && (
+      {shouldConcealNativeVideo && (
         <div
           className="absolute inset-0 bg-black pointer-events-none"
           aria-hidden="true"
