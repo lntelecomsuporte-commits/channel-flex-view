@@ -548,7 +548,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         x-webkit-airplay="allow"
         webkit-playsinline="true"
       />
-      {!firstFrameReady && (
+      {(!firstFrameReady || resolvedSourceUrl !== streamUrl || !playableStreamUrl) && (
         <div
           className="absolute inset-0 bg-black pointer-events-none"
           aria-hidden="true"
