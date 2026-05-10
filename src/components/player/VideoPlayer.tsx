@@ -147,6 +147,10 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     setBackupIndex(-1);
     setCorsFallback(false);
     setResolvedContentType("");
+    // Cobre o gap entre trocar de canal e a nova URL ser resolvida
+    // (token assinado / resolveRedirects / probe de content-type são async).
+    // Sem isso, o <video> vazio mostra o "play gigante" do WebView do Android.
+    setFirstFrameReady(false);
   }, [streamUrl]);
 
   // Se mudar de backup dentro do mesmo canal, cada URL precisa recomeçar limpa.
