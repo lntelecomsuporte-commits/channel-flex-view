@@ -1,7 +1,10 @@
 package tv.lntelecom.net;
 
+import android.graphics.Color;
 import android.os.Bundle;
 import android.view.KeyEvent;
+import android.view.View;
+import android.webkit.WebSettings;
 import android.view.WindowManager;
 import android.webkit.WebView;
 
@@ -15,6 +18,18 @@ public class MainActivity extends BridgeActivity {
         // Mantém a tela acesa enquanto a Activity estiver visível.
         // O foreground service cuida do CPU/processo em background.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        getWindow().getDecorView().setBackgroundColor(Color.BLACK);
+
+        WebView webView = this.bridge != null ? this.bridge.getWebView() : null;
+        if (webView != null) {
+            webView.setBackgroundColor(Color.BLACK);
+            webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+            webView.setHorizontalScrollBarEnabled(false);
+            webView.setVerticalScrollBarEnabled(false);
+
+            WebSettings settings = webView.getSettings();
+            settings.setMediaPlaybackRequiresUserGesture(false);
+        }
     }
 
     /**
