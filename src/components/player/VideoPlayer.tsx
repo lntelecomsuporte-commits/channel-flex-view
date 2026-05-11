@@ -589,5 +589,6 @@ const DelayedSpinner = () => {
 };
 
 VideoPlayer.displayName = "VideoPlayer";
+HlsVideoPlayer.displayName = "HlsVideoPlayer";
 
 export default VideoPlayer;
