@@ -239,16 +239,20 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         fragLoadingMaxRetry: 3,
         fragLoadingRetryDelay: 500,
         fragLoadingMaxRetryTimeout: 6000,
-        manifestLoadingMaxRetry: 6,
-        manifestLoadingRetryDelay: 500,
-        manifestLoadingMaxRetryTimeout: 16000,
-        levelLoadingMaxRetry: 6,
-        levelLoadingRetryDelay: 500,
-        levelLoadingMaxRetryTimeout: 16000,
+        manifestLoadingMaxRetry: 4,
+        manifestLoadingRetryDelay: 400,
+        manifestLoadingTimeOut: 6000,
+        manifestLoadingMaxRetryTimeout: 12000,
+        levelLoadingMaxRetry: 4,
+        levelLoadingRetryDelay: 400,
+        levelLoadingMaxRetryTimeout: 12000,
         // ABR conservador na subida pra evitar reflickar logo após startLevel:0
         abrEwmaDefaultEstimate: 500000,
         abrBandWidthFactor: 0.85,
         abrBandWidthUpFactor: 0.6,
+        // Aumenta tolerância a holes no buffer (evita stall por gap de 200ms)
+        maxBufferHole: 0.5,
+        nudgeMaxRetry: 5,
       });
       hlsRef.current = hls;
       hls.loadSource(playableStreamUrl);
