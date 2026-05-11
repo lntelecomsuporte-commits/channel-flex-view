@@ -1,9 +1,8 @@
 package tv.lntelecom.net;
 
 import android.graphics.Color;
-import android.graphics.PixelFormat;
 import android.net.Uri;
-import android.view.SurfaceView;
+import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.WebView;
@@ -30,7 +29,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 
 /**
  * Plugin nativo Android: substitui o <video>+hls.js do WebView por ExoPlayer
- * (media3) numa SurfaceView posicionada acima do WebView. Latência de troca
+ * (media3) numa TextureView posicionada atrás do WebView. Latência de troca
  * de canal cai de ~1s pra ~80-150ms (paridade com OleTV/Aptoide).
  *
  * O React mantém controle de UI (OSD, lista, EPG) — o plugin só toca vídeo
@@ -51,7 +50,7 @@ public class LntvPlayerPlugin extends Plugin {
 
     private ExoPlayer player;
     private ExoPlayer nextPlayer;
-    private SurfaceView surfaceView;
+    private TextureView textureView;
     private FrameLayout container;
     private float dpr = 1f;
 
@@ -59,7 +58,6 @@ public class LntvPlayerPlugin extends Plugin {
     public void load() {
         super.load();
         dpr = getContext().getResources().getDisplayMetrics().density;
-        getActivity().runOnUiThread(this::ensureViews);
     }
 
     private void ensureViews() {
@@ -70,34 +68,34 @@ public class LntvPlayerPlugin extends Plugin {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         );
-        // FireTV/WebView: SurfaceView acima do WebView pode tocar só áudio e
-        // ficar preto por composição de camadas. A solução estável é deixar a
-        // superfície nativa ATRÁS do WebView e tornar o HTML do player transparente.
+        // FireTV/WebView: SurfaceView pode tocar só áudio e ficar preto por
+        // composição de camadas. TextureView participa da hierarquia normal,
+        // fica atrás do WebView transparente e deixa OSD/listas visíveis.
         WebView webView = getBridge() != null ? getBridge().getWebView() : null;
         ViewGroup parent = webView != null && webView.getParent() instanceof ViewGroup
             ? (ViewGroup) webView.getParent()
             : null;
         if (parent != null) {
             int webViewIndex = parent.indexOfChild(webView);
+            parent.setBackgroundColor(Color.TRANSPARENT);
             parent.addView(container, Math.max(0, webViewIndex), lp);
             webView.setBackgroundColor(Color.TRANSPARENT);
-            webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+            webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
             webView.bringToFront();
         } else {
             ViewGroup root = (ViewGroup) getActivity().getWindow().getDecorView();
+            root.setBackgroundColor(Color.TRANSPARENT);
             root.addView(container, 0, lp);
         }
 
-        surfaceView = new SurfaceView(getActivity());
-        surfaceView.setBackgroundColor(Color.BLACK);
-        surfaceView.setZOrderOnTop(false);
-        surfaceView.setZOrderMediaOverlay(false);
-        surfaceView.getHolder().setFormat(PixelFormat.OPAQUE);
+        textureView = new TextureView(getActivity());
+        textureView.setOpaque(true);
+        textureView.setBackgroundColor(Color.BLACK);
         FrameLayout.LayoutParams sp = new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         );
-        container.addView(surfaceView, sp);
+        container.addView(textureView, sp);
         container.setVisibility(View.GONE);
     }
 
@@ -185,7 +183,7 @@ public class LntvPlayerPlugin extends Plugin {
                 }
                 player = createPlayer();
                 attachListener(player, true);
-                player.setVideoSurfaceView(surfaceView);
+                player.setVideoTextureView(textureView);
                 player.setMediaSource(buildSource(url));
                 player.prepare();
                 player.setPlayWhenReady(true);
@@ -233,7 +231,7 @@ public class LntvPlayerPlugin extends Plugin {
                 player = nextPlayer;
                 nextPlayer = null;
                 attachListener(player, true);
-                player.setVideoSurfaceView(surfaceView);
+                player.setVideoTextureView(textureView);
                 player.setPlayWhenReady(true);
                 container.setVisibility(View.VISIBLE);
                 call.resolve();
