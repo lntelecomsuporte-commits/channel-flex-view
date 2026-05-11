@@ -97,36 +97,31 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         url = buildProxyStreamUrl(activeStreamUrl) ?? getPlayableStreamUrl(activeStreamUrl);
       } else {
         url = await resolveChannelStreamUrl(activeStreamUrl, channelId, false, forceProxyNative);
-        // No APK: se a URL é HTTPS direta (não-proxy) tenta resolver
-        // redirects (encurtadores 301/302) ANTES do hls.js, pra ficar
-        // equivalente ao VLC nativo. Se falhar, segue com a URL original.
+        // No APK: redirects (301/302) são resolvidos em BACKGROUND pelo
+        // ChannelPrefetch — não bloqueamos o caminho crítico do zap aqui.
+        // Se o ChannelPrefetch já populou redirectCache, resolveRedirects
+        // devolve instantâneo do cache; senão, dispara em paralelo e o
+        // hls.js usa a URL original (que segue redirect server-side via
+        // hls-proxy ou via fetch nativo do WebView Android).
         if (
           Capacitor.isNativePlatform() &&
           !isProxiedStreamUrl(url) &&
           /^https:\/\//i.test(url)
         ) {
-          const resolved = await resolveRedirects(url);
-          if (!cancelled && resolved) url = resolved;
+          // Best-effort: dispara mas só espera ~120ms. Se o cache já tem,
+          // resolve imediato; senão, segue com a original sem travar o zap.
+          const fast = await Promise.race([
+            resolveRedirects(url),
+            new Promise<string>((r) => setTimeout(() => r(url), 120)),
+          ]);
+          if (!cancelled && fast) url = fast;
         }
       }
-
-      if (isProxiedStreamUrl(url) && isHlsManifestUrl(activeStreamUrl)) {
-        // O proxy expõe o content-type final após redirects. Se uma URL .m3u8
-        // redirecionar para TS bruto, trocamos de hls.js para mpegts.js.
-        try {
-          const probe = await fetch(url, { method: "GET" });
-          const contentType = probe.headers.get("x-lntv-final-content-type") || probe.headers.get("content-type") || "";
-          if (!cancelled) setResolvedContentType(contentType);
-          probe.body?.cancel().catch(() => {});
-          if (contentType.toLowerCase().includes("video/mp2t")) {
-            console.warn("[Player] Proxy detectou MPEG-TS bruto após redirect; usando engine MPEG-TS");
-          }
-        } catch {
-          if (!cancelled) setResolvedContentType("");
-        }
-      } else {
-        if (!cancelled) setResolvedContentType("");
-      }
+      // Probe de content-type DEFERIDO: removido do caminho crítico.
+      // Se a stream redirecionar pra MPEG-TS bruto, o hls.js vai dar
+      // manifestParsingError no primeiro carregamento — aí o handler de erro
+      // dispara o probe sob demanda (via setResolvedContentType abaixo).
+      if (!cancelled) setResolvedContentType("");
       if (!cancelled) {
         setResolvedSourceUrl(activeStreamUrl);
         setResolvedUrl(url);
@@ -244,16 +239,20 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         fragLoadingMaxRetry: 3,
         fragLoadingRetryDelay: 500,
         fragLoadingMaxRetryTimeout: 6000,
-        manifestLoadingMaxRetry: 6,
-        manifestLoadingRetryDelay: 500,
-        manifestLoadingMaxRetryTimeout: 16000,
-        levelLoadingMaxRetry: 6,
-        levelLoadingRetryDelay: 500,
-        levelLoadingMaxRetryTimeout: 16000,
+        manifestLoadingMaxRetry: 4,
+        manifestLoadingRetryDelay: 400,
+        manifestLoadingTimeOut: 6000,
+        manifestLoadingMaxRetryTimeout: 12000,
+        levelLoadingMaxRetry: 4,
+        levelLoadingRetryDelay: 400,
+        levelLoadingMaxRetryTimeout: 12000,
         // ABR conservador na subida pra evitar reflickar logo após startLevel:0
         abrEwmaDefaultEstimate: 500000,
         abrBandWidthFactor: 0.85,
         abrBandWidthUpFactor: 0.6,
+        // Aumenta tolerância a holes no buffer (evita stall por gap de 200ms)
+        maxBufferHole: 0.5,
+        nudgeMaxRetry: 5,
       });
       hlsRef.current = hls;
       hls.loadSource(playableStreamUrl);
@@ -535,7 +534,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     return <YouTubePlayer videoId={youTubeVideoId} autoPlay={autoPlay} />;
   }
 
-  const shouldConcealNativeVideo = !firstFrameReady || resolvedSourceUrl !== activeStreamUrl || !playableStreamUrl;
+  const isLoadingNewChannel = !firstFrameReady || resolvedSourceUrl !== activeStreamUrl || !playableStreamUrl;
 
   return (
     <>
@@ -543,11 +542,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         key={streamUrl}
         ref={videoRef}
         className="absolute inset-0 w-full h-full object-contain"
-        style={{
-          backgroundColor: "#000",
-          opacity: shouldConcealNativeVideo ? 0 : 1,
-          visibility: shouldConcealNativeVideo ? "hidden" : "visible",
-        }}
+        style={{ backgroundColor: "#000" }}
         poster=""
         controls={false}
         controlsList="nodownload noplaybackrate noremoteplayback"
@@ -558,15 +553,32 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         x-webkit-airplay="allow"
         webkit-playsinline="true"
       />
-      {shouldConcealNativeVideo && (
-        <div
-          className="absolute inset-0 bg-black pointer-events-none"
-          aria-hidden="true"
-        />
-      )}
+      {isLoadingNewChannel && <DelayedSpinner />}
     </>
   );
 });
+
+/**
+ * Spinner discreto que só aparece se a troca de canal demorar >500ms.
+ * Em zaps rápidos (cache hit do prefetch) NÃO mostra nada — só a transição
+ * natural do <video>, igual outros players de IPTV.
+ */
+const DelayedSpinner = () => {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setShow(true), 500);
+    return () => clearTimeout(t);
+  }, []);
+  if (!show) return null;
+  return (
+    <div
+      className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/40"
+      aria-hidden="true"
+    >
+      <div className="w-10 h-10 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+    </div>
+  );
+};
 
 VideoPlayer.displayName = "VideoPlayer";
 
