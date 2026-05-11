@@ -220,30 +220,24 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
 
     if (engine === "hls" && !isAppleDevice && Hls.isSupported()) {
       const profile = getDeviceProfile();
+      const isWeak = profile.weak;
       const hls = new Hls({
         enableWorker: true,
-        // Buffer padrão, mas com folga do ao vivo para absorver oscilações
-        lowLatencyMode: false,
-        liveSyncDurationCount: 3,        // ~3 segmentos atrás do live edge (mais perto = abre mais rápido)
-        liveMaxLatencyDurationCount: 10, // tolerância antes de re-sincronizar
-        // === Otimizações de tempo de troca de canal (fast channel zap) ===
-        // Começa pela qualidade mais baixa → 1º frame em ~500ms-1s.
-        // ABR sobe pra qualidade ideal nos próximos segmentos.
-        startLevel: 0,
-        // Buffer dinâmico: 10s em devices fortes (zap rápido),
-        // 30s em devices fracos (absorve underruns do decoder lento).
-        maxBufferLength: profile.maxBufferLength,
-        maxMaxBufferLength: Math.max(30, profile.maxBufferLength),
-        maxBufferSize: 30 * 1000 * 1000, // 30MB
-        // Pré-busca o primeiro fragmento enquanto o manifesto ainda processa
-        startFragPrefetch: true,
-        // Retries agressivos para fragmentos e manifestos.
-        // OBS: o modo "Ocultar URL" (signed proxy) usa os MESMOS valores do modo
-        // direto. Os retries baixos antigos (1x/1500ms) faziam o player desistir
-        // a qualquer hiccup de rede, derrubando o canal "depois de um pouco" no PWA.
-        // Reduzido de 8→3: 404 em segmento (live edge sliding / token expirado)
-        // não se resolve repetindo o mesmo segmento — melhor recarregar o manifest
-        // (handler abaixo) ou pular pro backup.
+        // Live low-latency: reduz tempo até 1º frame em ~150-300ms.
+        // Em devices fracos mantém modo padrão (decoder não acompanha LL).
+        lowLatencyMode: !isWeak,
+        liveSyncDurationCount: isWeak ? 3 : 2,
+        liveMaxLatencyDurationCount: 10,
+        // === Fast channel zap ===
+        startLevel: 0,                              // 1ª qualidade = mais baixa → 1º frame rápido
+        startFragPrefetch: true,                    // pre-busca seg #0 enquanto manifest processa
+        backBufferLength: isWeak ? 10 : 0,          // libera memória cedo (zap mais leve)
+        maxBufferLength: isWeak ? 20 : 6,           // buffer alvo enxuto = recover rápido
+        maxMaxBufferLength: 30,
+        maxBufferSize: 30 * 1000 * 1000,            // 30MB
+        maxBufferHole: 0.5,
+        nudgeMaxRetry: 5,
+        // Retries: agressivos mas com cap pra não emperrar em segmento podre.
         fragLoadingMaxRetry: 3,
         fragLoadingRetryDelay: 500,
         fragLoadingMaxRetryTimeout: 6000,
@@ -254,13 +248,10 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         levelLoadingMaxRetry: 4,
         levelLoadingRetryDelay: 400,
         levelLoadingMaxRetryTimeout: 12000,
-        // ABR conservador na subida pra evitar reflickar logo após startLevel:0
+        // ABR conservador: sobe devagar pra não reflickar logo após startLevel:0
         abrEwmaDefaultEstimate: 500000,
         abrBandWidthFactor: 0.85,
         abrBandWidthUpFactor: 0.6,
-        // Aumenta tolerância a holes no buffer (evita stall por gap de 200ms)
-        maxBufferHole: 0.5,
-        nudgeMaxRetry: 5,
       });
       hlsRef.current = hls;
       hls.loadSource(playableStreamUrl);
