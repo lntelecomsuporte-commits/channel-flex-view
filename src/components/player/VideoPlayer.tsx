@@ -49,7 +49,20 @@ export interface VideoPlayerHandle {
   getHls: () => Hls | null;
 }
 
-const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, forceProxyNative = false, backupStreamUrls = null }, ref) => {
+// Lazy: só importa quando nativo ativa (evita custo no bundle web)
+import NativeVideoPlayer from "./NativeVideoPlayer";
+
+const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>((props, ref) => {
+  // Branch nativo (APK Android com plugin LntvPlayer): ExoPlayer media3.
+  // Latência ~80-150ms. Cai pra hls.js abaixo se o plugin não responder.
+  const [useNative] = useState(() => isNativePlayerAvailable());
+  if (useNative) {
+    return <NativeVideoPlayer ref={ref} {...props} />;
+  }
+  return <HlsVideoPlayer ref={ref} {...props} />;
+});
+
+const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, forceProxyNative = false, backupStreamUrls = null }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const mpegtsRef = useRef<mpegts.Player | null>(null);
@@ -59,15 +72,9 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
   const [resolvedUrl, setResolvedUrl] = useState<string>("");
   const [resolvedSourceUrl, setResolvedSourceUrl] = useState<string>("");
   const [resolvedContentType, setResolvedContentType] = useState<string>("");
-  // Quando uma URL HTTPS direta falha por CORS/302/rede no primeiro load,
-  // tentamos UMA vez via proxy genérico (sem hardcode de host).
   const [corsFallback, setCorsFallback] = useState(false);
-  // Cobre o flash do placeholder cinza do <video> da WebView entre destruir
-  // o engine antigo e o primeiro frame do novo. Reseta a cada nova URL e
-  // libera quando o evento `playing` dispara.
   const [firstFrameReady, setFirstFrameReady] = useState(false);
   
-  // Índice da URL ativa: -1 = principal (streamUrl), 0..N = backupStreamUrls[i]
   const [backupIndex, setBackupIndex] = useState(-1);
   const backups = backupStreamUrls?.filter((u) => !!u && u.trim().length > 0) ?? [];
   const activeStreamUrl = backupIndex < 0 ? streamUrl : (backups[backupIndex] ?? streamUrl);
