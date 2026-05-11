@@ -1,70 +1,116 @@
-## Diagnóstico — por que tem delay hoje
+# Plano: zap rápido — A para web/TV, B para APK
 
-Mapeei o caminho completo entre apertar UP/DOWN e o 1º frame aparecer. Cada item abaixo soma alguns ms — juntos viram o "delayzinho" perceptível mesmo na rede local:
+Combinação dos dois caminhos: o APK Android passa a usar **ExoPlayer nativo** (latência ~50-150ms igual aos concorrentes), e a versão web/Smart TV recebe as **otimizações dentro de hls.js** (latência ~250-400ms, melhor que hoje mas limitado pelo WebView).
 
-1. **Pre-cache atual é fraco.** O `ChannelPrefetch` usa `fetch` em `mode: "no-cors"` + `cache: "force-cache"`. Resposta vem **opaca** — o browser **não reaproveita** isso para a próxima requisição que o `hls.js` fizer (CORS + headers diferentes). Resultado: aquece DNS/TLS e mais nada. Os "uns segundos do canal próximo" que você pediu **nunca chegam a ser baixados**.
-2. **Probe de content-type bloqueante.** Em todo canal proxiado com `.m3u8` o `VideoPlayer` faz um `fetch(url, { method: "GET" })` extra **antes** de instanciar o `hls.js` (linhas 113‑129 de `VideoPlayer.tsx`) só pra ler o header `x-lntv-final-content-type`. É uma rodada HTTP inteira no caminho crítico.
-3. **`resolveRedirects` no caminho crítico (APK).** Em URLs HTTPS diretas no APK, espera um GET `Range: 0-0` resolver redirect antes de começar. Vai pro cache só na **2ª** vez que o canal aparece.
-4. **`hls.js` é destruído e recriado a cada canal.** `hls.destroy()` + `new Hls(...)` + `attachMedia(video)` + `loadSource(...)` tem overhead fixo (~150‑300ms) que daria pra eliminar reaproveitando a instância.
-5. **Tela preta forçada (`firstFrameReady`).** O overlay preto só sai no evento `playing`. Mesmo que o frame chegue rápido, a transição visual passa por preto → o cérebro percebe "demorou".
-6. **`startFragPrefetch` + `startLevel: 0` ajudam, mas não substituem ter o segmento já em cache.** Quando o segmento já está no HTTP cache, o tempo cai pra "abrir = decodificar".
+Detecção: `Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'` → tenta ExoPlayer; cai em hls.js se o plugin falhar ao carregar (segurança).
 
-## O que vou fazer
+---
 
-### 1. Pre-cache real (manifest + 1 segmento) — o que vai dar o maior ganho
-Reescrever `ChannelPrefetch.tsx` para, ao detectar canal vizinho:
-- Resolver a URL final (proxy/token/redirect) **igualzinho** o `VideoPlayer` faz.
-- Fazer `fetch` **com CORS** (mesmas credenciais/headers que o `hls.js` vai usar) do `.m3u8` → grava resposta no HTTP cache do browser.
-- Parsear o manifest (regex simples nas linhas que não começam com `#`) e fazer `fetch` do **1º segmento `.ts`** (também com CORS, sem `Range`) → grava no cache.
-- Para MP4 direto: `fetch` com `Range: bytes=0-524287` (≈512KB, suficiente pro `moov` + 1‑2s de vídeo).
-- Quando o usuário apertar UP/DOWN, o `hls.js` puxa exatamente as mesmas URLs e **bate em cache local** → zap quase instantâneo.
-- Cancelar o prefetch em curso quando o canal mudar (pra não competir banda com o canal que está abrindo).
-- Throttle: só refazer quando `(currentIndex)` muda; não disparar prefetch enquanto o canal atual ainda está fazendo buffer inicial (`waiting`).
+## Parte A — Otimizações hls.js (web, Smart TV, fallback do APK)
 
-### 2. Eliminar o probe de content-type do caminho crítico
-- Lazy: só rodar o probe **se** o `hls.js` retornar erro de parsing do manifest (raríssimo). Caso contrário, assume que `.m3u8` é HLS e segue direto.
-- Isso remove uma viagem HTTP completa de **todo zap**.
+Aplica ao `VideoPlayer.tsx` e `ChannelPrefetch.tsx`. Nenhuma mudança de UI.
 
-### 3. Pular `resolveRedirects` quando já cacheado
-- Verificar `redirectCache` **sem fazer fetch**: se já tem entrada válida, usa; senão, dispara `hls.js` na URL original em paralelo e atualiza o cache em background.
+### A1. Reusar a instância de `Hls`
+Hoje cada zap faz `hls.destroy() + new Hls() + attachMedia()` (~200-400ms fixos). Vou manter a instância viva e, quando o engine/modo de proxy não muda, só chamar `hls.loadSource(novaUrl)`. Destroi só quando troca engine (HLS↔MPEG-TS↔native) ou flag de proxy.
 
-### 4. Reaproveitar a instância do `hls.js`
-- Em vez de `destroy()` + `new Hls(...)`, manter uma instância "viva" e chamar `hls.detachMedia()` + `hls.loadSource(novaUrl)` + `hls.attachMedia(video)` quando dá pra reusar (mesmo engine HLS, sem mudar `useProxyToken`).
-- Quando muda de engine (HLS↔MPEG-TS↔MP4 nativo) ou de modo de proxy, aí sim destrói.
-
-### 5. Não mostrar preto entre canais
-- Trocar o overlay preto por **manter o último frame do canal anterior** (CSS: o `<video>` antigo congela no último frame; cobrir só com um spinner discreto após 800ms se o novo ainda não tocou). Sensação subjetiva de troca cai pela metade mesmo sem mudar latência real.
-
-### 6. Ajustes finos no `hls.js`
-- `maxBufferHole: 0.5`, `nudgeMaxRetry: 5`, `manifestLoadingTimeOut: 6000` (mais agressivo).
-- Reduzir `liveSyncDurationCount` de 3 → 2 quando o device é forte (`getDeviceProfile`).
-
-## Arquivos que vou tocar
-
-- `src/components/player/ChannelPrefetch.tsx` — reescrita do pre-cache (CORS real + manifest+segmento).
-- `src/components/player/VideoPlayer.tsx` — remover probe sync de content-type, reaproveitar instância `hls.js`, trocar overlay preto por "frame congelado + spinner tardio", ajustar timeouts.
-- `src/lib/stream.ts` — adicionar variante de `resolveRedirects` que não bloqueia se o cache estiver vazio (apenas dispara em background).
-
-## Detalhes técnicos (referência)
-
-```text
-Antes:  [UP] → resolveRedirects(GET range) → contentType probe(GET) → new Hls() → loadManifest(GET) → loadSeg0(GET) → decode → 1º frame
-                ~200ms                       ~150ms                  ~80ms       ~120ms              ~250ms          ~150ms     ≈ 950ms
-
-Depois: [UP] → (cache hit do prefetch)        → reuseHls.loadSource → loadManifest(cache) → loadSeg0(cache) → decode → 1º frame
-                                                ~30ms                  ~5ms                  ~5ms              ~150ms     ≈ 190ms
+### A2. Config agressiva de baixa latência
+```ts
+{
+  lowLatencyMode: true,
+  maxBufferLength: 6,           // hoje varia 10-30
+  maxMaxBufferLength: 30,
+  backBufferLength: 0,
+  maxBufferHole: 0.5,
+  startFragPrefetch: true,
+  startLevel: 0,                // já existe
+  manifestLoadingTimeOut: 6000,
+  fragLoadingTimeOut: 8000,
+  liveSyncDurationCount: 2,     // se device forte
+  nudgeMaxRetry: 5,
+}
 ```
+Em devices fracos (`getDeviceProfile().weak`) mantém `maxBufferLength: 20` e `liveSyncDurationCount: 3`.
 
-Ganho estimado: zap percebido cai de ~1s pra ~200‑300ms quando o vizinho já foi prefetched. Em zap "frio" (canal não vizinho) o ganho é menor mas ainda sensível pelos itens 2, 4, 5.
+### A3. Remover probe de content-type do caminho crítico
+Hoje todo `.m3u8` faz um GET extra antes de instanciar o `Hls`. Vou pular: assume HLS direto e só roda o probe se o `Hls` emitir `MANIFEST_PARSING_ERROR`.
 
-## Riscos / coisas que posso quebrar
+### A4. `resolveRedirects` não-bloqueante
+Se `redirectCache` tem entrada válida, usa. Se não, instancia o `Hls` na URL original em paralelo e atualiza o cache em background (em vez de esperar o GET `Range: 0-0`).
 
-- **Banda extra**: pre-cache real baixa o 1º segmento (~300‑800KB por canal vizinho). Em rede local é desprezível, mas vou cancelar agressivamente ao trocar de canal pra não competir.
-- **CORS no `.ts`**: se o flussonic não devolver `Access-Control-Allow-Origin`, o `fetch` CORS falha. Fallback: tenta `no-cors` (não cacheia, mas pelo menos aquece TLS) — comportamento atual.
-- **Reuso de `hls.js`**: alguns canais com configs muito diferentes (codec exótico) podem precisar de instância nova. Vou usar uma chave (`engine|useProxyToken|forceProxyNative`) e só reusar dentro da mesma chave.
+### A5. Pre-cache real de vizinhos (corrigir CORS)
+`ChannelPrefetch.tsx` já está reescrito (manifest + 1º segmento com CORS), mas o `hls-proxy` precisa devolver `Access-Control-Allow-Origin: *` consistentemente para que o cache seja reaproveitado. Vou conferir/ajustar a edge function.
+
+### A6. Não voltar pra preto entre zaps
+Trocar o overlay preto (`firstFrameReady`) por: manter o último frame congelado do canal anterior (CSS `opacity` no `<video>` antigo) e mostrar spinner discreto só após 600ms se o novo ainda não tocou.
+
+**Ganho estimado web/TV:** ~950ms → ~250-400ms por zap (vizinho prefetched).
+
+---
+
+## Parte B — ExoPlayer nativo no APK Android
+
+Plugin Capacitor próprio que renderiza vídeo via ExoPlayer numa `SurfaceView` por cima do WebView. O React continua dono da UI (OSD, lista, EPG); só o `<video>` vira uma "janela" controlada pelo plugin.
+
+### B1. Plugin nativo `LntvPlayer`
+`android/app/src/main/java/tv/lntelecom/net/LntvPlayerPlugin.java`:
+- Métodos JS: `load({url, headers})`, `play()`, `pause()`, `setVolume(v)`, `setMuted(b)`, `release()`, `setRect({x,y,w,h})`, `prepareNext({url})`, `swapToNext()`.
+- Eventos: `playing`, `waiting`, `ended`, `error`, `firstFrame`, `levelSwitched`.
+- Usa `ExoPlayer` (media3) com `HlsMediaSource.Factory` + `DefaultHttpDataSource.Factory` (custom UA, headers).
+- `LoadControl` igual ao OleTV: `bufferForPlaybackMs=0`, `bufferForPlaybackAfterRebufferMs=0`, `minBufferMs=4000`, `maxBufferMs=60000`.
+- **Trio de instâncias** (`prev`, `current`, `next`): `prepare()` nas três, `setPlayWhenReady(true)` só na atual; `swapToNext()` é instantâneo (~50ms).
+- Surface: `SurfaceView` adicionada à `decorView`, posicionada por `setRect` que o React calcula a partir do bounding box do `<video>` placeholder (z-index acima do WebView mas abaixo do OSD).
+
+### B2. Wrapper TS
+`src/lib/native/lntvPlayer.ts`: `registerPlugin<LntvPlayerPlugin>('LntvPlayer')` + tipos.
+
+### B3. Integração no `VideoPlayer.tsx`
+- Detecta `Capacitor.getPlatform() === 'android'` no mount.
+- Se nativo: render `<div ref=videoRef />` placeholder (mesma posição/tamanho que o `<video>`), usa `ResizeObserver` pra `setRect` no plugin a cada layout.
+- Mapeia eventos do plugin nos mesmos handlers que hoje escutam no `<video>` (playing → `setFirstFrameReady`, error → fallback de URL etc.).
+- Se `LntvPlayer` não registrado (caiu na atualização, build velha): `Capacitor.isPluginAvailable('LntvPlayer')` falso → cai pra hls.js (Parte A).
+
+### B4. Pre-cache no APK
+Como ExoPlayer baixa direto, `ChannelPrefetch` no APK chama `LntvPlayer.prepareNext({url})` em vez de `fetch`. O ExoPlayer carrega manifest + 1-2 segmentos no slot `next`, e `swapToNext()` é trivial.
+
+### B5. Build
+- `android/app/build.gradle`: adicionar `implementation "androidx.media3:media3-exoplayer:1.4.1"`, `media3-exoplayer-hls:1.4.1`, `media3-ui:1.4.1`.
+- `MainActivity.java`: `registerPlugin(LntvPlayerPlugin.class)`.
+- `npm run build && npx cap sync android` + APK signed pelo workflow existente (keystore release, ver `mem://security/android-keystore`).
+
+**Ganho estimado APK:** ~950ms → ~80-150ms (paridade com OleTV).
+
+---
+
+## Arquivos tocados
+
+**Parte A (JS, deploy via `npm run build` + rsync):**
+- `src/components/player/VideoPlayer.tsx` — reuso de Hls, config low-latency, sem probe, redirect não-bloqueante, sem overlay preto.
+- `src/components/player/ChannelPrefetch.tsx` — pequeno ajuste pra chamar `LntvPlayer.prepareNext` quando nativo.
+- `src/lib/stream.ts` — variante não-bloqueante de `resolveRedirects`.
+- `supabase/functions/hls-proxy/index.ts` — garantir CORS `*` em todas as respostas (manifest + segmentos).
+
+**Parte B (nativo Android, requer rebuild de APK):**
+- `android/app/src/main/java/tv/lntelecom/net/LntvPlayerPlugin.java` (novo).
+- `android/app/src/main/java/tv/lntelecom/net/MainActivity.java` — `registerPlugin`.
+- `android/app/build.gradle` — deps media3.
+- `src/lib/native/lntvPlayer.ts` (novo) — wrapper Capacitor.
+- `src/components/player/VideoPlayer.tsx` — branch nativo vs. hls.js.
 
 ## Não vou mexer
 
-- Layout, OSD, lista de canais, navegação por teclas — só performance do player.
-- `hls-proxy` edge function — o ganho está no cliente.
-- APK / Android nativo — todas as mudanças são JS, então atualizam só com `npm run build`.
+Lista de canais, OSD, EPG, favoritos, PIN, login Hubsoft, sync de logos, edge functions de auth/webhooks, layout/branding.
+
+## Riscos
+
+- **ExoPlayer + SurfaceView sob WebView**: posicionamento exige `ResizeObserver` confiável; em fullscreen é trivial (100vw/100vh).
+- **Plugin novo no APK**: usuários precisam atualizar o APK para ter o ganho — antes da atualização, cai pra hls.js (Parte A).
+- **media3 aumenta tamanho do APK** em ~3-5MB (aceitável).
+- **CORS no hls-proxy**: se algum upstream rejeitar, fallback `no-cors` (atual) continua funcionando, só sem cache reaproveitado.
+
+## Validação
+
+- Web (preview): trocar canal várias vezes, medir tempo até 1º frame no console (já existe log).
+- APK: `adb logcat | grep LntvPlayer` mostra latência de cada `load → firstFrame`.
+- Comparar zap antes/depois com cronômetro no controle remoto da TV.
+
+Posso começar pela Parte A (rápida, atinge web/TV imediato) e depois Parte B (precisa rebuild de APK), ou ambos em paralelo. Confirma que sigo nesse plano?
