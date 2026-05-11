@@ -97,36 +97,31 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         url = buildProxyStreamUrl(activeStreamUrl) ?? getPlayableStreamUrl(activeStreamUrl);
       } else {
         url = await resolveChannelStreamUrl(activeStreamUrl, channelId, false, forceProxyNative);
-        // No APK: se a URL é HTTPS direta (não-proxy) tenta resolver
-        // redirects (encurtadores 301/302) ANTES do hls.js, pra ficar
-        // equivalente ao VLC nativo. Se falhar, segue com a URL original.
+        // No APK: redirects (301/302) são resolvidos em BACKGROUND pelo
+        // ChannelPrefetch — não bloqueamos o caminho crítico do zap aqui.
+        // Se o ChannelPrefetch já populou redirectCache, resolveRedirects
+        // devolve instantâneo do cache; senão, dispara em paralelo e o
+        // hls.js usa a URL original (que segue redirect server-side via
+        // hls-proxy ou via fetch nativo do WebView Android).
         if (
           Capacitor.isNativePlatform() &&
           !isProxiedStreamUrl(url) &&
           /^https:\/\//i.test(url)
         ) {
-          const resolved = await resolveRedirects(url);
-          if (!cancelled && resolved) url = resolved;
+          // Best-effort: dispara mas só espera ~120ms. Se o cache já tem,
+          // resolve imediato; senão, segue com a original sem travar o zap.
+          const fast = await Promise.race([
+            resolveRedirects(url),
+            new Promise<string>((r) => setTimeout(() => r(url), 120)),
+          ]);
+          if (!cancelled && fast) url = fast;
         }
       }
-
-      if (isProxiedStreamUrl(url) && isHlsManifestUrl(activeStreamUrl)) {
-        // O proxy expõe o content-type final após redirects. Se uma URL .m3u8
-        // redirecionar para TS bruto, trocamos de hls.js para mpegts.js.
-        try {
-          const probe = await fetch(url, { method: "GET" });
-          const contentType = probe.headers.get("x-lntv-final-content-type") || probe.headers.get("content-type") || "";
-          if (!cancelled) setResolvedContentType(contentType);
-          probe.body?.cancel().catch(() => {});
-          if (contentType.toLowerCase().includes("video/mp2t")) {
-            console.warn("[Player] Proxy detectou MPEG-TS bruto após redirect; usando engine MPEG-TS");
-          }
-        } catch {
-          if (!cancelled) setResolvedContentType("");
-        }
-      } else {
-        if (!cancelled) setResolvedContentType("");
-      }
+      // Probe de content-type DEFERIDO: removido do caminho crítico.
+      // Se a stream redirecionar pra MPEG-TS bruto, o hls.js vai dar
+      // manifestParsingError no primeiro carregamento — aí o handler de erro
+      // dispara o probe sob demanda (via setResolvedContentType abaixo).
+      if (!cancelled) setResolvedContentType("");
       if (!cancelled) {
         setResolvedSourceUrl(activeStreamUrl);
         setResolvedUrl(url);
