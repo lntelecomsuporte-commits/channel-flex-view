@@ -38,8 +38,12 @@ const PlayerPage = () => {
   const { favorites, isFavorite, setFavorite, isUpdatingFavorite } = useFavorites();
 
   useEffect(() => {
+    document.documentElement.classList.add("player-mode");
     document.body.classList.add("player-mode");
-    return () => document.body.classList.remove("player-mode");
+    return () => {
+      document.documentElement.classList.remove("player-mode");
+      document.body.classList.remove("player-mode");
+    };
   }, []);
 
   // Mantém o vídeo tocando mesmo com a aba em segundo plano
@@ -733,7 +737,7 @@ const PlayerPage = () => {
 
   return (
     <div
-      className="relative w-full h-full overflow-hidden bg-background select-none"
+      className="relative w-full h-full overflow-hidden bg-transparent select-none"
       style={{ width: "100vw", height: "100vh" }}
       {...touchHandlers}
       onClick={() => {
