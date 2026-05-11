@@ -526,6 +526,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
           try { mpegtsRef.current.destroy(); } catch { /* ignore */ }
           mpegtsRef.current = null;
         }
+        currentEngineRef.current = null;
         // Trigger re-mount do effect mexendo no resolvedUrl (vai voltar ao mesmo valor logo depois).
         setResolvedContentType((c) => c + " ");
       }
