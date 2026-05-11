@@ -38,8 +38,12 @@ const PlayerPage = () => {
   const { favorites, isFavorite, setFavorite, isUpdatingFavorite } = useFavorites();
 
   useEffect(() => {
+    document.documentElement.classList.add("player-mode");
     document.body.classList.add("player-mode");
-    return () => document.body.classList.remove("player-mode");
+    return () => {
+      document.documentElement.classList.remove("player-mode");
+      document.body.classList.remove("player-mode");
+    };
   }, []);
 
   // Mantém o vídeo tocando mesmo com a aba em segundo plano
