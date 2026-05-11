@@ -89,6 +89,9 @@ public class LegacyMainActivity extends Activity {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         }
 
+        // Bridge JS pro auto-update do APK no legacy.
+        webView.addJavascriptInterface(new LegacyUpdateBridge(), "LntvLegacy");
+
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
             @Override
