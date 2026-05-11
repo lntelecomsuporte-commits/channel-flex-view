@@ -56,6 +56,8 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const mpegtsRef = useRef<mpegts.Player | null>(null);
+  // Engine atualmente carregada na instância Hls — usado pra decidir hot-swap.
+  const currentEngineRef = useRef<"hls" | "mpegts" | "native" | null>(null);
   
   const [muted, setMuted] = useState(true);
   const [proxyTokenFailure, setProxyTokenFailure] = useState(false);
@@ -69,6 +71,14 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
   const backups = backupStreamUrls?.filter((u) => !!u && u.trim().length > 0) ?? [];
   const activeStreamUrl = backupIndex < 0 ? streamUrl : (backups[backupIndex] ?? streamUrl);
   const youTubeVideoId = extractYouTubeVideoId(activeStreamUrl);
+
+  // Refs espelhando estado pra que handlers registrados UMA vez no Hls
+  // (caminho hot-swap) sempre leiam valores atuais sem precisar re-registrar.
+  const corsFallbackRef = useRef(corsFallback);
+  const useProxyTokenRef = useRef(useProxyToken);
+  const playableUrlRef = useRef<string>("");
+  useEffect(() => { corsFallbackRef.current = corsFallback; }, [corsFallback]);
+  useEffect(() => { useProxyTokenRef.current = useProxyToken; }, [useProxyToken]);
 
   useImperativeHandle(ref, () => ({
     getVideoElement: () => videoRef.current,
