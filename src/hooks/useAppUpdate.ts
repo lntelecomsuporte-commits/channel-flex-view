@@ -212,6 +212,22 @@ export function useAppUpdate(): UseAppUpdateResult {
   const download = useCallback(async () => {
     if (!available) return;
 
+    // Legacy (Android 5.x): plugins de filesystem/file-opener não estão disponíveis.
+    // Delega pro bridge nativo, que abre o APK no navegador do sistema (download + install).
+    const legacy = getLegacyBridge();
+    if (legacy) {
+      try {
+        legacy.downloadApk(available.url);
+        setStatus("installing");
+      } catch (e) {
+        console.error("[useAppUpdate] LntvLegacy.downloadApk failed", e);
+        setError(e instanceof Error ? e.message : "Erro desconhecido");
+        setStatus("error");
+        try { window.open(available.url, "_blank"); } catch { /* noop */ }
+      }
+      return;
+    }
+
     // Web (PWA): só abre no navegador.
     if (!(await isNativeApp())) {
       window.open(available.url, "_blank");
