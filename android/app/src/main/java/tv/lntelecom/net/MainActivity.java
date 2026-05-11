@@ -3,7 +3,9 @@ package tv.lntelecom.net;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.KeyEvent;
+import android.view.SurfaceView;
 import android.view.View;
+import android.view.ViewGroup;
 import android.webkit.WebSettings;
 import android.view.WindowManager;
 import android.webkit.WebView;
@@ -30,6 +32,22 @@ public class MainActivity extends BridgeActivity {
 
             WebSettings settings = webView.getSettings();
             settings.setMediaPlaybackRequiresUserGesture(false);
+
+            ViewGroup parent = webView.getParent() instanceof ViewGroup
+                    ? (ViewGroup) webView.getParent()
+                    : null;
+            if (parent != null) {
+                SurfaceView compositionSurface = new SurfaceView(this);
+                compositionSurface.setBackgroundColor(Color.BLACK);
+                parent.addView(
+                    compositionSurface,
+                    0,
+                    new ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                );
+            }
         }
     }
 
