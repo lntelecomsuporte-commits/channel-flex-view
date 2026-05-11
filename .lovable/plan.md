@@ -1,116 +1,93 @@
-# Plano: zap rápido — A para web/TV, B para APK
+# Plano: remover ExoPlayer + aplicar otimizações no hls.js
 
-Combinação dos dois caminhos: o APK Android passa a usar **ExoPlayer nativo** (latência ~50-150ms igual aos concorrentes), e a versão web/Smart TV recebe as **otimizações dentro de hls.js** (latência ~250-400ms, melhor que hoje mas limitado pelo WebView).
+## 1. Remover ExoPlayer / plugin nativo (volta ao estado pré-ExoPlayer)
 
-Detecção: `Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'` → tenta ExoPlayer; cai em hls.js se o plugin falhar ao carregar (segurança).
+**Arquivos a deletar:**
+- `android/app/src/main/java/tv/lntelecom/net/LntvPlayerPlugin.java`
+- `src/components/player/NativeVideoPlayer.tsx`
+- `src/lib/native/lntvPlayer.ts`
 
----
+**Arquivos a reverter:**
+- `android/app/build.gradle` — remover dependências `androidx.media3:*` (exoplayer, exoplayer-hls, ui).
+- `android/app/src/main/java/tv/lntelecom/net/MainActivity.java` — remover `registerPlugin(LntvPlayerPlugin.class)` e o `SurfaceView` de composição que foi adicionado pra desbloquear o vídeo no FireTV. Volta ao estado original (só `PlaybackKeepAlivePlugin`, `KEEP_SCREEN_ON`, fundo preto, intercept de KEYCODE_MENU).
+- `android/app/src/main/res/values/styles.xml` — remover overrides `android:windowBackground/colorBackground` adicionados na tentativa de fix.
+- `src/index.css` — remover regras `.player-mode` com `background: transparent !important` (eram só pra TextureView aparecer).
+- `src/pages/PlayerPage.tsx` — remover qualquer add/remove da classe `player-mode` ligada ao native renderer.
+- `src/components/player/VideoPlayer.tsx` — remover branch `useNative` / `<NativeVideoPlayer>` e o import do wrapper.
+- `src/components/player/ChannelPrefetch.tsx` — remover ramo `shouldUseNativePlayer()` que chama `LntvPlayer.prepareNext`.
 
-## Parte A — Otimizações hls.js (web, Smart TV, fallback do APK)
+Resultado: APK volta a ser exatamente o WebView com `<video>`+hls.js, igual antes da empreitada do ExoPlayer.
 
-Aplica ao `VideoPlayer.tsx` e `ChannelPrefetch.tsx`. Nenhuma mudança de UI.
+## 2. Aplicar otimizações que faltavam no hls.js
 
-### A1. Reusar a instância de `Hls`
-Hoje cada zap faz `hls.destroy() + new Hls() + attachMedia()` (~200-400ms fixos). Vou manter a instância viva e, quando o engine/modo de proxy não muda, só chamar `hls.loadSource(novaUrl)`. Destroi só quando troca engine (HLS↔MPEG-TS↔native) ou flag de proxy.
+### 2a. Reusar instância de `Hls` entre zaps  *(ganho ~200-400ms)*
 
-### A2. Config agressiva de baixa latência
-```ts
-{
-  lowLatencyMode: true,
-  maxBufferLength: 6,           // hoje varia 10-30
-  maxMaxBufferLength: 30,
-  backBufferLength: 0,
-  maxBufferHole: 0.5,
-  startFragPrefetch: true,
-  startLevel: 0,                // já existe
-  manifestLoadingTimeOut: 6000,
-  fragLoadingTimeOut: 8000,
-  liveSyncDurationCount: 2,     // se device forte
-  nudgeMaxRetry: 5,
-}
+Refatorar `HlsVideoPlayer` em `src/components/player/VideoPlayer.tsx`:
+
+- Quebrar o `useEffect` grande em dois:
+  - **Setup once** (mount): cria `Hls` com a config low-latency atual, `attachMedia(video)`, registra todos os listeners (erro, freeze, watchdog, FRAG_LOADED).
+  - **On URL change**: só `hls.stopLoad()` + `hls.loadSource(novaUrl)` + reset de contadores (`networkErrorRetries`, `frag404ReloadAttempts`, `mediaErrorRecoveryAttempts`).
+- Destruir só quando: engine muda (HLS↔MPEG-TS↔native), unmount, ou troca de modo de proxy/token.
+- MPEG-TS continua destruindo (lib não suporta hot-swap).
+
+### 2b. Stack de 2 `<video>` invisíveis com swap  *(zap ~50-100ms em vizinho prefetched)*
+
+```text
+<div class="player-stack">
+  <video ref=videoA />   ← visível, tocando canal atual
+  <video ref=videoB />   ← oculto (opacity 0), com hls preparado no próximo
+</div>
 ```
-Em devices fracos (`getDeviceProfile().weak`) mantém `maxBufferLength: 20` e `liveSyncDurationCount: 3`.
 
-### A3. Remover probe de content-type do caminho crítico
-Hoje todo `.m3u8` faz um GET extra antes de instanciar o `Hls`. Vou pular: assume HLS direto e só roda o probe se o `Hls` emitir `MANIFEST_PARSING_ERROR`.
+- Duas instâncias `Hls` paralelas (`hlsA`, `hlsB`), cada uma anexada ao seu `<video>`.
+- `ChannelPrefetch` já recebe `nextStreamUrl` — vou usar pra carregar no slot inativo (`loadSource` + `startLoad(0)`, sem `play()` pra decoder não rodar).
+- Quando o usuário troca e a URL nova == `nextStreamUrl` prefetchada: **swap de slot** (toggle de classe + `play()` no novo + `pause()` no antigo). Latência ~ 1 frame.
+- URL nova ≠ prefetchada (busca, salto, favoritos): slot ativo recebe `loadSource` normal. Como A1 já está aplicado, sem destruir.
+- Em devices fracos (`getDeviceProfile().weak`): manter stack mas parar o `Hls` oculto após 2 segmentos baixados (não decodifica vídeo, só aquece buffer/cache).
 
-### A4. `resolveRedirects` não-bloqueante
-Se `redirectCache` tem entrada válida, usa. Se não, instancia o `Hls` na URL original em paralelo e atualiza o cache em background (em vez de esperar o GET `Range: 0-0`).
+### 2c. Eliminar tela preta entre zaps
 
-### A5. Pre-cache real de vizinhos (corrigir CORS)
-`ChannelPrefetch.tsx` já está reescrito (manifest + 1º segmento com CORS), mas o `hls-proxy` precisa devolver `Access-Control-Allow-Origin: *` consistentemente para que o cache seja reaproveitado. Vou conferir/ajustar a edge function.
+- Remover `key={streamUrl}` do `<video>` (linha 541) — força remount visual desnecessário.
+- Manter o `<video>` antigo no DOM com último frame congelado até o novo emitir `playing`. Com a stack do 2b isso fica natural: o swap só promove o slot novo depois do `playing`.
+- Spinner discreto continua só após 500ms (já existe).
 
-### A6. Não voltar pra preto entre zaps
-Trocar o overlay preto (`firstFrameReady`) por: manter o último frame congelado do canal anterior (CSS `opacity` no `<video>` antigo) e mostrar spinner discreto só após 600ms se o novo ainda não tocou.
+## 3. Confirmação rápida
 
-**Ganho estimado web/TV:** ~950ms → ~250-400ms por zap (vizinho prefetched).
-
----
-
-## Parte B — ExoPlayer nativo no APK Android
-
-Plugin Capacitor próprio que renderiza vídeo via ExoPlayer numa `SurfaceView` por cima do WebView. O React continua dono da UI (OSD, lista, EPG); só o `<video>` vira uma "janela" controlada pelo plugin.
-
-### B1. Plugin nativo `LntvPlayer`
-`android/app/src/main/java/tv/lntelecom/net/LntvPlayerPlugin.java`:
-- Métodos JS: `load({url, headers})`, `play()`, `pause()`, `setVolume(v)`, `setMuted(b)`, `release()`, `setRect({x,y,w,h})`, `prepareNext({url})`, `swapToNext()`.
-- Eventos: `playing`, `waiting`, `ended`, `error`, `firstFrame`, `levelSwitched`.
-- Usa `ExoPlayer` (media3) com `HlsMediaSource.Factory` + `DefaultHttpDataSource.Factory` (custom UA, headers).
-- `LoadControl` igual ao OleTV: `bufferForPlaybackMs=0`, `bufferForPlaybackAfterRebufferMs=0`, `minBufferMs=4000`, `maxBufferMs=60000`.
-- **Trio de instâncias** (`prev`, `current`, `next`): `prepare()` nas três, `setPlayWhenReady(true)` só na atual; `swapToNext()` é instantâneo (~50ms).
-- Surface: `SurfaceView` adicionada à `decorView`, posicionada por `setRect` que o React calcula a partir do bounding box do `<video>` placeholder (z-index acima do WebView mas abaixo do OSD).
-
-### B2. Wrapper TS
-`src/lib/native/lntvPlayer.ts`: `registerPlugin<LntvPlayerPlugin>('LntvPlayer')` + tipos.
-
-### B3. Integração no `VideoPlayer.tsx`
-- Detecta `Capacitor.getPlatform() === 'android'` no mount.
-- Se nativo: render `<div ref=videoRef />` placeholder (mesma posição/tamanho que o `<video>`), usa `ResizeObserver` pra `setRect` no plugin a cada layout.
-- Mapeia eventos do plugin nos mesmos handlers que hoje escutam no `<video>` (playing → `setFirstFrameReady`, error → fallback de URL etc.).
-- Se `LntvPlayer` não registrado (caiu na atualização, build velha): `Capacitor.isPluginAvailable('LntvPlayer')` falso → cai pra hls.js (Parte A).
-
-### B4. Pre-cache no APK
-Como ExoPlayer baixa direto, `ChannelPrefetch` no APK chama `LntvPlayer.prepareNext({url})` em vez de `fetch`. O ExoPlayer carrega manifest + 1-2 segmentos no slot `next`, e `swapToNext()` é trivial.
-
-### B5. Build
-- `android/app/build.gradle`: adicionar `implementation "androidx.media3:media3-exoplayer:1.4.1"`, `media3-exoplayer-hls:1.4.1`, `media3-ui:1.4.1`.
-- `MainActivity.java`: `registerPlugin(LntvPlayerPlugin.class)`.
-- `npm run build && npx cap sync android` + APK signed pelo workflow existente (keystore release, ver `mem://security/android-keystore`).
-
-**Ganho estimado APK:** ~950ms → ~80-150ms (paridade com OleTV).
+CORS no `hls-proxy` já está OK (`Access-Control-Allow-Origin: *` em todas as respostas). Prefetch é cacheável. Nada a fazer.
 
 ---
 
-## Arquivos tocados
+## Arquivos tocados (resumo)
 
-**Parte A (JS, deploy via `npm run build` + rsync):**
-- `src/components/player/VideoPlayer.tsx` — reuso de Hls, config low-latency, sem probe, redirect não-bloqueante, sem overlay preto.
-- `src/components/player/ChannelPrefetch.tsx` — pequeno ajuste pra chamar `LntvPlayer.prepareNext` quando nativo.
-- `src/lib/stream.ts` — variante não-bloqueante de `resolveRedirects`.
-- `supabase/functions/hls-proxy/index.ts` — garantir CORS `*` em todas as respostas (manifest + segmentos).
+**Deletar (3):**
+- `android/app/src/main/java/tv/lntelecom/net/LntvPlayerPlugin.java`
+- `src/components/player/NativeVideoPlayer.tsx`
+- `src/lib/native/lntvPlayer.ts`
 
-**Parte B (nativo Android, requer rebuild de APK):**
-- `android/app/src/main/java/tv/lntelecom/net/LntvPlayerPlugin.java` (novo).
-- `android/app/src/main/java/tv/lntelecom/net/MainActivity.java` — `registerPlugin`.
-- `android/app/build.gradle` — deps media3.
-- `src/lib/native/lntvPlayer.ts` (novo) — wrapper Capacitor.
-- `src/components/player/VideoPlayer.tsx` — branch nativo vs. hls.js.
+**Reverter (5):**
+- `android/app/build.gradle`
+- `android/app/src/main/java/tv/lntelecom/net/MainActivity.java`
+- `android/app/src/main/res/values/styles.xml`
+- `src/index.css`
+- `src/pages/PlayerPage.tsx`
+
+**Editar (2):**
+- `src/components/player/VideoPlayer.tsx` — refatorar HlsVideoPlayer (setup once + loadSource on change), adicionar stack de 2 `<video>` com swap, remover `key={streamUrl}`, remover branch nativo.
+- `src/components/player/ChannelPrefetch.tsx` — remover ramo nativo, comunicar `nextStreamUrl` ao `VideoPlayer` (via prop / context simples) pra carregar no slot oculto. Mantém o fetch de manifest+segmento como fallback pra MP4 e DNS warm.
 
 ## Não vou mexer
 
-Lista de canais, OSD, EPG, favoritos, PIN, login Hubsoft, sync de logos, edge functions de auth/webhooks, layout/branding.
-
-## Riscos
-
-- **ExoPlayer + SurfaceView sob WebView**: posicionamento exige `ResizeObserver` confiável; em fullscreen é trivial (100vw/100vh).
-- **Plugin novo no APK**: usuários precisam atualizar o APK para ter o ganho — antes da atualização, cai pra hls.js (Parte A).
-- **media3 aumenta tamanho do APK** em ~3-5MB (aceitável).
-- **CORS no hls-proxy**: se algum upstream rejeitar, fallback `no-cors` (atual) continua funcionando, só sem cache reaproveitado.
+Lista de canais, OSD, EPG, favoritos, PIN, login Hubsoft, sync de logos, edge functions, branding, layout, MPEG-TS, YouTube, foreground service de keep-alive.
 
 ## Validação
 
-- Web (preview): trocar canal várias vezes, medir tempo até 1º frame no console (já existe log).
-- APK: `adb logcat | grep LntvPlayer` mostra latência de cada `load → firstFrame`.
-- Comparar zap antes/depois com cronômetro no controle remoto da TV.
+- Web preview: trocar canal várias vezes; log `[Player] engine=hls` deve aparecer só 2x (mount), não a cada zap.
+- Cronômetro no controle: zap em vizinho < 150ms (hoje ~600-900ms).
+- APK rebuild: instalar e confirmar que voltou ao comportamento antes do ExoPlayer (sem tela preta/branca, vídeo dentro do WebView).
 
-Posso começar pela Parte A (rápida, atinge web/TV imediato) e depois Parte B (precisa rebuild de APK), ou ambos em paralelo. Confirma que sigo nesse plano?
+## Riscos
+
+- 2 `<video>` simultâneos consomem ~1 segmento extra de banda (vizinho). O `ChannelPrefetch` já gastava isso.
+- Em smart TVs muito velhas (Tizen 2017) pode haver limite de instâncias de `Hls` simultâneas — mitigado mantendo o slot oculto sem `play()`.
+
+Confirma que sigo?
