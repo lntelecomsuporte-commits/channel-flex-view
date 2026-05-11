@@ -76,12 +76,13 @@ public class LntvPlayerPlugin extends Plugin {
             ? (ViewGroup) webView.getParent()
             : null;
         if (parent != null) {
-            int webViewIndex = parent.indexOfChild(webView);
             parent.setBackgroundColor(Color.TRANSPARENT);
-            parent.addView(container, Math.max(0, webViewIndex), lp);
+            // Insere o container ANTES do WebView (z-order: vídeo embaixo)
+            parent.addView(container, 0, lp);
             webView.setBackgroundColor(Color.TRANSPARENT);
-            webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
-            webView.bringToFront();
+            // HARDWARE layer é necessário pra alpha/transparência funcionar
+            // de verdade no WebView. SOFTWARE deixa branco em alguns devices.
+            webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         } else {
             ViewGroup root = (ViewGroup) getActivity().getWindow().getDecorView();
             root.setBackgroundColor(Color.TRANSPARENT);
