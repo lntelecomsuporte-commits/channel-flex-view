@@ -23,7 +23,7 @@ public class MainActivity extends BridgeActivity {
 
         WebView webView = this.bridge != null ? this.bridge.getWebView() : null;
         if (webView != null) {
-            webView.setBackgroundColor(Color.BLACK);
+            webView.setBackgroundColor(Color.TRANSPARENT);
             webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
             webView.setHorizontalScrollBarEnabled(false);
             webView.setVerticalScrollBarEnabled(false);
