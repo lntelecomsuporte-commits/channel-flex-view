@@ -60,6 +60,12 @@ async function isNativeApp(): Promise<boolean> {
 }
 
 function normalizeApkUrl(remote: RemoteVersion): RemoteVersion {
+  // Em legacy (Android 5.x), trocamos `url` pra apontar pro APK legacy.
+  // Assim o restante do fluxo (prompt + download) usa o APK certo.
+  const legacy = getLegacyBridge();
+  if (legacy && remote.legacyUrl) {
+    remote = { ...remote, url: remote.legacyUrl };
+  }
   if (!remote.url.includes("/downloads/lntv-latest.apk")) return remote;
   // Compatibilidade com o script atual do servidor, que está publicando
   // lntv-release.apk. O workflow novo continua gerando lntv-latest.apk.
@@ -70,6 +76,18 @@ function normalizeApkUrl(remote: RemoteVersion): RemoteVersion {
 }
 
 async function getCurrentVersionCode(): Promise<number | null> {
+  // Legacy: pega versionCode via JS bridge exposto pela LegacyMainActivity.
+  const legacy = getLegacyBridge();
+  if (legacy) {
+    try {
+      const code = legacy.getVersionCode();
+      console.log("[useAppUpdate] LntvLegacy.getVersionCode()", code);
+      return Number.isFinite(code) && code > 0 ? code : null;
+    } catch (e) {
+      console.warn("[useAppUpdate] LntvLegacy.getVersionCode() failed", e);
+      return null;
+    }
+  }
   try {
     const { App } = await import("@capacitor/app");
     const info = await App.getInfo();
