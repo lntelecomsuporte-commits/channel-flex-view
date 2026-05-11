@@ -537,6 +537,21 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     };
   }, [playableStreamUrl, autoPlay, activeStreamUrl, proxyTokenFailure, resolvedContentType]);
 
+  // Unmount: derruba engines persistentes (hot-swap mantinha entre zaps).
+  useEffect(() => {
+    return () => {
+      if (hlsRef.current) {
+        try { hlsRef.current.destroy(); } catch { /* ignore */ }
+        hlsRef.current = null;
+      }
+      if (mpegtsRef.current) {
+        try { mpegtsRef.current.destroy(); } catch { /* ignore */ }
+        mpegtsRef.current = null;
+      }
+      currentEngineRef.current = null;
+    };
+  }, []);
+
   // Unmute after first user interaction
   useEffect(() => {
     const unmute = () => {
