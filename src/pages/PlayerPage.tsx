@@ -733,7 +733,7 @@ const PlayerPage = () => {
 
   return (
     <div
-      className="relative w-full h-full overflow-hidden bg-background select-none"
+      className="relative w-full h-full overflow-hidden bg-transparent select-none"
       style={{ width: "100vw", height: "100vh" }}
       {...touchHandlers}
       onClick={() => {
