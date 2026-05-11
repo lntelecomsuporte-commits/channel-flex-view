@@ -48,16 +48,7 @@ export interface VideoPlayerHandle {
   getHls: () => Hls | null;
 }
 
-// Lazy: só importa quando nativo ativa (evita custo no bundle web)
-import NativeVideoPlayer from "./NativeVideoPlayer";
-
 const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>((props, ref) => {
-  // Branch nativo (APK Android com plugin LntvPlayer): ExoPlayer media3.
-  // Latência ~80-150ms. Cai pra hls.js abaixo se o plugin não responder.
-  const [useNative] = useState(() => shouldUseNativePlayer());
-  if (useNative) {
-    return <NativeVideoPlayer ref={ref} {...props} />;
-  }
   return <HlsVideoPlayer ref={ref} {...props} />;
 });
 
