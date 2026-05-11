@@ -1,10 +1,12 @@
 package tv.lntelecom.net;
 
 import android.graphics.Color;
+import android.graphics.PixelFormat;
 import android.net.Uri;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.webkit.WebView;
 import android.widget.FrameLayout;
 
 import androidx.media3.common.MediaItem;
@@ -63,19 +65,34 @@ public class LntvPlayerPlugin extends Plugin {
     private void ensureViews() {
         if (container != null) return;
         container = new FrameLayout(getActivity());
-        container.setBackgroundColor(Color.BLACK);
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+        container.setBackgroundColor(Color.TRANSPARENT);
+        ViewGroup.LayoutParams lp = new ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         );
-        // Adiciona à decorView do Window — fica ACIMA do WebView por padrão.
-        // O OSD (HTML) ainda fica visível porque sobre ele coloca-se via
-        // setRect com tamanho específico ou esconde com setRect(0,0,0,0).
-        ViewGroup root = (ViewGroup) getActivity().getWindow().getDecorView();
-        root.addView(container, lp);
+        // FireTV/WebView: SurfaceView acima do WebView pode tocar só áudio e
+        // ficar preto por composição de camadas. A solução estável é deixar a
+        // superfície nativa ATRÁS do WebView e tornar o HTML do player transparente.
+        WebView webView = getBridge() != null ? getBridge().getWebView() : null;
+        ViewGroup parent = webView != null && webView.getParent() instanceof ViewGroup
+            ? (ViewGroup) webView.getParent()
+            : null;
+        if (parent != null) {
+            int webViewIndex = parent.indexOfChild(webView);
+            parent.addView(container, Math.max(0, webViewIndex), lp);
+            webView.setBackgroundColor(Color.TRANSPARENT);
+            webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+            webView.bringToFront();
+        } else {
+            ViewGroup root = (ViewGroup) getActivity().getWindow().getDecorView();
+            root.addView(container, 0, lp);
+        }
 
         surfaceView = new SurfaceView(getActivity());
         surfaceView.setBackgroundColor(Color.BLACK);
+        surfaceView.setZOrderOnTop(false);
+        surfaceView.setZOrderMediaOverlay(false);
+        surfaceView.getHolder().setFormat(PixelFormat.OPAQUE);
         FrameLayout.LayoutParams sp = new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
