@@ -6,7 +6,6 @@ import { Capacitor } from "@capacitor/core";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 import { getDeviceProfile } from "@/lib/deviceProfile";
 import YouTubePlayer from "./YouTubePlayer";
-import { shouldUseNativePlayer } from "@/lib/native/lntvPlayer";
 
 /** Detecta o engine a usar com base na URL (extensão). */
 const detectEngine = (url: string, sourceUrl = url, forcedContentType = ""): "hls" | "mpegts" | "native" => {
@@ -49,16 +48,7 @@ export interface VideoPlayerHandle {
   getHls: () => Hls | null;
 }
 
-// Lazy: só importa quando nativo ativa (evita custo no bundle web)
-import NativeVideoPlayer from "./NativeVideoPlayer";
-
 const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>((props, ref) => {
-  // Branch nativo (APK Android com plugin LntvPlayer): ExoPlayer media3.
-  // Latência ~80-150ms. Cai pra hls.js abaixo se o plugin não responder.
-  const [useNative] = useState(() => shouldUseNativePlayer());
-  if (useNative) {
-    return <NativeVideoPlayer ref={ref} {...props} />;
-  }
   return <HlsVideoPlayer ref={ref} {...props} />;
 });
 
@@ -66,6 +56,8 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const mpegtsRef = useRef<mpegts.Player | null>(null);
+  // Engine atualmente carregada na instância Hls — usado pra decidir hot-swap.
+  const currentEngineRef = useRef<"hls" | "mpegts" | "native" | null>(null);
   
   const [muted, setMuted] = useState(true);
   const [proxyTokenFailure, setProxyTokenFailure] = useState(false);
@@ -79,6 +71,14 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
   const backups = backupStreamUrls?.filter((u) => !!u && u.trim().length > 0) ?? [];
   const activeStreamUrl = backupIndex < 0 ? streamUrl : (backups[backupIndex] ?? streamUrl);
   const youTubeVideoId = extractYouTubeVideoId(activeStreamUrl);
+
+  // Refs espelhando estado pra que handlers registrados UMA vez no Hls
+  // (caminho hot-swap) sempre leiam valores atuais sem precisar re-registrar.
+  const corsFallbackRef = useRef(corsFallback);
+  const useProxyTokenRef = useRef(useProxyToken);
+  const playableUrlRef = useRef<string>("");
+  useEffect(() => { corsFallbackRef.current = corsFallback; }, [corsFallback]);
+  useEffect(() => { useProxyTokenRef.current = useProxyToken; }, [useProxyToken]);
 
   useImperativeHandle(ref, () => ({
     getVideoElement: () => videoRef.current,
@@ -178,37 +178,12 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     const video = videoRef.current;
     if (!video || !playableStreamUrl) return;
 
+    playableUrlRef.current = playableStreamUrl;
+
     setFirstFrameReady(false);
     const onFirstPlaying = () => setFirstFrameReady(true);
     video.addEventListener("playing", onFirstPlaying);
     video.addEventListener("loadeddata", onFirstPlaying);
-
-    video.pause();
-    video.removeAttribute("src");
-    video.load();
-
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
-    if (mpegtsRef.current) {
-      mpegtsRef.current.destroy();
-      mpegtsRef.current = null;
-    }
-
-    const handleVideoError = () => {
-      if (
-        !corsFallback &&
-        !isProxiedStreamUrl(playableStreamUrl) &&
-        !useProxyToken
-      ) {
-        console.warn("[Player] URL direta falhou — tentando via proxy genérico (1x)");
-        setCorsFallback(true);
-        return;
-      }
-      tryNextBackup();
-    };
-    video.addEventListener("error", handleVideoError);
 
     // On iOS/Safari, prefer native HLS for better AirPlay support
     const isAppleDevice = /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent) &&
@@ -217,6 +192,60 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     // Detecta engine pela extensão da URL: .m3u8 → hls.js, resto → tag <video>.
     const engine = detectEngine(playableStreamUrl, activeStreamUrl, resolvedContentType);
     console.log(`[Player] engine=${engine} url=${playableStreamUrl.slice(0, 80)}...`);
+
+    // === HOT-SWAP: reusa instância Hls entre zaps (ganho ~200-400ms) ===
+    // Mesma engine HLS + Hls já anexado ao <video>: troca só o source.
+    // Evita destroy/recreate, novo MediaSource (que pisca a tela), nova
+    // negociação de codec. O frame anterior fica congelado até 'playing'.
+    if (
+      engine === "hls" &&
+      !isAppleDevice &&
+      Hls.isSupported() &&
+      hlsRef.current &&
+      currentEngineRef.current === "hls"
+    ) {
+      const hls = hlsRef.current;
+      try {
+        hls.stopLoad();
+        hls.loadSource(playableStreamUrl);
+        if (autoPlay) video.play().catch(() => {});
+        return () => {
+          video.removeEventListener("playing", onFirstPlaying);
+          video.removeEventListener("loadeddata", onFirstPlaying);
+        };
+      } catch (e) {
+        console.warn("[Player] hot-swap falhou, recriando:", e);
+        try { hls.destroy(); } catch { /* ignore */ }
+        hlsRef.current = null;
+        currentEngineRef.current = null;
+      }
+    }
+
+    // === COLD PATH: cria engine nova (mudou de tipo, primeira vez,
+    // ou hot-swap falhou). Aí sim derruba o que tiver. ===
+    if (hlsRef.current) {
+      try { hlsRef.current.destroy(); } catch { /* ignore */ }
+      hlsRef.current = null;
+    }
+    if (mpegtsRef.current) {
+      try { mpegtsRef.current.destroy(); } catch { /* ignore */ }
+      mpegtsRef.current = null;
+    }
+    currentEngineRef.current = null;
+
+    const handleVideoError = () => {
+      if (
+        !corsFallbackRef.current &&
+        !isProxiedStreamUrl(playableUrlRef.current) &&
+        !useProxyTokenRef.current
+      ) {
+        console.warn("[Player] URL direta falhou — tentando via proxy genérico (1x)");
+        setCorsFallback(true);
+        return;
+      }
+      tryNextBackup();
+    };
+    video.addEventListener("error", handleVideoError);
 
     if (engine === "hls" && !isAppleDevice && Hls.isSupported()) {
       const profile = getDeviceProfile();
@@ -254,6 +283,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         abrBandWidthUpFactor: 0.6,
       });
       hlsRef.current = hls;
+      currentEngineRef.current = "hls";
       hls.loadSource(playableStreamUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -348,6 +378,8 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
               if (tryNextBackup()) return;
               console.error("[HLS] Sem mais backups — desistindo:", data.details);
               hls.destroy();
+              hlsRef.current = null;
+              currentEngineRef.current = null;
               return;
             }
             console.warn(`[HLS] Erro de rede fatal (#${networkErrorRetries}) — tentando retomar:`, data.details);
@@ -368,6 +400,8 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
             console.error("[HLS] Erro fatal não recuperável:", data);
             if (tryNextBackup()) return;
             hls.destroy();
+            hlsRef.current = null;
+            currentEngineRef.current = null;
             break;
         }
       });
@@ -441,6 +475,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         liveBufferLatencyMinRemain: 1,
       });
       mpegtsRef.current = tsPlayer;
+      currentEngineRef.current = "mpegts";
       tsPlayer.attachMediaElement(video);
       tsPlayer.load();
       tsPlayer.on(mpegts.Events.ERROR, (type, details) => {
@@ -453,6 +488,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
       }
     } else if (engine === "native" || (engine === "hls" && isAppleDevice && video.canPlayType("application/vnd.apple.mpegurl"))) {
       // Player nativo: MP4 progressivo ou HLS no Safari/iOS (AirPlay).
+      currentEngineRef.current = "native";
       video.src = playableStreamUrl;
       if (autoPlay) video.play().catch(() => {});
     }
@@ -490,6 +526,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
           try { mpegtsRef.current.destroy(); } catch { /* ignore */ }
           mpegtsRef.current = null;
         }
+        currentEngineRef.current = null;
         // Trigger re-mount do effect mexendo no resolvedUrl (vai voltar ao mesmo valor logo depois).
         setResolvedContentType((c) => c + " ");
       }
@@ -500,16 +537,25 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
       video.removeEventListener("error", handleVideoError);
       video.removeEventListener("playing", onFirstPlaying);
       video.removeEventListener("loadeddata", onFirstPlaying);
+      // NÃO destrói hlsRef/mpegtsRef aqui — o hot-swap reusa a instância
+      // entre zaps. Cleanup real acontece no useEffect de unmount abaixo.
+    };
+  }, [playableStreamUrl, autoPlay, activeStreamUrl, proxyTokenFailure, resolvedContentType]);
+
+  // Unmount: derruba engines persistentes (hot-swap mantinha entre zaps).
+  useEffect(() => {
+    return () => {
       if (hlsRef.current) {
-        hlsRef.current.destroy();
+        try { hlsRef.current.destroy(); } catch { /* ignore */ }
         hlsRef.current = null;
       }
       if (mpegtsRef.current) {
-        mpegtsRef.current.destroy();
+        try { mpegtsRef.current.destroy(); } catch { /* ignore */ }
         mpegtsRef.current = null;
       }
+      currentEngineRef.current = null;
     };
-  }, [playableStreamUrl, autoPlay, activeStreamUrl, proxyTokenFailure, resolvedContentType]);
+  }, []);
 
   // Unmute after first user interaction
   useEffect(() => {
@@ -538,7 +584,6 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
   return (
     <>
       <video
-        key={streamUrl}
         ref={videoRef}
         className="absolute inset-0 w-full h-full object-contain"
         style={{ backgroundColor: "#000" }}

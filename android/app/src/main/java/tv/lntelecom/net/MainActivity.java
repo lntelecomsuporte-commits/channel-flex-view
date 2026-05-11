@@ -3,9 +3,7 @@ package tv.lntelecom.net;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.KeyEvent;
-import android.view.SurfaceView;
 import android.view.View;
-import android.view.ViewGroup;
 import android.webkit.WebSettings;
 import android.view.WindowManager;
 import android.webkit.WebView;
@@ -16,7 +14,6 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(PlaybackKeepAlivePlugin.class);
-        registerPlugin(LntvPlayerPlugin.class);
         super.onCreate(savedInstanceState);
         // Mantém a tela acesa enquanto a Activity estiver visível.
         // O foreground service cuida do CPU/processo em background.
@@ -25,29 +22,13 @@ public class MainActivity extends BridgeActivity {
 
         WebView webView = this.bridge != null ? this.bridge.getWebView() : null;
         if (webView != null) {
-            webView.setBackgroundColor(Color.TRANSPARENT);
+            webView.setBackgroundColor(Color.BLACK);
             webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
             webView.setHorizontalScrollBarEnabled(false);
             webView.setVerticalScrollBarEnabled(false);
 
             WebSettings settings = webView.getSettings();
             settings.setMediaPlaybackRequiresUserGesture(false);
-
-            ViewGroup parent = webView.getParent() instanceof ViewGroup
-                    ? (ViewGroup) webView.getParent()
-                    : null;
-            if (parent != null) {
-                SurfaceView compositionSurface = new SurfaceView(this);
-                compositionSurface.setBackgroundColor(Color.BLACK);
-                parent.addView(
-                    compositionSurface,
-                    0,
-                    new ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                );
-            }
         }
     }
 
