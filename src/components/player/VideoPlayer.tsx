@@ -378,6 +378,8 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
               if (tryNextBackup()) return;
               console.error("[HLS] Sem mais backups — desistindo:", data.details);
               hls.destroy();
+              hlsRef.current = null;
+              currentEngineRef.current = null;
               return;
             }
             console.warn(`[HLS] Erro de rede fatal (#${networkErrorRetries}) — tentando retomar:`, data.details);
