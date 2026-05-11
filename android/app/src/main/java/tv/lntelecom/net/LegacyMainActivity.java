@@ -11,13 +11,47 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.CookieSyncManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.content.pm.PackageInfo;
 
 public class LegacyMainActivity extends Activity {
     private WebView webView;
+
+    /** Bridge JS exposto como window.LntvLegacy — usado pelo auto-update do APK no legacy. */
+    private class LegacyUpdateBridge {
+        @JavascriptInterface
+        public int getVersionCode() {
+            try {
+                PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
+                return pi.versionCode;
+            } catch (Exception e) {
+                return -1;
+            }
+        }
+
+        @JavascriptInterface
+        public String getVersionName() {
+            try {
+                PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
+                return pi.versionName != null ? pi.versionName : "";
+            } catch (Exception e) {
+                return "";
+            }
+        }
+
+        @JavascriptInterface
+        public void downloadApk(String url) {
+            try {
+                Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(i);
+            } catch (Exception ignored) {}
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,6 +88,9 @@ public class LegacyMainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         }
+
+        // Bridge JS pro auto-update do APK no legacy.
+        webView.addJavascriptInterface(new LegacyUpdateBridge(), "LntvLegacy");
 
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {

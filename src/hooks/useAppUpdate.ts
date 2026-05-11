@@ -17,6 +17,7 @@ export interface RemoteVersion {
   versionCode: number;
   versionName: string;
   url: string;
+  legacyUrl?: string;
   notes?: string;
 }
 
@@ -37,7 +38,19 @@ const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 min
 const VERSION_JSON_URL = "/version.json";
 const PRODUCTION_VERSION_JSON_URL = "https://tv2.lntelecom.net/version.json";
 
+interface LegacyBridge {
+  getVersionCode: () => number;
+  getVersionName?: () => string;
+  downloadApk: (url: string) => void;
+}
+
+function getLegacyBridge(): LegacyBridge | null {
+  const w = window as unknown as { LntvLegacy?: LegacyBridge };
+  return w.LntvLegacy && typeof w.LntvLegacy.getVersionCode === "function" ? w.LntvLegacy : null;
+}
+
 async function isNativeApp(): Promise<boolean> {
+  if (getLegacyBridge()) return true;
   try {
     const { Capacitor } = await import("@capacitor/core");
     return Capacitor.isNativePlatform();
@@ -47,6 +60,12 @@ async function isNativeApp(): Promise<boolean> {
 }
 
 function normalizeApkUrl(remote: RemoteVersion): RemoteVersion {
+  // Em legacy (Android 5.x), trocamos `url` pra apontar pro APK legacy.
+  // Assim o restante do fluxo (prompt + download) usa o APK certo.
+  const legacy = getLegacyBridge();
+  if (legacy && remote.legacyUrl) {
+    remote = { ...remote, url: remote.legacyUrl };
+  }
   if (!remote.url.includes("/downloads/lntv-latest.apk")) return remote;
   // Compatibilidade com o script atual do servidor, que está publicando
   // lntv-release.apk. O workflow novo continua gerando lntv-latest.apk.
@@ -57,6 +76,18 @@ function normalizeApkUrl(remote: RemoteVersion): RemoteVersion {
 }
 
 async function getCurrentVersionCode(): Promise<number | null> {
+  // Legacy: pega versionCode via JS bridge exposto pela LegacyMainActivity.
+  const legacy = getLegacyBridge();
+  if (legacy) {
+    try {
+      const code = legacy.getVersionCode();
+      console.log("[useAppUpdate] LntvLegacy.getVersionCode()", code);
+      return Number.isFinite(code) && code > 0 ? code : null;
+    } catch (e) {
+      console.warn("[useAppUpdate] LntvLegacy.getVersionCode() failed", e);
+      return null;
+    }
+  }
   try {
     const { App } = await import("@capacitor/app");
     const info = await App.getInfo();
@@ -180,6 +211,22 @@ export function useAppUpdate(): UseAppUpdateResult {
 
   const download = useCallback(async () => {
     if (!available) return;
+
+    // Legacy (Android 5.x): plugins de filesystem/file-opener não estão disponíveis.
+    // Delega pro bridge nativo, que abre o APK no navegador do sistema (download + install).
+    const legacy = getLegacyBridge();
+    if (legacy) {
+      try {
+        legacy.downloadApk(available.url);
+        setStatus("installing");
+      } catch (e) {
+        console.error("[useAppUpdate] LntvLegacy.downloadApk failed", e);
+        setError(e instanceof Error ? e.message : "Erro desconhecido");
+        setStatus("error");
+        try { window.open(available.url, "_blank"); } catch { /* noop */ }
+      }
+      return;
+    }
 
     // Web (PWA): só abre no navegador.
     if (!(await isNativeApp())) {
