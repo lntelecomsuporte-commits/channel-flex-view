@@ -105,24 +105,21 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         url = buildProxyStreamUrl(activeStreamUrl) ?? getPlayableStreamUrl(activeStreamUrl);
       } else {
         url = await resolveChannelStreamUrl(activeStreamUrl, channelId, false, forceProxyNative);
-        // No APK: redirects (301/302) são resolvidos em BACKGROUND pelo
-        // ChannelPrefetch — não bloqueamos o caminho crítico do zap aqui.
-        // Se o ChannelPrefetch já populou redirectCache, resolveRedirects
-        // devolve instantâneo do cache; senão, dispara em paralelo e o
-        // hls.js usa a URL original (que segue redirect server-side via
-        // hls-proxy ou via fetch nativo do WebView Android).
+        // Redirects: hls.js segue 301/302 sozinho via seu fetch loader, e
+        // o WebView Android também segue cross-origin pra HLS. Resolvemos
+        // em BACKGROUND (sem await) só pra popular o cache pra próxima vez.
+        // Não bloqueia o zap — economia de ~80-150ms por canal.
         if (
           Capacitor.isNativePlatform() &&
           !isProxiedStreamUrl(url) &&
           /^https:\/\//i.test(url)
         ) {
-          // Best-effort: dispara mas só espera ~120ms. Se o cache já tem,
-          // resolve imediato; senão, segue com a original sem travar o zap.
-          const fast = await Promise.race([
+          // Cache hit é instantâneo; cache miss roda em paralelo sem segurar.
+          const cached = await Promise.race([
             resolveRedirects(url),
-            new Promise<string>((r) => setTimeout(() => r(url), 120)),
+            Promise.resolve<string | null>(null),
           ]);
-          if (!cancelled && fast) url = fast;
+          if (!cancelled && cached && cached !== url) url = cached;
         }
       }
       // Probe de content-type DEFERIDO: removido do caminho crítico.
@@ -255,9 +252,12 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         // Live low-latency: reduz tempo até 1º frame em ~150-300ms.
         // Em devices fracos mantém modo padrão (decoder não acompanha LL).
         lowLatencyMode: !isWeak,
-        liveSyncDurationCount: isWeak ? 3 : 2,
-        liveMaxLatencyDurationCount: 10,
         // === Fast channel zap ===
+        // liveSyncDurationCount: 1 = começa playback assim que o 1º segmento
+        // do live edge chega. Antes (2-3) esperava 2-3 segmentos completos
+        // antes do 1º frame — explicava boa parte dos ~2s no zap.
+        liveSyncDurationCount: isWeak ? 2 : 1,
+        liveMaxLatencyDurationCount: 10,
         startLevel: 0,                              // 1ª qualidade = mais baixa → 1º frame rápido
         startFragPrefetch: true,                    // pre-busca seg #0 enquanto manifest processa
         backBufferLength: isWeak ? 10 : 0,          // libera memória cedo (zap mais leve)
