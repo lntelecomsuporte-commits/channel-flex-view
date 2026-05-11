@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { getPlayableStreamUrl, resolveChannelStreamUrl, resolveRedirects } from "@/lib/stream";
+import { LntvPlayer, isNativePlayerAvailable } from "@/lib/native/lntvPlayer";
 
 interface ChannelPrefetchProps {
   /** URL do próximo canal (já resolvido). Se nulo, não prefetcha. */
