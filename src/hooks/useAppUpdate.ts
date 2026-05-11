@@ -17,6 +17,7 @@ export interface RemoteVersion {
   versionCode: number;
   versionName: string;
   url: string;
+  legacyUrl?: string;
   notes?: string;
 }
 
@@ -37,7 +38,19 @@ const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 min
 const VERSION_JSON_URL = "/version.json";
 const PRODUCTION_VERSION_JSON_URL = "https://tv2.lntelecom.net/version.json";
 
+interface LegacyBridge {
+  getVersionCode: () => number;
+  getVersionName?: () => string;
+  downloadApk: (url: string) => void;
+}
+
+function getLegacyBridge(): LegacyBridge | null {
+  const w = window as unknown as { LntvLegacy?: LegacyBridge };
+  return w.LntvLegacy && typeof w.LntvLegacy.getVersionCode === "function" ? w.LntvLegacy : null;
+}
+
 async function isNativeApp(): Promise<boolean> {
+  if (getLegacyBridge()) return true;
   try {
     const { Capacitor } = await import("@capacitor/core");
     return Capacitor.isNativePlatform();
