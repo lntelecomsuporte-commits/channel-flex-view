@@ -6,7 +6,7 @@ import { Capacitor } from "@capacitor/core";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 import { getDeviceProfile } from "@/lib/deviceProfile";
 import YouTubePlayer from "./YouTubePlayer";
-import { LntvPlayer, isNativePlayerAvailable } from "@/lib/native/lntvPlayer";
+import { shouldUseNativePlayer } from "@/lib/native/lntvPlayer";
 
 /** Detecta o engine a usar com base na URL (extensão). */
 const detectEngine = (url: string, sourceUrl = url, forcedContentType = ""): "hls" | "mpegts" | "native" => {
@@ -55,7 +55,7 @@ import NativeVideoPlayer from "./NativeVideoPlayer";
 const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>((props, ref) => {
   // Branch nativo (APK Android com plugin LntvPlayer): ExoPlayer media3.
   // Latência ~80-150ms. Cai pra hls.js abaixo se o plugin não responder.
-  const [useNative] = useState(() => isNativePlayerAvailable());
+  const [useNative] = useState(() => shouldUseNativePlayer());
   if (useNative) {
     return <NativeVideoPlayer ref={ref} {...props} />;
   }
