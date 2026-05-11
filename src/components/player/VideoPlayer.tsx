@@ -471,6 +471,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         liveBufferLatencyMinRemain: 1,
       });
       mpegtsRef.current = tsPlayer;
+      currentEngineRef.current = "mpegts";
       tsPlayer.attachMediaElement(video);
       tsPlayer.load();
       tsPlayer.on(mpegts.Events.ERROR, (type, details) => {
@@ -483,6 +484,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
       }
     } else if (engine === "native" || (engine === "hls" && isAppleDevice && video.canPlayType("application/vnd.apple.mpegurl"))) {
       // Player nativo: MP4 progressivo ou HLS no Safari/iOS (AirPlay).
+      currentEngineRef.current = "native";
       video.src = playableStreamUrl;
       if (autoPlay) video.play().catch(() => {});
     }
