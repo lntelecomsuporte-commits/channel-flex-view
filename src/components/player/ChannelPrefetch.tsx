@@ -42,21 +42,19 @@ const ChannelPrefetch = ({
     if (!nextStreamUrl) return;
 
     const ctrl = new AbortController();
-    // Delay curto: dá prioridade pro canal atual abrir, mas curto o bastante
-    // pra que zaps consecutivos (UP, UP, UP) já achem cache pronto.
-    const t = setTimeout(() => {
-      void prefetchChannel({
-        nextStreamUrl,
-        channelId,
-        useProxyToken,
-        forceProxyNative,
-        signal: ctrl.signal,
-        lastFetchedRef,
-      });
-    }, 150);
+    // Sem delay: dispara imediato pra que zaps consecutivos (UP/DOWN)
+    // achem manifest+1º segmento já no HTTP cache. O canal atual está
+    // numa Hls separada, sem competir pelo decoder.
+    void prefetchChannel({
+      nextStreamUrl,
+      channelId,
+      useProxyToken,
+      forceProxyNative,
+      signal: ctrl.signal,
+      lastFetchedRef,
+    });
 
     return () => {
-      clearTimeout(t);
       ctrl.abort();
     };
   }, [nextStreamUrl, channelId, useProxyToken, forceProxyNative]);
