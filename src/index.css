@@ -68,13 +68,6 @@
   body.player-mode {
     overflow: hidden;
   }
-
-  html.player-mode,
-  body.player-mode,
-  body.player-mode #root {
-    background: transparent !important;
-    background-color: transparent !important;
-  }
 }
 
 @layer utilities {
