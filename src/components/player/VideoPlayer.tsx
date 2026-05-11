@@ -574,7 +574,6 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         className="absolute inset-0 w-full h-full object-contain"
         style={{ backgroundColor: "#000" }}
         poster=""
-        poster=""
         controls={false}
         controlsList="nodownload noplaybackrate noremoteplayback"
         disablePictureInPicture
