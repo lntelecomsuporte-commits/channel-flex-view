@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { getPlayableStreamUrl, resolveChannelStreamUrl, resolveRedirects } from "@/lib/stream";
-import { LntvPlayer, isNativePlayerAvailable } from "@/lib/native/lntvPlayer";
+import { LntvPlayer, shouldUseNativePlayer } from "@/lib/native/lntvPlayer";
 
 interface ChannelPrefetchProps {
   /** URL do próximo canal (já resolvido). Se nulo, não prefetcha. */
@@ -97,7 +97,7 @@ const prefetchChannel = async ({
 
     // 2.b) APK Android: ExoPlayer nativo pré-buffera direto via prepareNext.
     // Próximo zap é resolvido via swapToNext() → ~50ms.
-    if (isNativePlayerAvailable()) {
+    if (shouldUseNativePlayer()) {
       try {
         await LntvPlayer.prepareNext({ url });
       } catch {
