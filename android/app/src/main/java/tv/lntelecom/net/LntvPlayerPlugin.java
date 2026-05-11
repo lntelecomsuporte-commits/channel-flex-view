@@ -291,9 +291,17 @@ public class LntvPlayerPlugin extends Plugin {
                 call.resolve();
                 return;
             }
-            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-                (int) (w * dpr), (int) (h * dpr)
-            );
+            ViewGroup.MarginLayoutParams lp;
+            ViewGroup.LayoutParams current = container.getLayoutParams();
+            if (current instanceof ViewGroup.MarginLayoutParams) {
+                lp = (ViewGroup.MarginLayoutParams) current;
+                lp.width = (int) (w * dpr);
+                lp.height = (int) (h * dpr);
+            } else {
+                lp = new ViewGroup.MarginLayoutParams(
+                    (int) (w * dpr), (int) (h * dpr)
+                );
+            }
             lp.leftMargin = (int) (x * dpr);
             lp.topMargin = (int) (y * dpr);
             container.setLayoutParams(lp);
