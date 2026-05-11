@@ -283,6 +283,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         abrBandWidthUpFactor: 0.6,
       });
       hlsRef.current = hls;
+      currentEngineRef.current = "hls";
       hls.loadSource(playableStreamUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
