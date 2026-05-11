@@ -400,6 +400,8 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
             console.error("[HLS] Erro fatal não recuperável:", data);
             if (tryNextBackup()) return;
             hls.destroy();
+            hlsRef.current = null;
+            currentEngineRef.current = null;
             break;
         }
       });
