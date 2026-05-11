@@ -163,7 +163,7 @@ const NativeVideoPlayer = forwardRef<VideoPlayerHandle, NativeVideoPlayerProps>(
       <div
         ref={placeholderRef}
         className="absolute inset-0 w-full h-full"
-        style={{ backgroundColor: "#000" }}
+        style={{ backgroundColor: "transparent" }}
         aria-label="Native video surface placeholder"
       />
       {!firstFrame && (
