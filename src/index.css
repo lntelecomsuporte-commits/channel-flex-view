@@ -72,7 +72,8 @@
   html.player-mode,
   body.player-mode,
   body.player-mode #root {
-    background: transparent;
+    background: transparent !important;
+    background-color: transparent !important;
   }
 }
 
