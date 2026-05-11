@@ -6,7 +6,6 @@ import { Capacitor } from "@capacitor/core";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 import { getDeviceProfile } from "@/lib/deviceProfile";
 import YouTubePlayer from "./YouTubePlayer";
-import { shouldUseNativePlayer } from "@/lib/native/lntvPlayer";
 
 /** Detecta o engine a usar com base na URL (extensão). */
 const detectEngine = (url: string, sourceUrl = url, forcedContentType = ""): "hls" | "mpegts" | "native" => {
