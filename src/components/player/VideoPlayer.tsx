@@ -532,14 +532,8 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
       video.removeEventListener("error", handleVideoError);
       video.removeEventListener("playing", onFirstPlaying);
       video.removeEventListener("loadeddata", onFirstPlaying);
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
-      }
-      if (mpegtsRef.current) {
-        mpegtsRef.current.destroy();
-        mpegtsRef.current = null;
-      }
+      // NÃO destrói hlsRef/mpegtsRef aqui — o hot-swap reusa a instância
+      // entre zaps. Cleanup real acontece no useEffect de unmount abaixo.
     };
   }, [playableStreamUrl, autoPlay, activeStreamUrl, proxyTokenFailure, resolvedContentType]);
 
