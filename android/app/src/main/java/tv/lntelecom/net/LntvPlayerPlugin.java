@@ -183,7 +183,7 @@ public class LntvPlayerPlugin extends Plugin {
                 }
                 player = createPlayer();
                 attachListener(player, true);
-                player.setVideoSurfaceView(surfaceView);
+                player.setVideoTextureView(textureView);
                 player.setMediaSource(buildSource(url));
                 player.prepare();
                 player.setPlayWhenReady(true);
@@ -231,7 +231,7 @@ public class LntvPlayerPlugin extends Plugin {
                 player = nextPlayer;
                 nextPlayer = null;
                 attachListener(player, true);
-                player.setVideoSurfaceView(surfaceView);
+                player.setVideoTextureView(textureView);
                 player.setPlayWhenReady(true);
                 container.setVisibility(View.VISIBLE);
                 call.resolve();
