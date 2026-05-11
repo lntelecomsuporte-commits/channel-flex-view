@@ -530,7 +530,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
     return <YouTubePlayer videoId={youTubeVideoId} autoPlay={autoPlay} />;
   }
 
-  const shouldConcealNativeVideo = !firstFrameReady || resolvedSourceUrl !== activeStreamUrl || !playableStreamUrl;
+  const isLoadingNewChannel = !firstFrameReady || resolvedSourceUrl !== activeStreamUrl || !playableStreamUrl;
 
   return (
     <>
@@ -538,11 +538,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         key={streamUrl}
         ref={videoRef}
         className="absolute inset-0 w-full h-full object-contain"
-        style={{
-          backgroundColor: "#000",
-          opacity: shouldConcealNativeVideo ? 0 : 1,
-          visibility: shouldConcealNativeVideo ? "hidden" : "visible",
-        }}
+        style={{ backgroundColor: "#000" }}
         poster=""
         controls={false}
         controlsList="nodownload noplaybackrate noremoteplayback"
@@ -553,15 +549,32 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ streamUrl
         x-webkit-airplay="allow"
         webkit-playsinline="true"
       />
-      {shouldConcealNativeVideo && (
-        <div
-          className="absolute inset-0 bg-black pointer-events-none"
-          aria-hidden="true"
-        />
-      )}
+      {isLoadingNewChannel && <DelayedSpinner />}
     </>
   );
 });
+
+/**
+ * Spinner discreto que só aparece se a troca de canal demorar >500ms.
+ * Em zaps rápidos (cache hit do prefetch) NÃO mostra nada — só a transição
+ * natural do <video>, igual outros players de IPTV.
+ */
+const DelayedSpinner = () => {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setShow(true), 500);
+    return () => clearTimeout(t);
+  }, []);
+  if (!show) return null;
+  return (
+    <div
+      className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/40"
+      aria-hidden="true"
+    >
+      <div className="w-10 h-10 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+    </div>
+  );
+};
 
 VideoPlayer.displayName = "VideoPlayer";
 
