@@ -252,9 +252,12 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         // Live low-latency: reduz tempo até 1º frame em ~150-300ms.
         // Em devices fracos mantém modo padrão (decoder não acompanha LL).
         lowLatencyMode: !isWeak,
-        liveSyncDurationCount: isWeak ? 3 : 2,
-        liveMaxLatencyDurationCount: 10,
         // === Fast channel zap ===
+        // liveSyncDurationCount: 1 = começa playback assim que o 1º segmento
+        // do live edge chega. Antes (2-3) esperava 2-3 segmentos completos
+        // antes do 1º frame — explicava boa parte dos ~2s no zap.
+        liveSyncDurationCount: isWeak ? 2 : 1,
+        liveMaxLatencyDurationCount: 10,
         startLevel: 0,                              // 1ª qualidade = mais baixa → 1º frame rápido
         startFragPrefetch: true,                    // pre-busca seg #0 enquanto manifest processa
         backBufferLength: isWeak ? 10 : 0,          // libera memória cedo (zap mais leve)
