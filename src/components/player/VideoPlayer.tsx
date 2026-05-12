@@ -85,52 +85,52 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     getHls: () => hlsRef.current,
   }), []);
 
-  // Resolve a URL de stream — pode ser async se canal usar token assinado.
+  // Resolve a URL de stream.
+  // FAST PATH (síncrono): caminho simples (sem token assinado, sem cors fallback)
+  // resolve em 1 render só, sem await/microtask. Economiza ~50-150ms no zap.
+  // SLOW PATH (async): só quando precisa assinar token HMAC.
   useEffect(() => {
     if (youTubeVideoId) {
       setResolvedUrl("");
       setResolvedSourceUrl("");
       return;
     }
-    let cancelled = false;
-    (async () => {
+
+    const needsAsync =
+      useProxyToken && channelId && !proxyTokenFailure && backupIndex < 0;
+
+    if (!needsAsync) {
+      // Caminho síncrono — resolve direto, sem await.
       let url: string;
-      if (useProxyToken && channelId && !proxyTokenFailure && backupIndex < 0) {
-        // Token assinado só faz sentido na URL principal (cadastrada no admin).
-        // Em backup, vai direto/proxy normal.
-        url = await resolveChannelStreamUrl(activeStreamUrl, channelId, true, forceProxyNative);
-      } else if (corsFallback) {
-        // Fallback genérico: URL HTTPS direta falhou por CORS/302/rede.
-        // Tenta UMA vez via proxy antes de pular pro próximo backup.
+      if (corsFallback) {
+        url = buildProxyStreamUrl(activeStreamUrl) ?? getPlayableStreamUrl(activeStreamUrl);
+      } else if (forceProxyNative && Capacitor.isNativePlatform()) {
         url = buildProxyStreamUrl(activeStreamUrl) ?? getPlayableStreamUrl(activeStreamUrl);
       } else {
-        url = await resolveChannelStreamUrl(activeStreamUrl, channelId, false, forceProxyNative);
-        // Redirects: hls.js segue 301/302 sozinho via seu fetch loader, e
-        // o WebView Android também segue cross-origin pra HLS. Resolvemos
-        // em BACKGROUND (sem await) só pra popular o cache pra próxima vez.
-        // Não bloqueia o zap — economia de ~80-150ms por canal.
-        if (
-          Capacitor.isNativePlatform() &&
-          !isProxiedStreamUrl(url) &&
-          /^https:\/\//i.test(url)
-        ) {
-          // Cache hit é instantâneo; cache miss roda em paralelo sem segurar.
-          const cached = await Promise.race([
-            resolveRedirects(url),
-            Promise.resolve<string | null>(null),
-          ]);
-          if (!cancelled && cached && cached !== url) url = cached;
-        }
+        url = getPlayableStreamUrl(activeStreamUrl);
       }
-      // Probe de content-type DEFERIDO: removido do caminho crítico.
-      // Se a stream redirecionar pra MPEG-TS bruto, o hls.js vai dar
-      // manifestParsingError no primeiro carregamento — aí o handler de erro
-      // dispara o probe sob demanda (via setResolvedContentType abaixo).
-      if (!cancelled) setResolvedContentType("");
-      if (!cancelled) {
-        setResolvedSourceUrl(activeStreamUrl);
-        setResolvedUrl(url);
+      // Fire-and-forget: aquece cache de redirect pra próxima vez. Não bloqueia.
+      if (
+        Capacitor.isNativePlatform() &&
+        !isProxiedStreamUrl(url) &&
+        /^https:\/\//i.test(url)
+      ) {
+        resolveRedirects(url).catch(() => {});
       }
+      setResolvedContentType("");
+      setResolvedSourceUrl(activeStreamUrl);
+      setResolvedUrl(url);
+      return;
+    }
+
+    // Caminho async (token assinado HMAC).
+    let cancelled = false;
+    (async () => {
+      const url = await resolveChannelStreamUrl(activeStreamUrl, channelId, true, forceProxyNative);
+      if (cancelled) return;
+      setResolvedContentType("");
+      setResolvedSourceUrl(activeStreamUrl);
+      setResolvedUrl(url);
     })();
     return () => { cancelled = true; };
   }, [activeStreamUrl, useProxyToken, forceProxyNative, channelId, youTubeVideoId, proxyTokenFailure, backupIndex, corsFallback]);
@@ -143,14 +143,15 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
   // o canal sem src. O guard resolvedSourceUrl === activeStreamUrl já impede
   // anexar a URL do canal anterior no <video> novo.
   useEffect(() => {
+    // Reset SOMENTE flags de erro/backup. NÃO zera firstFrameReady:
+    // o hot-swap mantém o frame anterior congelado até o novo dar 'playing',
+    // o que evita o spinner aparecer em todo zap. firstFrameReady é zerado
+    // apenas no effect do <video> abaixo, e mesmo assim o DelayedSpinner
+    // tem threshold alto pra não piscar em zap rápido.
     setProxyTokenFailure(false);
     setBackupIndex(-1);
     setCorsFallback(false);
     setResolvedContentType("");
-    // Cobre o gap entre trocar de canal e a nova URL ser resolvida
-    // (token assinado / resolveRedirects / probe de content-type são async).
-    // Sem isso, o <video> vazio mostra o "play gigante" do WebView do Android.
-    setFirstFrameReady(false);
   }, [streamUrl]);
 
   // Se mudar de backup dentro do mesmo canal, cada URL precisa recomeçar limpa.
@@ -177,7 +178,10 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
 
     playableUrlRef.current = playableStreamUrl;
 
-    setFirstFrameReady(false);
+    // NÃO zera firstFrameReady aqui — em hot-swap o frame anterior fica
+    // congelado até o novo dar 'playing'. Sem isso, todo zap mostraria spinner
+    // por ~500ms+. firstFrameReady só vai pra false na primeira montagem
+    // (initial state) ou se realmente não houver frame.
     const onFirstPlaying = () => setFirstFrameReady(true);
     video.addEventListener("playing", onFirstPlaying);
     video.addEventListener("loadeddata", onFirstPlaying);
@@ -579,6 +583,9 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     return <YouTubePlayer videoId={youTubeVideoId} autoPlay={autoPlay} />;
   }
 
+  // Loading state: só conta como "carregando" se NUNCA tocou ainda OU
+  // se a URL não resolveu. Em hot-swap (firstFrameReady já true) deixa o
+  // frame anterior visível enquanto o novo segmento chega — sem spinner piscando.
   const isLoadingNewChannel = !firstFrameReady || resolvedSourceUrl !== activeStreamUrl || !playableStreamUrl;
 
   return (
@@ -597,29 +604,30 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         x-webkit-airplay="allow"
         webkit-playsinline="true"
       />
-      {isLoadingNewChannel && <DelayedSpinner />}
+      {isLoadingNewChannel && <DelayedSpinner key={activeStreamUrl} />}
     </>
   );
 });
 
 /**
- * Spinner discreto que só aparece se a troca de canal demorar >500ms.
- * Em zaps rápidos (cache hit do prefetch) NÃO mostra nada — só a transição
- * natural do <video>, igual outros players de IPTV.
+ * Spinner discreto no canto inferior direito. Só aparece se a troca de
+ * canal demorar >900ms — em zap normal (cache hit do prefetch) NÃO mostra
+ * nada, só a transição natural do <video>. Sem véu preto pra não cobrir
+ * o frame anterior congelado durante o hot-swap.
  */
 const DelayedSpinner = () => {
   const [show, setShow] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setShow(true), 500);
+    const t = setTimeout(() => setShow(true), 900);
     return () => clearTimeout(t);
   }, []);
   if (!show) return null;
   return (
     <div
-      className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/40"
+      className="absolute bottom-6 right-6 pointer-events-none animate-fade-in"
       aria-hidden="true"
     >
-      <div className="w-10 h-10 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+      <div className="w-7 h-7 border-2 border-white/30 border-t-white rounded-full animate-spin drop-shadow-lg" />
     </div>
   );
 };
