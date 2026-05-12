@@ -261,14 +261,14 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         // do live edge chega. Antes (2-3) esperava 2-3 segmentos completos
         // antes do 1º frame — explicava boa parte dos ~2s no zap.
         liveSyncDurationCount: isWeak ? 2 : 1,
-        liveMaxLatencyDurationCount: 10,
+        liveMaxLatencyDurationCount: isWeak ? 10 : 5,
         startLevel: 0,                              // 1ª qualidade = mais baixa → 1º frame rápido
         startFragPrefetch: true,                    // pre-busca seg #0 enquanto manifest processa
         backBufferLength: isWeak ? 10 : 0,          // libera memória cedo (zap mais leve)
         maxBufferLength: isWeak ? 20 : 6,           // buffer alvo enxuto = recover rápido
         maxMaxBufferLength: 30,
         maxBufferSize: 30 * 1000 * 1000,            // 30MB
-        maxBufferHole: 0.5,
+        maxBufferHole: 0.3,                         // pula gaps menores rápido
         nudgeMaxRetry: 5,
         // Retries: agressivos mas com cap pra não emperrar em segmento podre.
         fragLoadingMaxRetry: 3,
