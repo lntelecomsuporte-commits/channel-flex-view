@@ -1,93 +1,87 @@
-# Plano: remover ExoPlayer + aplicar otimizações no hls.js
+# Análise: o que acontece hoje a cada troca de canal
 
-## 1. Remover ExoPlayer / plugin nativo (volta ao estado pré-ExoPlayer)
+Quando você aperta ↑ no controle, a sequência atual é:
 
-**Arquivos a deletar:**
-- `android/app/src/main/java/tv/lntelecom/net/LntvPlayerPlugin.java`
-- `src/components/player/NativeVideoPlayer.tsx`
-- `src/lib/native/lntvPlayer.ts`
-
-**Arquivos a reverter:**
-- `android/app/build.gradle` — remover dependências `androidx.media3:*` (exoplayer, exoplayer-hls, ui).
-- `android/app/src/main/java/tv/lntelecom/net/MainActivity.java` — remover `registerPlugin(LntvPlayerPlugin.class)` e o `SurfaceView` de composição que foi adicionado pra desbloquear o vídeo no FireTV. Volta ao estado original (só `PlaybackKeepAlivePlugin`, `KEEP_SCREEN_ON`, fundo preto, intercept de KEYCODE_MENU).
-- `android/app/src/main/res/values/styles.xml` — remover overrides `android:windowBackground/colorBackground` adicionados na tentativa de fix.
-- `src/index.css` — remover regras `.player-mode` com `background: transparent !important` (eram só pra TextureView aparecer).
-- `src/pages/PlayerPage.tsx` — remover qualquer add/remove da classe `player-mode` ligada ao native renderer.
-- `src/components/player/VideoPlayer.tsx` — remover branch `useNative` / `<NativeVideoPlayer>` e o import do wrapper.
-- `src/components/player/ChannelPrefetch.tsx` — remover ramo `shouldUseNativePlayer()` que chama `LntvPlayer.prepareNext`.
-
-Resultado: APK volta a ser exatamente o WebView com `<video>`+hls.js, igual antes da empreitada do ExoPlayer.
-
-## 2. Aplicar otimizações que faltavam no hls.js
-
-### 2a. Reusar instância de `Hls` entre zaps  *(ganho ~200-400ms)*
-
-Refatorar `HlsVideoPlayer` em `src/components/player/VideoPlayer.tsx`:
-
-- Quebrar o `useEffect` grande em dois:
-  - **Setup once** (mount): cria `Hls` com a config low-latency atual, `attachMedia(video)`, registra todos os listeners (erro, freeze, watchdog, FRAG_LOADED).
-  - **On URL change**: só `hls.stopLoad()` + `hls.loadSource(novaUrl)` + reset de contadores (`networkErrorRetries`, `frag404ReloadAttempts`, `mediaErrorRecoveryAttempts`).
-- Destruir só quando: engine muda (HLS↔MPEG-TS↔native), unmount, ou troca de modo de proxy/token.
-- MPEG-TS continua destruindo (lib não suporta hot-swap).
-
-### 2b. Stack de 2 `<video>` invisíveis com swap  *(zap ~50-100ms em vizinho prefetched)*
-
-```text
-<div class="player-stack">
-  <video ref=videoA />   ← visível, tocando canal atual
-  <video ref=videoB />   ← oculto (opacity 0), com hls preparado no próximo
-</div>
+```
+keydown ↑ → setCurrentIndex(+1)
+        → PlayerPage re-renderiza com novo currentChannel.stream_url
+        → VideoPlayer recebe novo streamUrl
+        → useEffect "reset" dispara: zera firstFrameReady, backupIndex,
+          corsFallback, contentType, proxyTokenFailure (5 setStates)
+        → useEffect "resolve URL" dispara em ASYNC (await mesmo no caminho
+          simples HTTPS direto)
+        → Em APK + HTTPS: ainda faz Promise.race com resolveRedirects
+          (no-op porque Promise.resolve(null) ganha sempre)
+        → setResolvedUrl → useEffect do <video> dispara
+        → hot-swap (hls.stopLoad + loadSource) — bom, isso é rápido
+        → hls.js baixa manifest + 1 segmento → evento "playing"
+        → firstFrameReady = true → spinner some
 ```
 
-- Duas instâncias `Hls` paralelas (`hlsA`, `hlsB`), cada uma anexada ao seu `<video>`.
-- `ChannelPrefetch` já recebe `nextStreamUrl` — vou usar pra carregar no slot inativo (`loadSource` + `startLoad(0)`, sem `play()` pra decoder não rodar).
-- Quando o usuário troca e a URL nova == `nextStreamUrl` prefetchada: **swap de slot** (toggle de classe + `play()` no novo + `pause()` no antigo). Latência ~ 1 frame.
-- URL nova ≠ prefetchada (busca, salto, favoritos): slot ativo recebe `loadSource` normal. Como A1 já está aplicado, sem destruir.
-- Em devices fracos (`getDeviceProfile().weak`): manter stack mas parar o `Hls` oculto após 2 segmentos baixados (não decodifica vídeo, só aquece buffer/cache).
+## Diagnóstico dos problemas que você relatou
 
-### 2c. Eliminar tela preta entre zaps
+**1. Spinner aparece TODA troca** — o reset effect zera `firstFrameReady` na hora que `streamUrl` muda. Isso ativa `isLoadingNewChannel=true` imediatamente. O `DelayedSpinner` espera 500ms — mas como o tempo real até o 1º frame é ~600-1500ms (manifest + 1 segmento), ele quase sempre ultrapassa o limite e aparece. Resultado: spinner gigante no meio da tela em todo zap, ofuscando o frame anterior congelado que o hot-swap mantém.
 
-- Remover `key={streamUrl}` do `<video>` (linha 541) — força remount visual desnecessário.
-- Manter o `<video>` antigo no DOM com último frame congelado até o novo emitir `playing`. Com a stack do 2b isso fica natural: o swap só promove o slot novo depois do `playing`.
-- Spinner discreto continua só após 500ms (já existe).
+**2. Delay de ~2s mesmo em canal local** — três custos pequenos somados:
+- 1 microtask + render extra do `await resolveChannelStreamUrl` no caminho HTTPS direto (que poderia ser síncrono).
+- O `Promise.race([resolveRedirects, Promise.resolve(null)])` é teatro: o `null` ganha sempre, então não economiza nada e ainda gasta 1 microtask.
+- 5 setStates no reset effect causam 2-3 renders antes do <video> ser remontado.
+- Hls.js precisa baixar manifest + 1 segmento HLS (4-6s de live edge) — esse é o piso real, ~400-800ms numa rede boa.
 
-## 3. Confirmação rápida
+**3. "Segurando ↑↑↑ mostra canais, soltou abre"** — hoje, segurar ↑ já mostra preview (via `e.repeat`), mas **soltar não confirma** — você ainda precisa apertar OK. Após 5s o preview some sem trocar. Não existe handler de `keyup` que faça `confirmPreview()`.
 
-CORS no `hls-proxy` já está OK (`Access-Control-Allow-Origin: *` em todas as respostas). Prefetch é cacheável. Nada a fazer.
+**4. Excesso de regras** — sim, há duplicação:
+- 5 setStates no reset que poderiam ser 1 ou nenhum (a maioria é "best-effort" que pode ser lazy).
+- O `Promise.race` é morto.
+- O `await` no caminho simples gasta render extra.
 
 ---
 
-## Arquivos tocados (resumo)
+# O que vou fazer
 
-**Deletar (3):**
-- `android/app/src/main/java/tv/lntelecom/net/LntvPlayerPlugin.java`
-- `src/components/player/NativeVideoPlayer.tsx`
-- `src/lib/native/lntvPlayer.ts`
+## 1. Tirar o spinner do caminho do zap (mais visível pro usuário)
 
-**Reverter (5):**
-- `android/app/build.gradle`
-- `android/app/src/main/java/tv/lntelecom/net/MainActivity.java`
-- `android/app/src/main/res/values/styles.xml`
-- `src/index.css`
-- `src/pages/PlayerPage.tsx`
+Em `VideoPlayer.tsx`:
+- **Não zerar `firstFrameReady` no reset effect.** Deixar o frame anterior congelado até o novo dar `playing` — exatamente o comportamento do hot-swap. Spinner só aparece se a URL DEMORAR pra resolver de verdade (>800ms), não em todo zap.
+- **Aumentar o threshold do `DelayedSpinner` de 500ms → 900ms.** Em zap normal (cache hit do prefetch), o frame troca antes — sem spinner. Só aparece se algo realmente travou.
+- **Diminuir o spinner e mover pro canto inferior direito**, sem véu preto. Não cobre o conteúdo.
 
-**Editar (2):**
-- `src/components/player/VideoPlayer.tsx` — refatorar HlsVideoPlayer (setup once + loadSource on change), adicionar stack de 2 `<video>` com swap, remover `key={streamUrl}`, remover branch nativo.
-- `src/components/player/ChannelPrefetch.tsx` — remover ramo nativo, comunicar `nextStreamUrl` ao `VideoPlayer` (via prop / context simples) pra carregar no slot oculto. Mantém o fetch de manifest+segmento como fallback pra MP4 e DNS warm.
+## 2. Eliminar o delay artificial no caminho síncrono
 
-## Não vou mexer
+Em `VideoPlayer.tsx` (effect de resolução de URL):
+- **Caminho simples (HTTPS direto, sem `useProxyToken`, sem `forceProxyNative`): roda síncrono**, sem `await`, sem effect com `Promise`. Calcula `getPlayableStreamUrl(streamUrl)` direto no `useMemo` e passa pro effect do <video>. Economiza 1-2 renders.
+- **Remover o `Promise.race([resolveRedirects, Promise.resolve(null)])`** — é no-op. Manter apenas o disparo "fire-and-forget" do `resolveRedirects` em background pra popular cache pra próxima vez.
+- **Consolidar os 5 setStates** do reset effect em 1 único `useReducer` (ou agrupar dentro do mesmo render via `unstable_batchedUpdates` implícito do React 18 — já vem batched, mas reordenar pra que o reset não dispare quando não precisa: só zerar `proxyTokenFailure`/`backupIndex` se eles estavam diferentes do default).
 
-Lista de canais, OSD, EPG, favoritos, PIN, login Hubsoft, sync de logos, edge functions, branding, layout, MPEG-TS, YouTube, foreground service de keep-alive.
+## 3. "Soltou ↑/↓ → abre o canal do preview"
 
-## Validação
+Em `PlayerPage.tsx` (handler de keyup):
+- Detectar `keyup` em `ArrowUp`/`ArrowDown` quando `showPreview` está ativo → chamar `confirmPreview()` automaticamente, com pequeno debounce de 120ms (pra não confirmar entre dois pulses do auto-repeat do controle).
+- Comportamento final:
+  - **Tap rápido em ↑** → troca direto pro próximo (igual hoje).
+  - **Segurar ↑** → mostra preview do próximo, próximo, próximo… (igual hoje).
+  - **Soltar** → confirma e abre o canal em foco no preview (NOVO — hoje precisa apertar OK).
 
-- Web preview: trocar canal várias vezes; log `[Player] engine=hls` deve aparecer só 2x (mount), não a cada zap.
-- Cronômetro no controle: zap em vizinho < 150ms (hoje ~600-900ms).
-- APK rebuild: instalar e confirmar que voltou ao comportamento antes do ExoPlayer (sem tela preta/branca, vídeo dentro do WebView).
+## 4. Reaproveitar prefetch melhor
 
-## Riscos
+Em `ChannelPrefetch.tsx`:
+- Já está bom — manifest + 1º segmento em cache. Vou apenas **pre-resolver o redirect** (`resolveRedirects`) imediatamente em paralelo (já está, mas garantir que o `next` E `prev` estejam sempre quentes). Sem mudanças grandes.
 
-- 2 `<video>` simultâneos consomem ~1 segmento extra de banda (vizinho). O `ChannelPrefetch` já gastava isso.
-- Em smart TVs muito velhas (Tizen 2017) pode haver limite de instâncias de `Hls` simultâneas — mitigado mantendo o slot oculto sem `play()`.
+---
 
-Confirma que sigo?
+# Resultado esperado
+
+- **Tap único em ↑/↓**: troca em ~300-600ms (limitado pelo download de 1 segmento HLS), **sem spinner aparecendo** — só o frame anterior congelando 1 instante antes do novo entrar.
+- **Segurar ↑/↓**: vê os preview cards passando rapidamente; ao soltar, o canal selecionado abre automaticamente.
+- **Spinner**: só aparece quando algo travou de verdade (>900ms), e mesmo assim discreto no canto, sem véu preto.
+- **Sem mudanças de comportamento** em: lista de canais, OSD, favoritos, busca, PIN, backups, hot-swap, watchdog, EPG.
+
+# Detalhes técnicos
+
+Arquivos tocados:
+- `src/components/player/VideoPlayer.tsx` — reset effect, async→sync no caminho simples, DelayedSpinner (threshold + visual).
+- `src/pages/PlayerPage.tsx` — handler de keyup pra `ArrowUp`/`ArrowDown` + lógica `confirmPreviewOnRelease`.
+
+Sem mudanças em: `ChannelPrefetch.tsx` (já otimizado), `stream.ts`, edge functions, banco, APK nativo.
+
+Risco baixo — todas as mudanças são em código de UI/timing. Sem alteração de protocolo de stream nem de proxies.
