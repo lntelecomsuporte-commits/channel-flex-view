@@ -655,6 +655,16 @@ const PlayerPage = () => {
         return;
       }
 
+      // "Soltou ↑/↓ → abre o canal do preview".
+      // Quando o usuário segura ↑ ou ↓, o `e.repeat` mostra preview do próximo.
+      // Ao soltar a tecla, confirma automaticamente o canal em foco — sem
+      // precisar apertar OK. Comportamento esperado de IPTV/Sky.
+      if ((e.key === "ArrowUp" || e.key === "ArrowDown") && showPreview && previewIndex !== null) {
+        e.preventDefault();
+        confirmPreview();
+        return;
+      }
+
       if (!isSelectKey(e)) return;
       if (enterLongPressTimerRef.current) {
         clearTimeout(enterLongPressTimerRef.current);
