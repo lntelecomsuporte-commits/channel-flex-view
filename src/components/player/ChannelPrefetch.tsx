@@ -42,19 +42,24 @@ const ChannelPrefetch = ({
     if (!nextStreamUrl) return;
 
     const ctrl = new AbortController();
-    // Sem delay: dispara imediato pra que zaps consecutivos (UP/DOWN)
-    // achem manifest+1º segmento já no HTTP cache. O canal atual está
-    // numa Hls separada, sem competir pelo decoder.
-    void prefetchChannel({
-      nextStreamUrl,
-      channelId,
-      useProxyToken,
-      forceProxyNative,
-      signal: ctrl.signal,
-      lastFetchedRef,
-    });
+    // Janela de silêncio: o canal ATUAL precisa baixar manifest + 1º segmento
+    // (~1-1.5MB) sem competir banda. Só depois de ~450ms começamos a aquecer
+    // o próximo. Se o usuário trocar antes disso, o timer é cancelado e nada
+    // de bytes parasitas foram baixados. Ganho real em zap: ~150-300ms.
+    const QUIET_WINDOW_MS = 450;
+    const timer = setTimeout(() => {
+      void prefetchChannel({
+        nextStreamUrl,
+        channelId,
+        useProxyToken,
+        forceProxyNative,
+        signal: ctrl.signal,
+        lastFetchedRef,
+      });
+    }, QUIET_WINDOW_MS);
 
     return () => {
+      clearTimeout(timer);
       ctrl.abort();
     };
   }, [nextStreamUrl, channelId, useProxyToken, forceProxyNative]);
