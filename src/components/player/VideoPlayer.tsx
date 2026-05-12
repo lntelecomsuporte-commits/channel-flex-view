@@ -178,7 +178,10 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
 
     playableUrlRef.current = playableStreamUrl;
 
-    setFirstFrameReady(false);
+    // NÃO zera firstFrameReady aqui — em hot-swap o frame anterior fica
+    // congelado até o novo dar 'playing'. Sem isso, todo zap mostraria spinner
+    // por ~500ms+. firstFrameReady só vai pra false na primeira montagem
+    // (initial state) ou se realmente não houver frame.
     const onFirstPlaying = () => setFirstFrameReady(true);
     video.addEventListener("playing", onFirstPlaying);
     video.addEventListener("loadeddata", onFirstPlaying);
@@ -580,6 +583,9 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     return <YouTubePlayer videoId={youTubeVideoId} autoPlay={autoPlay} />;
   }
 
+  // Loading state: só conta como "carregando" se NUNCA tocou ainda OU
+  // se a URL não resolveu. Em hot-swap (firstFrameReady já true) deixa o
+  // frame anterior visível enquanto o novo segmento chega — sem spinner piscando.
   const isLoadingNewChannel = !firstFrameReady || resolvedSourceUrl !== activeStreamUrl || !playableStreamUrl;
 
   return (
@@ -598,29 +604,30 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         x-webkit-airplay="allow"
         webkit-playsinline="true"
       />
-      {isLoadingNewChannel && <DelayedSpinner />}
+      {isLoadingNewChannel && <DelayedSpinner key={activeStreamUrl} />}
     </>
   );
 });
 
 /**
- * Spinner discreto que só aparece se a troca de canal demorar >500ms.
- * Em zaps rápidos (cache hit do prefetch) NÃO mostra nada — só a transição
- * natural do <video>, igual outros players de IPTV.
+ * Spinner discreto no canto inferior direito. Só aparece se a troca de
+ * canal demorar >900ms — em zap normal (cache hit do prefetch) NÃO mostra
+ * nada, só a transição natural do <video>. Sem véu preto pra não cobrir
+ * o frame anterior congelado durante o hot-swap.
  */
 const DelayedSpinner = () => {
   const [show, setShow] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setShow(true), 500);
+    const t = setTimeout(() => setShow(true), 900);
     return () => clearTimeout(t);
   }, []);
   if (!show) return null;
   return (
     <div
-      className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/40"
+      className="absolute bottom-6 right-6 pointer-events-none animate-fade-in"
       aria-hidden="true"
     >
-      <div className="w-10 h-10 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+      <div className="w-7 h-7 border-2 border-white/30 border-t-white rounded-full animate-spin drop-shadow-lg" />
     </div>
   );
 };
