@@ -42,6 +42,7 @@ public class MainActivity extends BridgeActivity {
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_MENU
                 || keyCode == 172 /* KEYCODE_GUIDE */
+                || keyCode == KeyEvent.KEYCODE_INFO /* 165 */
                 || keyCode == KeyEvent.KEYCODE_TV_CONTENTS_MENU
                 || keyCode == KeyEvent.KEYCODE_TV_MEDIA_CONTEXT_MENU) {
             try {

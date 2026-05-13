@@ -32,9 +32,13 @@ export function isMenuKey(event: KeyboardEvent) {
     key === "Menu" ||
     key === "Settings" ||
     key === "AppSwitch" ||
+    key === "Info" ||
+    key === "MediaTopMenu" ||
     keyCode === 82 ||  // KEYCODE_MENU
     keyCode === 93 ||  // KEYCODE_GUIDE (alguns Smart TVs)
-    keyCode === 18     // KEYCODE_SETTINGS (raro)
+    keyCode === 18 ||  // KEYCODE_SETTINGS (raro)
+    keyCode === 165 || // KEYCODE_INFO
+    keyCode === 172    // KEYCODE_GUIDE (Android TV)
   );
 }
 
