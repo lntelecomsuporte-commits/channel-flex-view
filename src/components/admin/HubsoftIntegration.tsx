@@ -131,6 +131,46 @@ async function syncCategoriesToExistingUsers(configId: string, categoryIds: stri
   return userIds.length;
 }
 
+async function syncTrialToExistingUsers(
+  configId: string,
+  trialCategoryIds: string[],
+  trialDays: number,
+): Promise<number> {
+  const { data: existingAccess, error: accessErr } = await supabase
+    .from("user_category_access")
+    .select("user_id")
+    .eq("hubsoft_config_id", configId);
+  if (accessErr) throw accessErr;
+
+  const userIds = Array.from(new Set((existingAccess ?? []).map((a) => a.user_id)));
+  if (userIds.length === 0) return 0;
+
+  const { error: delErr } = await supabase
+    .from("user_category_access")
+    .delete()
+    .eq("hubsoft_config_id", configId)
+    .in("user_id", userIds);
+  if (delErr) throw delErr;
+
+  if (trialCategoryIds.length === 0) return 0;
+
+  const expiresAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString();
+  const rows = userIds.flatMap((uid) =>
+    trialCategoryIds.map((cid) => ({
+      user_id: uid,
+      category_id: cid,
+      hubsoft_config_id: configId,
+      is_active: true,
+      is_trial: true,
+      trial_expires_at: expiresAt,
+    })),
+  );
+  const { error: insErr } = await supabase.from("user_category_access").insert(rows);
+  if (insErr) throw insErr;
+
+  return userIds.length;
+}
+
 const HubsoftIntegration = () => {
   const { data: configs, isLoading } = useHubsoftConfigs();
   const { data: configCategories } = useHubsoftConfigCategories();
@@ -154,6 +194,35 @@ const HubsoftIntegration = () => {
       toast.error("Erro ao sincronizar: " + (e?.message ?? e));
     } finally {
       queryClient.invalidateQueries({ queryKey: ["users"] });
+      setSyncingId(null);
+    }
+  };
+
+  const handleSyncTrialExisting = async (
+    configId: string,
+    trialCategoryIds: string[],
+    trialDays: number,
+    configName: string,
+  ) => {
+    if (trialCategoryIds.length === 0) {
+      toast.error("Nenhuma categoria de degustação configurada");
+      return;
+    }
+    if (
+      !confirm(
+        `Aplicar DEGUSTAÇÃO (${trialCategoryIds.length} categoria(s), ${trialDays} dias) a TODOS os usuários de "${configName}"? Os acessos atuais vinculados a ela serão substituídos. A expiração será contada a partir de agora.`,
+      )
+    )
+      return;
+    setSyncingId(configId);
+    try {
+      const count = await syncTrialToExistingUsers(configId, trialCategoryIds, trialDays);
+      toast.success(count > 0 ? `Degustação aplicada a ${count} usuário(s)` : "Nenhum usuário cadastrado por essa integração");
+    } catch (e: any) {
+      toast.error("Erro ao aplicar degustação: " + (e?.message ?? e));
+    } finally {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["user_trial_access"] });
       setSyncingId(null);
     }
   };
@@ -534,6 +603,24 @@ const HubsoftIntegration = () => {
                       >
                         <RefreshCw className={`h-4 w-4 ${syncingId === config.id ? "animate-spin" : ""}`} />
                       </Button>
+                      {(config as any).trial_enabled && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            handleSyncTrialExisting(
+                              config.id,
+                              getTrialCategoryIdsForConfig(config.id),
+                              Number((config as any).trial_days) || 30,
+                              config.name,
+                            )
+                          }
+                          disabled={syncingId === config.id}
+                          title="Aplicar período de degustação a todos os usuários desta integração"
+                        >
+                          🎁
+                        </Button>
+                      )}
                       <Button variant="ghost" size="sm" onClick={() => startEdit(config)} title="Editar">
                         <Edit2 className="h-4 w-4" />
                       </Button>
