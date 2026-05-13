@@ -121,6 +121,22 @@ const HubsoftIntegration = () => {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>({ ...emptyForm });
   const [saving, setSaving] = useState(false);
+  const [applyToExisting, setApplyToExisting] = useState(false);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+
+  const handleSyncExisting = async (configId: string, categoryIds: string[], configName: string) => {
+    if (!confirm(`Aplicar as ${categoryIds.length} categoria(s) atuais de "${configName}" a TODOS os usuários já cadastrados por essa integração? Os acessos anteriores vinculados a ela serão substituídos.`)) return;
+    setSyncingId(configId);
+    try {
+      const count = await syncCategoriesToExistingUsers(configId, categoryIds);
+      toast.success(count > 0 ? `Categorias aplicadas a ${count} usuário(s)` : "Nenhum usuário cadastrado por essa integração");
+    } catch (e: any) {
+      toast.error("Erro ao sincronizar: " + (e?.message ?? e));
+    } finally {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      setSyncingId(null);
+    }
+  };
 
   const getCategoryIdsForConfig = (configId: string) => {
     return configCategories?.filter((cc) => cc.hubsoft_config_id === configId).map((cc) => cc.category_id) || [];
