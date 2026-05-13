@@ -162,6 +162,10 @@ const HubsoftIntegration = () => {
     return configCategories?.filter((cc) => cc.hubsoft_config_id === configId).map((cc) => cc.category_id) || [];
   };
 
+  const getTrialCategoryIdsForConfig = (configId: string) => {
+    return trialConfigCategories?.filter((cc) => cc.hubsoft_config_id === configId).map((cc) => cc.category_id) || [];
+  };
+
   const startNew = () => {
     setEditingId(null);
     setForm({ ...emptyForm, api_key: generateApiKey() });
@@ -180,6 +184,9 @@ const HubsoftIntegration = () => {
       package_id: config.package_id,
       is_active: config.is_active,
       category_ids: getCategoryIdsForConfig(config.id),
+      trial_enabled: !!(config as any).trial_enabled,
+      trial_days: Number((config as any).trial_days) || 30,
+      trial_category_ids: getTrialCategoryIdsForConfig(config.id),
     });
     setApplyToExisting(false);
     setShowForm(true);
