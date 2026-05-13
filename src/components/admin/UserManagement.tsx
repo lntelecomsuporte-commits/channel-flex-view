@@ -527,6 +527,17 @@ const UserManagement = () => {
                   </div>
                   <div className="flex items-center flex-wrap gap-2 shrink-0">
                     <UserStatusBadge userId={p.user_id} />
+                    {trialMap?.get(p.user_id) && (() => {
+                      const t = formatTrialRemaining(trialMap.get(p.user_id)!);
+                      return (
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded ${t.expired ? "bg-destructive/20 text-destructive" : "bg-amber-500/20 text-amber-600 dark:text-amber-400"}`}
+                          title={`Degustação até ${fmtDate(trialMap.get(p.user_id)!)}`}
+                        >
+                          🎁 Degustação · {t.label}
+                        </span>
+                      );
+                    })()}
                     <span className={`text-xs px-2 py-0.5 rounded ${p.is_blocked ? "bg-destructive/20 text-destructive" : p.is_active ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
                       {p.is_blocked ? "Bloqueado" : p.is_active ? "Ativo" : "Inativo"}
                     </span>
