@@ -76,6 +76,42 @@ const emptyForm: FormState = {
   category_ids: [],
 };
 
+async function syncCategoriesToExistingUsers(configId: string, categoryIds: string[]): Promise<number> {
+  // Pega todos os usuários que já foram criados por essa integração
+  const { data: existingAccess, error: accessErr } = await supabase
+    .from("user_category_access")
+    .select("user_id")
+    .eq("hubsoft_config_id", configId);
+  if (accessErr) throw accessErr;
+
+  const userIds = Array.from(new Set((existingAccess ?? []).map((a) => a.user_id)));
+  if (userIds.length === 0) return 0;
+
+  // Remove acessos antigos vinculados a essa integração
+  const { error: delErr } = await supabase
+    .from("user_category_access")
+    .delete()
+    .eq("hubsoft_config_id", configId)
+    .in("user_id", userIds);
+  if (delErr) throw delErr;
+
+  // Insere novos acessos pra cada user × cada categoria selecionada
+  if (categoryIds.length > 0) {
+    const rows = userIds.flatMap((uid) =>
+      categoryIds.map((cid) => ({
+        user_id: uid,
+        category_id: cid,
+        hubsoft_config_id: configId,
+        is_active: true,
+      })),
+    );
+    const { error: insErr } = await supabase.from("user_category_access").insert(rows);
+    if (insErr) throw insErr;
+  }
+
+  return userIds.length;
+}
+
 const HubsoftIntegration = () => {
   const { data: configs, isLoading } = useHubsoftConfigs();
   const { data: configCategories } = useHubsoftConfigCategories();
@@ -85,6 +121,22 @@ const HubsoftIntegration = () => {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>({ ...emptyForm });
   const [saving, setSaving] = useState(false);
+  const [applyToExisting, setApplyToExisting] = useState(false);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+
+  const handleSyncExisting = async (configId: string, categoryIds: string[], configName: string) => {
+    if (!confirm(`Aplicar as ${categoryIds.length} categoria(s) atuais de "${configName}" a TODOS os usuários já cadastrados por essa integração? Os acessos anteriores vinculados a ela serão substituídos.`)) return;
+    setSyncingId(configId);
+    try {
+      const count = await syncCategoriesToExistingUsers(configId, categoryIds);
+      toast.success(count > 0 ? `Categorias aplicadas a ${count} usuário(s)` : "Nenhum usuário cadastrado por essa integração");
+    } catch (e: any) {
+      toast.error("Erro ao sincronizar: " + (e?.message ?? e));
+    } finally {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      setSyncingId(null);
+    }
+  };
 
   const getCategoryIdsForConfig = (configId: string) => {
     return configCategories?.filter((cc) => cc.hubsoft_config_id === configId).map((cc) => cc.category_id) || [];
@@ -93,6 +145,7 @@ const HubsoftIntegration = () => {
   const startNew = () => {
     setEditingId(null);
     setForm({ ...emptyForm, api_key: generateApiKey() });
+    setApplyToExisting(false);
     setShowForm(true);
   };
 
@@ -108,6 +161,7 @@ const HubsoftIntegration = () => {
       is_active: config.is_active,
       category_ids: getCategoryIdsForConfig(config.id),
     });
+    setApplyToExisting(false);
     setShowForm(true);
   };
 
@@ -115,6 +169,7 @@ const HubsoftIntegration = () => {
     setShowForm(false);
     setEditingId(null);
     setForm({ ...emptyForm });
+    setApplyToExisting(false);
   };
 
   const handleSave = async () => {
@@ -165,11 +220,22 @@ const HubsoftIntegration = () => {
       }
     }
 
+    let syncedCount = 0;
+    if (configId && applyToExisting) {
+      try {
+        syncedCount = await syncCategoriesToExistingUsers(configId, form.category_ids);
+      } catch (e: any) {
+        toast.error("Categorias salvas, mas erro ao aplicar a usuários: " + (e?.message ?? e));
+      }
+    }
+
     setSaving(false);
-    toast.success(editingId ? "Integração atualizada!" : "Integração criada!");
+    const baseMsg = editingId ? "Integração atualizada!" : "Integração criada!";
+    toast.success(applyToExisting && syncedCount > 0 ? `${baseMsg} Categorias aplicadas a ${syncedCount} usuário(s).` : baseMsg);
     cancelForm();
     queryClient.invalidateQueries({ queryKey: ["hubsoft-configs"] });
     queryClient.invalidateQueries({ queryKey: ["hubsoft-config-categories"] });
+    queryClient.invalidateQueries({ queryKey: ["users"] });
   };
 
   const handleDelete = async (id: string) => {
@@ -288,6 +354,22 @@ const HubsoftIntegration = () => {
               </div>
             </div>
 
+            {editingId && (
+              <label className="flex items-start gap-2 p-3 rounded-lg border border-border bg-secondary/40 cursor-pointer">
+                <Checkbox
+                  checked={applyToExisting}
+                  onCheckedChange={(v) => setApplyToExisting(v === true)}
+                  className="mt-0.5"
+                />
+                <div className="text-sm">
+                  <p className="font-medium text-foreground">Aplicar também aos usuários já cadastrados</p>
+                  <p className="text-xs text-muted-foreground">
+                    Substitui os acessos dos usuários criados por esta integração pelas categorias selecionadas acima.
+                  </p>
+                </div>
+              </label>
+            )}
+
             <Button onClick={handleSave} disabled={saving}>
               <Save className="h-4 w-4 mr-1" /> {saving ? "Salvando..." : "Salvar"}
             </Button>
@@ -343,13 +425,22 @@ const HubsoftIntegration = () => {
                       )}
                     </div>
                     <div className="flex items-center gap-1 ml-2">
-                      <Button variant="ghost" size="sm" onClick={() => copyToClipboard(buildCallbackUrl(config.api_key), "URL")}>
+                      <Button variant="ghost" size="sm" onClick={() => copyToClipboard(buildCallbackUrl(config.api_key), "URL")} title="Copiar URL">
                         <Copy className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => startEdit(config)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSyncExisting(config.id, catIds, config.name)}
+                        disabled={syncingId === config.id}
+                        title="Aplicar categorias atuais a todos os usuários desta integração"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${syncingId === config.id ? "animate-spin" : ""}`} />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => startEdit(config)} title="Editar">
                         <Edit2 className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(config.id)}>
+                      <Button variant="ghost" size="sm" onClick={() => handleDelete(config.id)} title="Excluir">
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
