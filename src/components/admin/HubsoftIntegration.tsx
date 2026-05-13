@@ -220,6 +220,15 @@ const HubsoftIntegration = () => {
       }
     }
 
+    let syncedCount = 0;
+    if (configId && applyToExisting) {
+      try {
+        syncedCount = await syncCategoriesToExistingUsers(configId, form.category_ids);
+      } catch (e: any) {
+        toast.error("Categorias salvas, mas erro ao aplicar a usuários: " + (e?.message ?? e));
+      }
+    }
+
     setSaving(false);
     toast.success(editingId ? "Integração atualizada!" : "Integração criada!");
     cancelForm();
