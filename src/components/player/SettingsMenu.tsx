@@ -56,7 +56,7 @@ export default function SettingsMenu({ onClose, onLogout, userId, userEmail }: S
 
   // Captura teclas do menu (não na sub-view de PIN — PinPrompt cuida)
   useEffect(() => {
-    if (view === "change-pin-current" || view === "change-pin-new") return;
+    if (view === "change-pin-current" || view === "change-pin-new" || view === "diagnostics") return;
     const handler = (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -260,6 +260,10 @@ export default function SettingsMenu({ onClose, onLogout, userId, userEmail }: S
           }}
           onCancel={() => setView("menu")}
         />
+      )}
+
+      {view === "diagnostics" && (
+        <NetworkDiagnostics onClose={() => setView("menu")} />
       )}
     </div>
   );
