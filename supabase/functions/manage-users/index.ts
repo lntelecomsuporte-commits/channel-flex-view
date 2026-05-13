@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
       if (!isAdmin) return json({ error: "Forbidden" }, 403);
     }
 
-    const { action, email, password, display_name, user_id } = await req.json();
+    const { action, email, password, display_name, user_id, is_admin } = await req.json();
     const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
 
     if (action === "create") {
@@ -155,6 +155,32 @@ Deno.serve(async (req) => {
         });
       }
 
+      return json({ success: true });
+    }
+
+    if (action === "set_admin") {
+      if (!user_id) return json({ error: "user_id é obrigatório" }, 400);
+      if (is_admin) {
+        const res = await serviceRestFetch(supabaseUrl, serviceRoleKey, "user_roles", "POST", {
+          user_id,
+          role: "admin",
+        });
+        if (!res.ok && res.status !== 409) {
+          console.error("set_admin insert failed:", res.status, res.data);
+          return json({ error: "Erro ao tornar admin" }, 400);
+        }
+      } else {
+        const res = await serviceRestFetch(
+          supabaseUrl,
+          serviceRoleKey,
+          `user_roles?user_id=eq.${encodeURIComponent(user_id)}&role=eq.admin`,
+          "DELETE",
+        );
+        if (!res.ok) {
+          console.error("set_admin delete failed:", res.status, res.data);
+          return json({ error: "Erro ao remover admin" }, 400);
+        }
+      }
       return json({ success: true });
     }
 

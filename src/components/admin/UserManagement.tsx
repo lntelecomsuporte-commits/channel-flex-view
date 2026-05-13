@@ -71,6 +71,8 @@ const UserManagement = () => {
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
   const [editForm, setEditForm] = useState({ password: "", display_name: "", adult_pin: "" });
   const [editCategories, setEditCategories] = useState<string[]>([]);
+  const [editIsAdmin, setEditIsAdmin] = useState(false);
+  const [editWasAdmin, setEditWasAdmin] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("recent");
@@ -229,6 +231,15 @@ const UserManagement = () => {
       .eq("user_id", profile.user_id)
       .maybeSingle();
     setEditForm({ password: "", display_name: profile.display_name || "", adult_pin: (data as any)?.adult_pin || "" });
+    const { data: roleRow } = await supabase
+      .from("user_roles")
+      .select("id")
+      .eq("user_id", profile.user_id)
+      .eq("role", "admin")
+      .maybeSingle();
+    const isAdmin = !!roleRow;
+    setEditIsAdmin(isAdmin);
+    setEditWasAdmin(isAdmin);
   };
 
   const handleUpdate = async () => {
@@ -272,6 +283,18 @@ const UserManagement = () => {
 
     // Always save category access
     await saveCategoryAccess(editingUser.user_id, editCategories);
+
+    // Update admin role if changed
+    if (editIsAdmin !== editWasAdmin) {
+      const { data: rData, error: rErr } = await supabase.functions.invoke("manage-users", {
+        body: { action: "set_admin", user_id: editingUser.user_id, is_admin: editIsAdmin },
+      });
+      if (rErr || rData?.error) {
+        toast.error("Erro ao atualizar admin: " + (rData?.error || rErr?.message));
+        setUpdating(false);
+        return;
+      }
+    }
 
     setUpdating(false);
     toast.success("Usuário atualizado!");
@@ -451,7 +474,7 @@ const UserManagement = () => {
               {sortedProfiles.map((p: any) => {
                 const s = statsByUser.get(p.user_id);
                 return (
-                <div key={p.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary gap-2">
+                <div key={p.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg bg-secondary gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-foreground truncate">{p.display_name || p.username}</p>
                     <p className="text-xs text-muted-foreground truncate">{p.username}</p>
@@ -466,7 +489,7 @@ const UserManagement = () => {
                       <p className="text-xs text-muted-foreground">Hubsoft ID: {p.hubsoft_client_id}</p>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center flex-wrap gap-2 shrink-0">
                     <UserStatusBadge userId={p.user_id} />
                     <span className={`text-xs px-2 py-0.5 rounded ${p.is_blocked ? "bg-destructive/20 text-destructive" : p.is_active ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
                       {p.is_blocked ? "Bloqueado" : p.is_active ? "Ativo" : "Inativo"}
@@ -523,6 +546,11 @@ const UserManagement = () => {
               selected={editCategories}
               onToggle={(id) => toggleCategory(id, editCategories, setEditCategories)}
             />
+            <label className="flex items-center gap-2 text-sm cursor-pointer p-3 rounded-md border border-border bg-secondary/50">
+              <Checkbox checked={editIsAdmin} onCheckedChange={(v) => setEditIsAdmin(!!v)} />
+              <span className="font-medium">Administrador do painel</span>
+              <span className="text-xs text-muted-foreground ml-auto">Acesso total ao /admin</span>
+            </label>
             <Button onClick={handleUpdate} disabled={updating} className="w-full">
               {updating ? "Salvando..." : "Salvar Alterações"}
             </Button>
