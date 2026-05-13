@@ -1,0 +1,1 @@
+ALTER TABLE public.categories ADD COLUMN IF NOT EXISTS requires_pin boolean NOT NULL DEFAULT false;
