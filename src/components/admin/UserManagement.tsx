@@ -458,6 +458,10 @@ const UserManagement = () => {
               </p>
             </div>
             <div className="p-3 rounded-lg bg-secondary">
+              <p className="text-xs text-muted-foreground">Em degustação</p>
+              <p className="text-2xl font-bold text-amber-500">{trialMap?.size || 0}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-secondary">
               <p className="text-xs text-muted-foreground">Acessos nos últimos 30d</p>
               <p className="text-2xl font-bold">
                 {(accessStats || []).reduce((acc, s) => acc + (s.logins_last_30d || 0), 0)}
