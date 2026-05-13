@@ -231,6 +231,15 @@ const UserManagement = () => {
       .eq("user_id", profile.user_id)
       .maybeSingle();
     setEditForm({ password: "", display_name: profile.display_name || "", adult_pin: (data as any)?.adult_pin || "" });
+    const { data: roleRow } = await supabase
+      .from("user_roles")
+      .select("id")
+      .eq("user_id", profile.user_id)
+      .eq("role", "admin")
+      .maybeSingle();
+    const isAdmin = !!roleRow;
+    setEditIsAdmin(isAdmin);
+    setEditWasAdmin(isAdmin);
   };
 
   const handleUpdate = async () => {
