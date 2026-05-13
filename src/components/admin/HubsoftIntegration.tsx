@@ -286,6 +286,7 @@ const HubsoftIntegration = () => {
       toast.success("Integração excluída");
       queryClient.invalidateQueries({ queryKey: ["hubsoft-configs"] });
       queryClient.invalidateQueries({ queryKey: ["hubsoft-config-categories"] });
+      queryClient.invalidateQueries({ queryKey: ["hubsoft-config-trial-categories"] });
     }
   };
 
