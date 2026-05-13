@@ -134,6 +134,7 @@ async function syncCategoriesToExistingUsers(configId: string, categoryIds: stri
 const HubsoftIntegration = () => {
   const { data: configs, isLoading } = useHubsoftConfigs();
   const { data: configCategories } = useHubsoftConfigCategories();
+  const { data: trialConfigCategories } = useHubsoftConfigTrialCategories();
   const { data: categories } = useCategories();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
