@@ -76,6 +76,9 @@ type FormState = {
   package_id: string;
   is_active: boolean;
   category_ids: string[];
+  trial_enabled: boolean;
+  trial_days: number;
+  trial_category_ids: string[];
 };
 
 const emptyForm: FormState = {
@@ -87,6 +90,9 @@ const emptyForm: FormState = {
   package_id: "",
   is_active: true,
   category_ids: [],
+  trial_enabled: false,
+  trial_days: 30,
+  trial_category_ids: [],
 };
 
 async function syncCategoriesToExistingUsers(configId: string, categoryIds: string[]): Promise<number> {
