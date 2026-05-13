@@ -230,10 +230,12 @@ const HubsoftIntegration = () => {
     }
 
     setSaving(false);
-    toast.success(editingId ? "Integração atualizada!" : "Integração criada!");
+    const baseMsg = editingId ? "Integração atualizada!" : "Integração criada!";
+    toast.success(applyToExisting && syncedCount > 0 ? `${baseMsg} Categorias aplicadas a ${syncedCount} usuário(s).` : baseMsg);
     cancelForm();
     queryClient.invalidateQueries({ queryKey: ["hubsoft-configs"] });
     queryClient.invalidateQueries({ queryKey: ["hubsoft-config-categories"] });
+    queryClient.invalidateQueries({ queryKey: ["users"] });
   };
 
   const handleDelete = async (id: string) => {
