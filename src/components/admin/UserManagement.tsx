@@ -284,6 +284,18 @@ const UserManagement = () => {
     // Always save category access
     await saveCategoryAccess(editingUser.user_id, editCategories);
 
+    // Update admin role if changed
+    if (editIsAdmin !== editWasAdmin) {
+      const { data: rData, error: rErr } = await supabase.functions.invoke("manage-users", {
+        body: { action: "set_admin", user_id: editingUser.user_id, is_admin: editIsAdmin },
+      });
+      if (rErr || rData?.error) {
+        toast.error("Erro ao atualizar admin: " + (rData?.error || rErr?.message));
+        setUpdating(false);
+        return;
+      }
+    }
+
     setUpdating(false);
     toast.success("Usuário atualizado!");
     setEditingUser(null);
