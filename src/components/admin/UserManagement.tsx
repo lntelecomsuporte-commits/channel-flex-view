@@ -34,6 +34,41 @@ function useProfiles() {
   });
 }
 
+function useTrialAccess() {
+  return useQuery({
+    queryKey: ["user_trial_access"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_category_access")
+        .select("user_id,trial_expires_at")
+        .eq("is_trial", true)
+        .eq("is_active", true)
+        .not("trial_expires_at", "is", null);
+      if (error) throw error;
+      // earliest expiration per user
+      const map = new Map<string, string>();
+      (data || []).forEach((row: any) => {
+        const cur = map.get(row.user_id);
+        if (!cur || new Date(row.trial_expires_at) < new Date(cur)) {
+          map.set(row.user_id, row.trial_expires_at);
+        }
+      });
+      return map;
+    },
+    refetchInterval: 60000,
+  });
+}
+
+function formatTrialRemaining(iso: string): { label: string; expired: boolean } {
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return { label: "expirado", expired: true };
+  const days = Math.floor(ms / 86400000);
+  const hours = Math.floor((ms % 86400000) / 3600000);
+  if (days >= 1) return { label: `${days}d ${hours}h restantes`, expired: false };
+  const mins = Math.floor((ms % 3600000) / 60000);
+  return { label: `${hours}h ${mins}m restantes`, expired: false };
+}
+
 function useAccessStats() {
   return useQuery({
     queryKey: ["user_access_stats"],
@@ -63,6 +98,7 @@ type Profile = {
 const UserManagement = () => {
   const { data: profiles, isLoading } = useProfiles();
   const { data: accessStats } = useAccessStats();
+  const { data: trialMap } = useTrialAccess();
   const { data: categories } = useCategories();
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ email: "", password: "", display_name: "" });
@@ -422,6 +458,10 @@ const UserManagement = () => {
               </p>
             </div>
             <div className="p-3 rounded-lg bg-secondary">
+              <p className="text-xs text-muted-foreground">Em degustação</p>
+              <p className="text-2xl font-bold text-amber-500">{trialMap?.size || 0}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-secondary">
               <p className="text-xs text-muted-foreground">Acessos nos últimos 30d</p>
               <p className="text-2xl font-bold">
                 {(accessStats || []).reduce((acc, s) => acc + (s.logins_last_30d || 0), 0)}
@@ -491,6 +531,17 @@ const UserManagement = () => {
                   </div>
                   <div className="flex items-center flex-wrap gap-2 shrink-0">
                     <UserStatusBadge userId={p.user_id} />
+                    {trialMap?.get(p.user_id) && (() => {
+                      const t = formatTrialRemaining(trialMap.get(p.user_id)!);
+                      return (
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded ${t.expired ? "bg-destructive/20 text-destructive" : "bg-amber-500/20 text-amber-600 dark:text-amber-400"}`}
+                          title={`Degustação até ${fmtDate(trialMap.get(p.user_id)!)}`}
+                        >
+                          🎁 Degustação · {t.label}
+                        </span>
+                      );
+                    })()}
                     <span className={`text-xs px-2 py-0.5 rounded ${p.is_blocked ? "bg-destructive/20 text-destructive" : p.is_active ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
                       {p.is_blocked ? "Bloqueado" : p.is_active ? "Ativo" : "Inativo"}
                     </span>
