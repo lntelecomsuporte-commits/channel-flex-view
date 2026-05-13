@@ -71,6 +71,8 @@ const UserManagement = () => {
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
   const [editForm, setEditForm] = useState({ password: "", display_name: "", adult_pin: "" });
   const [editCategories, setEditCategories] = useState<string[]>([]);
+  const [editIsAdmin, setEditIsAdmin] = useState(false);
+  const [editWasAdmin, setEditWasAdmin] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("recent");
