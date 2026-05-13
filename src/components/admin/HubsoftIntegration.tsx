@@ -273,6 +273,7 @@ const HubsoftIntegration = () => {
     cancelForm();
     queryClient.invalidateQueries({ queryKey: ["hubsoft-configs"] });
     queryClient.invalidateQueries({ queryKey: ["hubsoft-config-categories"] });
+    queryClient.invalidateQueries({ queryKey: ["hubsoft-config-trial-categories"] });
     queryClient.invalidateQueries({ queryKey: ["users"] });
   };
 
