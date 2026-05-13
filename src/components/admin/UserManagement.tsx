@@ -62,6 +62,7 @@ type Profile = {
 
 const UserManagement = () => {
   const { data: profiles, isLoading } = useProfiles();
+  const { data: accessStats } = useAccessStats();
   const { data: categories } = useCategories();
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ email: "", password: "", display_name: "" });
@@ -72,6 +73,93 @@ const UserManagement = () => {
   const [editCategories, setEditCategories] = useState<string[]>([]);
   const [updating, setUpdating] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>("recent");
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const statsByUser = new Map<string, AccessStats>();
+  (accessStats || []).forEach((s) => statsByUser.set(s.user_id, s));
+
+  const fmtDate = (iso: string | null) => {
+    if (!iso) return "Nunca";
+    return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  };
+
+  const sortedProfiles = (() => {
+    if (!profiles) return [];
+    const term = searchTerm.trim().toLowerCase();
+    const list = profiles.filter((p: any) => {
+      if (!term) return true;
+      return (
+        (p.username || "").toLowerCase().includes(term) ||
+        (p.display_name || "").toLowerCase().includes(term)
+      );
+    });
+    const ts = (p: any) => {
+      const t = statsByUser.get(p.user_id)?.last_login_at;
+      return t ? new Date(t).getTime() : 0;
+    };
+    const cmp: Record<SortMode, (a: any, b: any) => number> = {
+      recent: (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      last_login_desc: (a, b) => ts(b) - ts(a),
+      last_login_asc: (a, b) => {
+        const ta = ts(a), tb = ts(b);
+        if (ta === 0 && tb === 0) return 0;
+        if (ta === 0) return 1;
+        if (tb === 0) return -1;
+        return ta - tb;
+      },
+      email_asc: (a, b) => (a.username || "").localeCompare(b.username || ""),
+      name_asc: (a, b) => (a.display_name || a.username || "").localeCompare(b.display_name || b.username || ""),
+      logins_30d_desc: (a, b) =>
+        (statsByUser.get(b.user_id)?.logins_last_30d || 0) -
+        (statsByUser.get(a.user_id)?.logins_last_30d || 0),
+    };
+    return [...list].sort(cmp[sortMode]);
+  })();
+
+  const neverAccessed = (profiles || []).filter(
+    (p: any) => (statsByUser.get(p.user_id)?.total_logins || 0) === 0
+  );
+
+  const downloadCsv = (filename: string, rows: string[][]) => {
+    const csv = rows
+      .map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportNeverAccessed = () => {
+    const rows = [["Email", "Nome", "Criado em"]];
+    neverAccessed.forEach((p: any) =>
+      rows.push([p.username || "", p.display_name || "", fmtDate(p.created_at)])
+    );
+    downloadCsv(`usuarios-nunca-acessaram-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    toast.success(`${neverAccessed.length} usuários exportados`);
+  };
+
+  const exportAccess30d = () => {
+    const rows = [["Email", "Nome", "Acessos 30d", "Total acessos", "Último acesso"]];
+    (profiles || [])
+      .map((p: any) => ({ p, s: statsByUser.get(p.user_id) }))
+      .sort((a, b) => (b.s?.logins_last_30d || 0) - (a.s?.logins_last_30d || 0))
+      .forEach(({ p, s }) =>
+        rows.push([
+          p.username || "",
+          p.display_name || "",
+          String(s?.logins_last_30d || 0),
+          String(s?.total_logins || 0),
+          fmtDate(s?.last_login_at || null),
+        ])
+      );
+    downloadCsv(`relatorio-acessos-30d-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    toast.success("Relatório exportado");
+  };
 
   // Load user categories when editing
   useEffect(() => {
