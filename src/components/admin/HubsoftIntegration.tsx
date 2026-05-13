@@ -603,6 +603,24 @@ const HubsoftIntegration = () => {
                       >
                         <RefreshCw className={`h-4 w-4 ${syncingId === config.id ? "animate-spin" : ""}`} />
                       </Button>
+                      {(config as any).trial_enabled && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            handleSyncTrialExisting(
+                              config.id,
+                              getTrialCategoryIdsForConfig(config.id),
+                              Number((config as any).trial_days) || 30,
+                              config.name,
+                            )
+                          }
+                          disabled={syncingId === config.id}
+                          title="Aplicar período de degustação a todos os usuários desta integração"
+                        >
+                          🎁
+                        </Button>
+                      )}
                       <Button variant="ghost" size="sm" onClick={() => startEdit(config)} title="Editar">
                         <Edit2 className="h-4 w-4" />
                       </Button>
