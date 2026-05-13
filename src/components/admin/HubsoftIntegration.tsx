@@ -39,6 +39,19 @@ function useHubsoftConfigCategories() {
   });
 }
 
+function useHubsoftConfigTrialCategories() {
+  return useQuery({
+    queryKey: ["hubsoft-config-trial-categories"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("hubsoft_config_trial_categories")
+        .select("*");
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 function generateApiKey() {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
   let key = "";
@@ -63,6 +76,9 @@ type FormState = {
   package_id: string;
   is_active: boolean;
   category_ids: string[];
+  trial_enabled: boolean;
+  trial_days: number;
+  trial_category_ids: string[];
 };
 
 const emptyForm: FormState = {
@@ -74,6 +90,9 @@ const emptyForm: FormState = {
   package_id: "",
   is_active: true,
   category_ids: [],
+  trial_enabled: false,
+  trial_days: 30,
+  trial_category_ids: [],
 };
 
 async function syncCategoriesToExistingUsers(configId: string, categoryIds: string[]): Promise<number> {
@@ -115,6 +134,7 @@ async function syncCategoriesToExistingUsers(configId: string, categoryIds: stri
 const HubsoftIntegration = () => {
   const { data: configs, isLoading } = useHubsoftConfigs();
   const { data: configCategories } = useHubsoftConfigCategories();
+  const { data: trialConfigCategories } = useHubsoftConfigTrialCategories();
   const { data: categories } = useCategories();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -142,6 +162,10 @@ const HubsoftIntegration = () => {
     return configCategories?.filter((cc) => cc.hubsoft_config_id === configId).map((cc) => cc.category_id) || [];
   };
 
+  const getTrialCategoryIdsForConfig = (configId: string) => {
+    return trialConfigCategories?.filter((cc) => cc.hubsoft_config_id === configId).map((cc) => cc.category_id) || [];
+  };
+
   const startNew = () => {
     setEditingId(null);
     setForm({ ...emptyForm, api_key: generateApiKey() });
@@ -160,6 +184,9 @@ const HubsoftIntegration = () => {
       package_id: config.package_id,
       is_active: config.is_active,
       category_ids: getCategoryIdsForConfig(config.id),
+      trial_enabled: !!(config as any).trial_enabled,
+      trial_days: Number((config as any).trial_days) || 30,
+      trial_category_ids: getTrialCategoryIdsForConfig(config.id),
     });
     setApplyToExisting(false);
     setShowForm(true);
@@ -187,7 +214,9 @@ const HubsoftIntegration = () => {
       password: form.password,
       package_id: form.package_id,
       is_active: form.is_active,
-    };
+      trial_enabled: form.trial_enabled,
+      trial_days: Math.max(1, Number(form.trial_days) || 30),
+    } as any;
 
     let configId = editingId;
 
@@ -208,7 +237,7 @@ const HubsoftIntegration = () => {
       configId = data.id;
     }
 
-    // Sync categories
+    // Sync categories (normal + trial)
     if (configId) {
       await supabase.from("hubsoft_config_categories").delete().eq("hubsoft_config_id", configId);
       if (form.category_ids.length > 0) {
@@ -217,6 +246,15 @@ const HubsoftIntegration = () => {
           category_id: cid,
         }));
         await supabase.from("hubsoft_config_categories").insert(rows);
+      }
+
+      await supabase.from("hubsoft_config_trial_categories").delete().eq("hubsoft_config_id", configId);
+      if (form.trial_enabled && form.trial_category_ids.length > 0) {
+        const trialRows = form.trial_category_ids.map((cid) => ({
+          hubsoft_config_id: configId!,
+          category_id: cid,
+        }));
+        await supabase.from("hubsoft_config_trial_categories").insert(trialRows);
       }
     }
 
@@ -235,6 +273,7 @@ const HubsoftIntegration = () => {
     cancelForm();
     queryClient.invalidateQueries({ queryKey: ["hubsoft-configs"] });
     queryClient.invalidateQueries({ queryKey: ["hubsoft-config-categories"] });
+    queryClient.invalidateQueries({ queryKey: ["hubsoft-config-trial-categories"] });
     queryClient.invalidateQueries({ queryKey: ["users"] });
   };
 
@@ -247,6 +286,7 @@ const HubsoftIntegration = () => {
       toast.success("Integração excluída");
       queryClient.invalidateQueries({ queryKey: ["hubsoft-configs"] });
       queryClient.invalidateQueries({ queryKey: ["hubsoft-config-categories"] });
+      queryClient.invalidateQueries({ queryKey: ["hubsoft-config-trial-categories"] });
     }
   };
 
@@ -261,6 +301,15 @@ const HubsoftIntegration = () => {
       category_ids: f.category_ids.includes(categoryId)
         ? f.category_ids.filter((id) => id !== categoryId)
         : [...f.category_ids, categoryId],
+    }));
+  };
+
+  const toggleTrialCategory = (categoryId: string) => {
+    setForm((f) => ({
+      ...f,
+      trial_category_ids: f.trial_category_ids.includes(categoryId)
+        ? f.trial_category_ids.filter((id) => id !== categoryId)
+        : [...f.trial_category_ids, categoryId],
     }));
   };
 
@@ -352,6 +401,54 @@ const HubsoftIntegration = () => {
                   <p className="text-xs text-muted-foreground">Nenhuma categoria cadastrada</p>
                 )}
               </div>
+            </div>
+
+            {/* Trial / Degustação */}
+            <div className="space-y-3 rounded-lg border border-border p-3 bg-secondary/30">
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={form.trial_enabled}
+                  onCheckedChange={(v) => setForm((f) => ({ ...f, trial_enabled: v }))}
+                />
+                <Label className="cursor-pointer">Ativar período de degustação</Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Novos usuários cadastrados por esta integração recebem as categorias de degustação por X dias. Ao expirar, os acessos voltam automaticamente para as categorias normais acima.
+              </p>
+
+              {form.trial_enabled && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Dias de degustação</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={365}
+                      value={form.trial_days}
+                      onChange={(e) => setForm((f) => ({ ...f, trial_days: parseInt(e.target.value || "0", 10) }))}
+                      className="max-w-[140px]"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Categorias de degustação</Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                      {categories?.map((cat) => (
+                        <label key={cat.id} className="flex items-center gap-2 p-2 rounded-lg bg-secondary cursor-pointer hover:bg-secondary/80">
+                          <Checkbox
+                            checked={form.trial_category_ids.includes(cat.id)}
+                            onCheckedChange={() => toggleTrialCategory(cat.id)}
+                          />
+                          <span className="text-sm text-foreground">{cat.name}</span>
+                        </label>
+                      ))}
+                      {(!categories || categories.length === 0) && (
+                        <p className="text-xs text-muted-foreground">Nenhuma categoria cadastrada</p>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             {editingId && (

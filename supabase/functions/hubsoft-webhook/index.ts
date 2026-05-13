@@ -72,14 +72,29 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch categories linked to this config
+    // Run trial expiration sweep before evaluating this event
+    try {
+      await supabaseAdmin.rpc("expire_trial_access");
+    } catch (err) {
+      console.warn("expire_trial_access RPC failed (non-fatal):", err);
+    }
+
+    // Fetch categories linked to this config (normal + trial)
     const { data: configCategories } = await supabaseAdmin
       .from("hubsoft_config_categories")
       .select("category_id")
       .eq("hubsoft_config_id", config.id);
-    
+
+    const { data: trialConfigCategories } = await supabaseAdmin
+      .from("hubsoft_config_trial_categories")
+      .select("category_id")
+      .eq("hubsoft_config_id", config.id);
+
     const linkedCategoryIds = configCategories?.map((cc: any) => cc.category_id) || [];
-    console.log("Config:", config.name, "Linked categories:", linkedCategoryIds.length);
+    const trialCategoryIds = trialConfigCategories?.map((cc: any) => cc.category_id) || [];
+    const trialEnabled = !!config.trial_enabled && trialCategoryIds.length > 0;
+    const trialDays = Math.max(1, Number(config.trial_days) || 30);
+    console.log("Config:", config.name, "Linked:", linkedCategoryIds.length, "Trial:", trialEnabled ? `${trialCategoryIds.length}cats/${trialDays}d` : "off");
 
     // Parse the Hubsoft payload
     const tipo = body.tipo;
@@ -169,27 +184,62 @@ Deno.serve(async (req) => {
 
     const normalizedTipo = String(tipo).toLowerCase().trim();
 
-    // Helper: grant category access for a user
+    // Helper: grant category access for a user (applies trial if configured and user is new to this integration)
     async function grantCategoryAccess(userId: string) {
+      // Decide whether this user qualifies for trial:
+      // qualifies = trial enabled AND user has no prior access record (active or expired) for this config
+      let useTrial = false;
+      if (trialEnabled) {
+        const { data: prior } = await supabaseAdmin
+          .from("user_category_access")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("hubsoft_config_id", config.id)
+          .limit(1);
+        useTrial = !prior || prior.length === 0;
+      }
+
+      if (useTrial) {
+        const expiresAt = new Date(Date.now() + trialDays * 86400_000).toISOString();
+        for (const categoryId of trialCategoryIds) {
+          await supabaseAdmin.from("user_category_access").upsert(
+            {
+              user_id: userId,
+              category_id: categoryId,
+              hubsoft_config_id: config.id,
+              is_active: true,
+              is_trial: true,
+              trial_expires_at: expiresAt,
+            },
+            { onConflict: "user_id,category_id" },
+          );
+        }
+        console.log(`Granted TRIAL (${trialCategoryIds.length} cats, ${trialDays}d) to user ${userId}`);
+        return;
+      }
+
       if (linkedCategoryIds.length === 0) return;
       for (const categoryId of linkedCategoryIds) {
         await supabaseAdmin.from("user_category_access").upsert(
-          { user_id: userId, category_id: categoryId, hubsoft_config_id: config.id, is_active: true },
-          { onConflict: "user_id,category_id" }
+          {
+            user_id: userId,
+            category_id: categoryId,
+            hubsoft_config_id: config.id,
+            is_active: true,
+            is_trial: false,
+            trial_expires_at: null,
+          },
+          { onConflict: "user_id,category_id" },
         );
       }
     }
 
-    // Helper: revoke category access for a user (from this config only)
+    // Helper: revoke category access for a user (from this config only — both normal and trial)
     async function revokeCategoryAccess(userId: string) {
-      if (linkedCategoryIds.length === 0) return;
-      for (const categoryId of linkedCategoryIds) {
-        await supabaseAdmin.from("user_category_access")
-          .delete()
-          .eq("user_id", userId)
-          .eq("category_id", categoryId)
-          .eq("hubsoft_config_id", config.id);
-      }
+      await supabaseAdmin.from("user_category_access")
+        .delete()
+        .eq("user_id", userId)
+        .eq("hubsoft_config_id", config.id);
     }
 
     // Handle "cadastro" (create/register)
