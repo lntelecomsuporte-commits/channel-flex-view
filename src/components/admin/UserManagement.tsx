@@ -546,6 +546,11 @@ const UserManagement = () => {
               selected={editCategories}
               onToggle={(id) => toggleCategory(id, editCategories, setEditCategories)}
             />
+            <label className="flex items-center gap-2 text-sm cursor-pointer p-3 rounded-md border border-border bg-secondary/50">
+              <Checkbox checked={editIsAdmin} onCheckedChange={(v) => setEditIsAdmin(!!v)} />
+              <span className="font-medium">Administrador do painel</span>
+              <span className="text-xs text-muted-foreground ml-auto">Acesso total ao /admin</span>
+            </label>
             <Button onClick={handleUpdate} disabled={updating} className="w-full">
               {updating ? "Salvando..." : "Salvar Alterações"}
             </Button>
