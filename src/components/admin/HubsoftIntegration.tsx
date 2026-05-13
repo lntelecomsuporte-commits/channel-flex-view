@@ -198,6 +198,35 @@ const HubsoftIntegration = () => {
     }
   };
 
+  const handleSyncTrialExisting = async (
+    configId: string,
+    trialCategoryIds: string[],
+    trialDays: number,
+    configName: string,
+  ) => {
+    if (trialCategoryIds.length === 0) {
+      toast.error("Nenhuma categoria de degustação configurada");
+      return;
+    }
+    if (
+      !confirm(
+        `Aplicar DEGUSTAÇÃO (${trialCategoryIds.length} categoria(s), ${trialDays} dias) a TODOS os usuários de "${configName}"? Os acessos atuais vinculados a ela serão substituídos. A expiração será contada a partir de agora.`,
+      )
+    )
+      return;
+    setSyncingId(configId);
+    try {
+      const count = await syncTrialToExistingUsers(configId, trialCategoryIds, trialDays);
+      toast.success(count > 0 ? `Degustação aplicada a ${count} usuário(s)` : "Nenhum usuário cadastrado por essa integração");
+    } catch (e: any) {
+      toast.error("Erro ao aplicar degustação: " + (e?.message ?? e));
+    } finally {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["user_trial_access"] });
+      setSyncingId(null);
+    }
+  };
+
   const getCategoryIdsForConfig = (configId: string) => {
     return configCategories?.filter((cc) => cc.hubsoft_config_id === configId).map((cc) => cc.category_id) || [];
   };
