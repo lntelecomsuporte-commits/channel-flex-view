@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
       if (!isAdmin) return json({ error: "Forbidden" }, 403);
     }
 
-    const { action, email, password, display_name, user_id } = await req.json();
+    const { action, email, password, display_name, user_id, is_admin } = await req.json();
     const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
 
     if (action === "create") {
