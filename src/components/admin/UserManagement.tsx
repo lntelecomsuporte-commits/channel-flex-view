@@ -34,6 +34,41 @@ function useProfiles() {
   });
 }
 
+function useTrialAccess() {
+  return useQuery({
+    queryKey: ["user_trial_access"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_category_access")
+        .select("user_id,trial_expires_at")
+        .eq("is_trial", true)
+        .eq("is_active", true)
+        .not("trial_expires_at", "is", null);
+      if (error) throw error;
+      // earliest expiration per user
+      const map = new Map<string, string>();
+      (data || []).forEach((row: any) => {
+        const cur = map.get(row.user_id);
+        if (!cur || new Date(row.trial_expires_at) < new Date(cur)) {
+          map.set(row.user_id, row.trial_expires_at);
+        }
+      });
+      return map;
+    },
+    refetchInterval: 60000,
+  });
+}
+
+function formatTrialRemaining(iso: string): { label: string; expired: boolean } {
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return { label: "expirado", expired: true };
+  const days = Math.floor(ms / 86400000);
+  const hours = Math.floor((ms % 86400000) / 3600000);
+  if (days >= 1) return { label: `${days}d ${hours}h restantes`, expired: false };
+  const mins = Math.floor((ms % 3600000) / 60000);
+  return { label: `${hours}h ${mins}m restantes`, expired: false };
+}
+
 function useAccessStats() {
   return useQuery({
     queryKey: ["user_access_stats"],
