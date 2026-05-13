@@ -92,6 +92,8 @@ export default function SettingsMenu({ onClose, onLogout, userId, userEmail }: S
           setTimeout(() => pwdInputRef.current?.focus(), 50);
         } else if (id === "change-pin") {
           setView("change-pin-current");
+        } else if (id === "diagnostics") {
+          setView("diagnostics");
         } else if (id === "about") {
           setView("about");
         }
@@ -161,6 +163,7 @@ export default function SettingsMenu({ onClose, onLogout, userId, userEmail }: S
                     if (item.id === "logout") { onLogout(); onClose(); }
                     else if (item.id === "change-password") { setView("change-password"); setTimeout(() => pwdInputRef.current?.focus(), 50); }
                     else if (item.id === "change-pin") setView("change-pin-current");
+                    else if (item.id === "diagnostics") setView("diagnostics");
                     else if (item.id === "about") setView("about");
                   }}
                 >
