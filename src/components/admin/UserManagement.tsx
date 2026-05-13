@@ -8,9 +8,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Plus, Trash2, ShieldOff, ShieldCheck, Pencil, LogOut } from "lucide-react";
+import { Plus, Trash2, ShieldOff, ShieldCheck, Pencil, LogOut, Download } from "lucide-react";
 import { useCategories } from "@/hooks/useChannels";
 import { UserStatusBadge } from "./UserStatusBadge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+type AccessStats = {
+  user_id: string;
+  last_login_at: string | null;
+  total_logins: number;
+  logins_last_30d: number;
+};
 
 function useProfiles() {
   return useQuery({
@@ -25,6 +33,22 @@ function useProfiles() {
     },
   });
 }
+
+function useAccessStats() {
+  return useQuery({
+    queryKey: ["user_access_stats"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("user_access_stats")
+        .select("user_id,last_login_at,total_logins,logins_last_30d");
+      if (error) throw error;
+      return (data || []) as AccessStats[];
+    },
+    refetchInterval: 60000,
+  });
+}
+
+type SortMode = "recent" | "last_login_desc" | "last_login_asc" | "email_asc" | "name_asc" | "logins_30d_desc";
 
 type Profile = {
   id: string;
