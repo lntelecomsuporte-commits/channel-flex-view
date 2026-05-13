@@ -72,14 +72,29 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch categories linked to this config
+    // Run trial expiration sweep before evaluating this event
+    try {
+      await supabaseAdmin.rpc("expire_trial_access");
+    } catch (err) {
+      console.warn("expire_trial_access RPC failed (non-fatal):", err);
+    }
+
+    // Fetch categories linked to this config (normal + trial)
     const { data: configCategories } = await supabaseAdmin
       .from("hubsoft_config_categories")
       .select("category_id")
       .eq("hubsoft_config_id", config.id);
-    
+
+    const { data: trialConfigCategories } = await supabaseAdmin
+      .from("hubsoft_config_trial_categories")
+      .select("category_id")
+      .eq("hubsoft_config_id", config.id);
+
     const linkedCategoryIds = configCategories?.map((cc: any) => cc.category_id) || [];
-    console.log("Config:", config.name, "Linked categories:", linkedCategoryIds.length);
+    const trialCategoryIds = trialConfigCategories?.map((cc: any) => cc.category_id) || [];
+    const trialEnabled = !!config.trial_enabled && trialCategoryIds.length > 0;
+    const trialDays = Math.max(1, Number(config.trial_days) || 30);
+    console.log("Config:", config.name, "Linked:", linkedCategoryIds.length, "Trial:", trialEnabled ? `${trialCategoryIds.length}cats/${trialDays}d` : "off");
 
     // Parse the Hubsoft payload
     const tipo = body.tipo;
