@@ -380,25 +380,93 @@ const UserManagement = () => {
 
       <Card>
         <CardHeader>
+          <CardTitle>Relatórios de Acesso</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <div className="p-3 rounded-lg bg-secondary">
+              <p className="text-xs text-muted-foreground">Total de usuários</p>
+              <p className="text-2xl font-bold">{profiles?.length || 0}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-secondary">
+              <p className="text-xs text-muted-foreground">Nunca acessaram</p>
+              <p className="text-2xl font-bold text-destructive">{neverAccessed.length}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-secondary">
+              <p className="text-xs text-muted-foreground">Ativos (30d)</p>
+              <p className="text-2xl font-bold text-primary">
+                {(accessStats || []).filter((s) => (s.logins_last_30d || 0) > 0).length}
+              </p>
+            </div>
+            <div className="p-3 rounded-lg bg-secondary">
+              <p className="text-xs text-muted-foreground">Acessos nos últimos 30d</p>
+              <p className="text-2xl font-bold">
+                {(accessStats || []).reduce((acc, s) => acc + (s.logins_last_30d || 0), 0)}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={exportNeverAccessed} disabled={!neverAccessed.length}>
+              <Download className="h-4 w-4 mr-1" /> Exportar nunca acessaram ({neverAccessed.length})
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportAccess30d}>
+              <Download className="h-4 w-4 mr-1" /> Exportar acessos 30 dias
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Usuários Cadastrados</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="flex flex-col md:flex-row gap-2 mb-4">
+            <Input
+              placeholder="Buscar por nome ou email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="md:max-w-xs"
+            />
+            <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
+              <SelectTrigger className="md:w-64">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="recent">Mais recentes (cadastro)</SelectItem>
+                <SelectItem value="last_login_desc">Último online (mais recente)</SelectItem>
+                <SelectItem value="last_login_asc">Último online (mais antigo)</SelectItem>
+                <SelectItem value="email_asc">E-mail (A → Z)</SelectItem>
+                <SelectItem value="name_asc">Nome (A → Z)</SelectItem>
+                <SelectItem value="logins_30d_desc">Mais acessos (30d)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           {isLoading ? (
             <p className="text-muted-foreground">Carregando...</p>
-          ) : !profiles?.length ? (
-            <p className="text-muted-foreground">Nenhum usuário cadastrado</p>
+          ) : !sortedProfiles.length ? (
+            <p className="text-muted-foreground">Nenhum usuário encontrado</p>
           ) : (
             <div className="space-y-2">
-              {profiles.map((p) => (
-                <div key={p.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
-                  <div>
-                    <p className="font-medium text-foreground">{p.display_name || p.username}</p>
-                    <p className="text-xs text-muted-foreground">{p.username}</p>
+              {sortedProfiles.map((p: any) => {
+                const s = statsByUser.get(p.user_id);
+                return (
+                <div key={p.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-foreground truncate">{p.display_name || p.username}</p>
+                    <p className="text-xs text-muted-foreground truncate">{p.username}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Último online: {fmtDate(s?.last_login_at || null)}
+                      {" · "}
+                      {s?.logins_last_30d || 0} acessos (30d)
+                      {" · "}
+                      total {s?.total_logins || 0}
+                    </p>
                     {p.hubsoft_client_id && (
                       <p className="text-xs text-muted-foreground">Hubsoft ID: {p.hubsoft_client_id}</p>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <UserStatusBadge userId={p.user_id} />
                     <span className={`text-xs px-2 py-0.5 rounded ${p.is_blocked ? "bg-destructive/20 text-destructive" : p.is_active ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
                       {p.is_blocked ? "Bloqueado" : p.is_active ? "Ativo" : "Inativo"}
@@ -417,7 +485,8 @@ const UserManagement = () => {
                     </Button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
