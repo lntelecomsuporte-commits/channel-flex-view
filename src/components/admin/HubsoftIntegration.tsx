@@ -425,13 +425,22 @@ const HubsoftIntegration = () => {
                       )}
                     </div>
                     <div className="flex items-center gap-1 ml-2">
-                      <Button variant="ghost" size="sm" onClick={() => copyToClipboard(buildCallbackUrl(config.api_key), "URL")}>
+                      <Button variant="ghost" size="sm" onClick={() => copyToClipboard(buildCallbackUrl(config.api_key), "URL")} title="Copiar URL">
                         <Copy className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => startEdit(config)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSyncExisting(config.id, catIds, config.name)}
+                        disabled={syncingId === config.id}
+                        title="Aplicar categorias atuais a todos os usuários desta integração"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${syncingId === config.id ? "animate-spin" : ""}`} />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => startEdit(config)} title="Editar">
                         <Edit2 className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(config.id)}>
+                      <Button variant="ghost" size="sm" onClick={() => handleDelete(config.id)} title="Excluir">
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
