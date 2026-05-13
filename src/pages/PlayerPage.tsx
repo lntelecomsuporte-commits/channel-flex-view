@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useChannels, type Channel } from "@/hooks/useChannels";
+import { useChannels, useCategories, type Channel } from "@/hooks/useChannels";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTouchControls } from "@/hooks/useTouchControls";
 import { useAuth } from "@/hooks/useAuth";
@@ -20,7 +20,6 @@ import ChannelSearch from "@/components/player/ChannelSearch";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useSessionHeartbeat } from "@/hooks/useSessionHeartbeat";
 import { isSelectKey, isPageNextKey, isPagePrevKey, isMenuKey } from "@/lib/remoteKeys";
-import { useCategories } from "@/hooks/useChannels";
 import SettingsMenu from "@/components/player/SettingsMenu";
 import PinPrompt from "@/components/player/PinPrompt";
 import { List, ChevronUp, ChevronDown } from "lucide-react";
