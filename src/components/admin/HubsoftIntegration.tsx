@@ -304,6 +304,15 @@ const HubsoftIntegration = () => {
     }));
   };
 
+  const toggleTrialCategory = (categoryId: string) => {
+    setForm((f) => ({
+      ...f,
+      trial_category_ids: f.trial_category_ids.includes(categoryId)
+        ? f.trial_category_ids.filter((id) => id !== categoryId)
+        : [...f.trial_category_ids, categoryId],
+    }));
+  };
+
   if (isLoading) {
     return <p className="text-muted-foreground">Carregando...</p>;
   }
