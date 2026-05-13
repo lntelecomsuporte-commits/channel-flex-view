@@ -403,6 +403,54 @@ const HubsoftIntegration = () => {
               </div>
             </div>
 
+            {/* Trial / Degustação */}
+            <div className="space-y-3 rounded-lg border border-border p-3 bg-secondary/30">
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={form.trial_enabled}
+                  onCheckedChange={(v) => setForm((f) => ({ ...f, trial_enabled: v }))}
+                />
+                <Label className="cursor-pointer">Ativar período de degustação</Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Novos usuários cadastrados por esta integração recebem as categorias de degustação por X dias. Ao expirar, os acessos voltam automaticamente para as categorias normais acima.
+              </p>
+
+              {form.trial_enabled && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Dias de degustação</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={365}
+                      value={form.trial_days}
+                      onChange={(e) => setForm((f) => ({ ...f, trial_days: parseInt(e.target.value || "0", 10) }))}
+                      className="max-w-[140px]"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Categorias de degustação</Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                      {categories?.map((cat) => (
+                        <label key={cat.id} className="flex items-center gap-2 p-2 rounded-lg bg-secondary cursor-pointer hover:bg-secondary/80">
+                          <Checkbox
+                            checked={form.trial_category_ids.includes(cat.id)}
+                            onCheckedChange={() => toggleTrialCategory(cat.id)}
+                          />
+                          <span className="text-sm text-foreground">{cat.name}</span>
+                        </label>
+                      ))}
+                      {(!categories || categories.length === 0) && (
+                        <p className="text-xs text-muted-foreground">Nenhuma categoria cadastrada</p>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
             {editingId && (
               <label className="flex items-start gap-2 p-3 rounded-lg border border-border bg-secondary/40 cursor-pointer">
                 <Checkbox
