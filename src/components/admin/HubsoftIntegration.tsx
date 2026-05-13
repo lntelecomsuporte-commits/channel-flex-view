@@ -131,6 +131,46 @@ async function syncCategoriesToExistingUsers(configId: string, categoryIds: stri
   return userIds.length;
 }
 
+async function syncTrialToExistingUsers(
+  configId: string,
+  trialCategoryIds: string[],
+  trialDays: number,
+): Promise<number> {
+  const { data: existingAccess, error: accessErr } = await supabase
+    .from("user_category_access")
+    .select("user_id")
+    .eq("hubsoft_config_id", configId);
+  if (accessErr) throw accessErr;
+
+  const userIds = Array.from(new Set((existingAccess ?? []).map((a) => a.user_id)));
+  if (userIds.length === 0) return 0;
+
+  const { error: delErr } = await supabase
+    .from("user_category_access")
+    .delete()
+    .eq("hubsoft_config_id", configId)
+    .in("user_id", userIds);
+  if (delErr) throw delErr;
+
+  if (trialCategoryIds.length === 0) return 0;
+
+  const expiresAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString();
+  const rows = userIds.flatMap((uid) =>
+    trialCategoryIds.map((cid) => ({
+      user_id: uid,
+      category_id: cid,
+      hubsoft_config_id: configId,
+      is_active: true,
+      is_trial: true,
+      trial_expires_at: expiresAt,
+    })),
+  );
+  const { error: insErr } = await supabase.from("user_category_access").insert(rows);
+  if (insErr) throw insErr;
+
+  return userIds.length;
+}
+
 const HubsoftIntegration = () => {
   const { data: configs, isLoading } = useHubsoftConfigs();
   const { data: configCategories } = useHubsoftConfigCategories();
