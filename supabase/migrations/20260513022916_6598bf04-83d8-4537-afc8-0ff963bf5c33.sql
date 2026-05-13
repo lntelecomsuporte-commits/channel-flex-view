@@ -1,0 +1,1 @@
+GRANT SELECT ON public.user_access_stats TO authenticated, anon;
