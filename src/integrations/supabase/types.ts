@@ -191,6 +191,8 @@ export type Database = {
           name: string
           package_id: string
           password: string
+          trial_days: number
+          trial_enabled: boolean
           updated_at: string
           username: string
         }
@@ -203,6 +205,8 @@ export type Database = {
           name?: string
           package_id?: string
           password?: string
+          trial_days?: number
+          trial_enabled?: boolean
           updated_at?: string
           username?: string
         }
@@ -215,6 +219,8 @@ export type Database = {
           name?: string
           package_id?: string
           password?: string
+          trial_days?: number
+          trial_enabled?: boolean
           updated_at?: string
           username?: string
         }
@@ -255,6 +261,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      hubsoft_config_trial_categories: {
+        Row: {
+          category_id: string
+          created_at: string
+          hubsoft_config_id: string
+          id: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          hubsoft_config_id: string
+          id?: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          hubsoft_config_id?: string
+          id?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -350,6 +377,8 @@ export type Database = {
           hubsoft_config_id: string | null
           id: string
           is_active: boolean
+          is_trial: boolean
+          trial_expires_at: string | null
           user_id: string
         }
         Insert: {
@@ -358,6 +387,8 @@ export type Database = {
           hubsoft_config_id?: string | null
           id?: string
           is_active?: boolean
+          is_trial?: boolean
+          trial_expires_at?: string | null
           user_id: string
         }
         Update: {
@@ -366,6 +397,8 @@ export type Database = {
           hubsoft_config_id?: string | null
           id?: string
           is_active?: boolean
+          is_trial?: boolean
+          trial_expires_at?: string | null
           user_id?: string
         }
         Relationships: [
@@ -527,6 +560,7 @@ export type Database = {
     }
     Functions: {
       cleanup_old_monitoring_data: { Args: never; Returns: undefined }
+      expire_trial_access: { Args: never; Returns: number }
       export_auth_identities: {
         Args: never
         Returns: unknown[]
