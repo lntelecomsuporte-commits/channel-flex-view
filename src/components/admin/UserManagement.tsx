@@ -98,6 +98,7 @@ type Profile = {
 const UserManagement = () => {
   const { data: profiles, isLoading } = useProfiles();
   const { data: accessStats } = useAccessStats();
+  const { data: trialMap } = useTrialAccess();
   const { data: categories } = useCategories();
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ email: "", password: "", display_name: "" });
