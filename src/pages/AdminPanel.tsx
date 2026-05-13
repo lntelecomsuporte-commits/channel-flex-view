@@ -38,7 +38,7 @@ const AdminPanel = () => {
 
   const [channelForm, setChannelForm] = useState({ ...emptyChannelForm });
   const [extraEpgUrls, setExtraEpgUrls] = useState<string[]>([]);
-  const [categoryForm, setCategoryForm] = useState({ name: "", position: "", includedCategoryIds: [] as string[] });
+  const [categoryForm, setCategoryForm] = useState({ name: "", position: "", includedCategoryIds: [] as string[], requiresPin: false });
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -206,7 +206,7 @@ const AdminPanel = () => {
     });
   };
 
-  const resetCategoryForm = () => setCategoryForm({ name: "", position: "", includedCategoryIds: [] });
+  const resetCategoryForm = () => setCategoryForm({ name: "", position: "", includedCategoryIds: [], requiresPin: false });
 
   const handleSaveCategory = async () => {
     if (!categoryForm.name) { toast.error("Informe o nome da categoria"); return; }
@@ -214,10 +214,10 @@ const AdminPanel = () => {
     let categoryId = editingCategoryId;
 
     if (editingCategoryId) {
-      const { error } = await supabase.from("categories").update({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0 }).eq("id", editingCategoryId);
+      const { error } = await supabase.from("categories").update({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0, requires_pin: categoryForm.requiresPin } as any).eq("id", editingCategoryId);
       if (error) { toast.error("Erro: " + error.message); setSaving(false); return; }
     } else {
-      const { data, error } = await supabase.from("categories").insert({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0 }).select("id").single();
+      const { data, error } = await supabase.from("categories").insert({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0, requires_pin: categoryForm.requiresPin } as any).select("id").single();
       if (error) { toast.error("Erro ao salvar categoria: " + error.message); setSaving(false); return; }
       categoryId = data.id;
     }
@@ -244,7 +244,7 @@ const AdminPanel = () => {
   const handleEditCategory = (cat: NonNullable<typeof categories>[0]) => {
     setEditingCategoryId(cat.id);
     const includes = categoryIncludes?.filter((ci) => ci.category_id === cat.id).map((ci) => ci.included_category_id) || [];
-    setCategoryForm({ name: cat.name, position: String(cat.position), includedCategoryIds: includes });
+    setCategoryForm({ name: cat.name, position: String(cat.position), includedCategoryIds: includes, requiresPin: !!(cat as any).requires_pin });
     requestAnimationFrame(() => {
       categoryFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
