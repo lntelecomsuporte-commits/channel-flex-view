@@ -39,6 +39,19 @@ function useHubsoftConfigCategories() {
   });
 }
 
+function useHubsoftConfigTrialCategories() {
+  return useQuery({
+    queryKey: ["hubsoft-config-trial-categories"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("hubsoft_config_trial_categories")
+        .select("*");
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 function generateApiKey() {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
   let key = "";
