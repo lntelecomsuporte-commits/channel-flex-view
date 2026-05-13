@@ -544,6 +544,17 @@ const AdminPanel = () => {
                   </div>
                 </div>
 
+                <label className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted">
+                  <Checkbox
+                    checked={categoryForm.requiresPin}
+                    onCheckedChange={(v) => setCategoryForm((f) => ({ ...f, requiresPin: !!v }))}
+                  />
+                  <div>
+                    <p className="text-sm text-foreground">🔞 Exige PIN parental para todos os canais desta categoria</p>
+                    <p className="text-xs text-muted-foreground">Ao marcar, qualquer canal dentro desta categoria pedirá o PIN — não precisa marcar canal por canal.</p>
+                  </div>
+                </label>
+
                 {categories && categories.filter((c) => c.id !== editingCategoryId).length > 0 && (
                   <div className="space-y-2">
                     <Label>Inclui canais de outras categorias</Label>
@@ -593,7 +604,10 @@ const AdminPanel = () => {
                       return (
                         <div key={cat.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
                           <div>
-                            <p className="font-medium text-foreground">{cat.name} <span className="text-xs text-muted-foreground">(pos: {cat.position})</span></p>
+                            <p className="font-medium text-foreground">
+                              {cat.name} <span className="text-xs text-muted-foreground">(pos: {cat.position})</span>
+                              {(cat as any).requires_pin && <span className="ml-2 text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive">🔞 PIN</span>}
+                            </p>
                             {includes.length > 0 && (
                               <p className="text-xs text-muted-foreground">
                                 Inclui: {includes.map((inc) => categories.find((c) => c.id === inc.included_category_id)?.name).filter(Boolean).join(", ")}
