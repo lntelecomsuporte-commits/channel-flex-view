@@ -145,6 +145,7 @@ const HubsoftIntegration = () => {
   const startNew = () => {
     setEditingId(null);
     setForm({ ...emptyForm, api_key: generateApiKey() });
+    setApplyToExisting(false);
     setShowForm(true);
   };
 
@@ -160,6 +161,7 @@ const HubsoftIntegration = () => {
       is_active: config.is_active,
       category_ids: getCategoryIdsForConfig(config.id),
     });
+    setApplyToExisting(false);
     setShowForm(true);
   };
 
@@ -167,6 +169,7 @@ const HubsoftIntegration = () => {
     setShowForm(false);
     setEditingId(null);
     setForm({ ...emptyForm });
+    setApplyToExisting(false);
   };
 
   const handleSave = async () => {
