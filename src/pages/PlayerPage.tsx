@@ -151,10 +151,18 @@ const PlayerPage = () => {
   const focusedChannel: Channel | null = previewChannel ?? currentChannel;
 
   // Mantém ID lembrado em memória quando o usuário troca de canal (não persiste).
+  // Também guarda o índice do canal ANTERIOR pra que o botão Voltar possa
+  // alternar entre o atual e o anterior (igual a tecla "Last" de TVs).
+  const previousIndexRef = useRef<number | null>(null);
+  const lastIndexSeenRef = useRef<number>(0);
   useEffect(() => {
     if (!currentChannel?.id) return;
     currentChannelIdRef.current = currentChannel.id;
-  }, [currentChannel?.id]);
+    if (currentIndex !== lastIndexSeenRef.current) {
+      previousIndexRef.current = lastIndexSeenRef.current;
+      lastIndexSeenRef.current = currentIndex;
+    }
+  }, [currentChannel?.id, currentIndex]);
 
   // Mantém sessão viva no banco (admin enxerga online/canal atual)
   useSessionHeartbeat({
@@ -446,13 +454,30 @@ const PlayerPage = () => {
       return false;
     }
 
+    // Primeiro toque: se houver canal anterior, alterna pra ele (tecla "Last").
+    // Mantém o contador rodando — se o usuário insistir 3x rápido, sai do APK.
+    if (
+      backPressRef.current.count === 1 &&
+      channels &&
+      previousIndexRef.current !== null &&
+      previousIndexRef.current !== currentIndex &&
+      previousIndexRef.current < channels.length
+    ) {
+      setCurrentIndex(previousIndexRef.current);
+      showOSDTemporarily();
+      backPressRef.current.timer = setTimeout(() => {
+        backPressRef.current.count = 0;
+      }, 2000);
+      return true;
+    }
+
     const remaining = 3 - backPressRef.current.count;
     toast(`Pressione Voltar mais ${remaining}x para sair`, { duration: 2000 });
     backPressRef.current.timer = setTimeout(() => {
       backPressRef.current.count = 0;
     }, 2000);
     return true;
-  }, [pendingAdult, settingsOpen, showStats, synopsisProgram, searchActive, showChannelList, favFocusIndex, showPreview, previewTimeout, showOSD, showFavoritesBar, osdTimeout]);
+  }, [pendingAdult, settingsOpen, showStats, synopsisProgram, searchActive, showChannelList, favFocusIndex, showPreview, previewTimeout, showOSD, showFavoritesBar, osdTimeout, channels, currentIndex, showOSDTemporarily]);
 
   useNativeBackButton(handleBackPress);
 
