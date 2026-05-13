@@ -354,6 +354,22 @@ const HubsoftIntegration = () => {
               </div>
             </div>
 
+            {editingId && (
+              <label className="flex items-start gap-2 p-3 rounded-lg border border-border bg-secondary/40 cursor-pointer">
+                <Checkbox
+                  checked={applyToExisting}
+                  onCheckedChange={(v) => setApplyToExisting(v === true)}
+                  className="mt-0.5"
+                />
+                <div className="text-sm">
+                  <p className="font-medium text-foreground">Aplicar também aos usuários já cadastrados</p>
+                  <p className="text-xs text-muted-foreground">
+                    Substitui os acessos dos usuários criados por esta integração pelas categorias selecionadas acima.
+                  </p>
+                </div>
+              </label>
+            )}
+
             <Button onClick={handleSave} disabled={saving}>
               <Save className="h-4 w-4 mr-1" /> {saving ? "Salvando..." : "Salvar"}
             </Button>
