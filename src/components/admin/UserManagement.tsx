@@ -8,9 +8,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Plus, Trash2, ShieldOff, ShieldCheck, Pencil, LogOut } from "lucide-react";
+import { Plus, Trash2, ShieldOff, ShieldCheck, Pencil, LogOut, Download } from "lucide-react";
 import { useCategories } from "@/hooks/useChannels";
 import { UserStatusBadge } from "./UserStatusBadge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+type AccessStats = {
+  user_id: string;
+  last_login_at: string | null;
+  total_logins: number;
+  logins_last_30d: number;
+};
 
 function useProfiles() {
   return useQuery({
@@ -26,6 +34,22 @@ function useProfiles() {
   });
 }
 
+function useAccessStats() {
+  return useQuery({
+    queryKey: ["user_access_stats"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("user_access_stats")
+        .select("user_id,last_login_at,total_logins,logins_last_30d");
+      if (error) throw error;
+      return (data || []) as AccessStats[];
+    },
+    refetchInterval: 60000,
+  });
+}
+
+type SortMode = "recent" | "last_login_desc" | "last_login_asc" | "email_asc" | "name_asc" | "logins_30d_desc";
+
 type Profile = {
   id: string;
   user_id: string;
@@ -38,6 +62,7 @@ type Profile = {
 
 const UserManagement = () => {
   const { data: profiles, isLoading } = useProfiles();
+  const { data: accessStats } = useAccessStats();
   const { data: categories } = useCategories();
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ email: "", password: "", display_name: "" });
@@ -48,6 +73,93 @@ const UserManagement = () => {
   const [editCategories, setEditCategories] = useState<string[]>([]);
   const [updating, setUpdating] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>("recent");
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const statsByUser = new Map<string, AccessStats>();
+  (accessStats || []).forEach((s) => statsByUser.set(s.user_id, s));
+
+  const fmtDate = (iso: string | null) => {
+    if (!iso) return "Nunca";
+    return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  };
+
+  const sortedProfiles = (() => {
+    if (!profiles) return [];
+    const term = searchTerm.trim().toLowerCase();
+    const list = profiles.filter((p: any) => {
+      if (!term) return true;
+      return (
+        (p.username || "").toLowerCase().includes(term) ||
+        (p.display_name || "").toLowerCase().includes(term)
+      );
+    });
+    const ts = (p: any) => {
+      const t = statsByUser.get(p.user_id)?.last_login_at;
+      return t ? new Date(t).getTime() : 0;
+    };
+    const cmp: Record<SortMode, (a: any, b: any) => number> = {
+      recent: (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      last_login_desc: (a, b) => ts(b) - ts(a),
+      last_login_asc: (a, b) => {
+        const ta = ts(a), tb = ts(b);
+        if (ta === 0 && tb === 0) return 0;
+        if (ta === 0) return 1;
+        if (tb === 0) return -1;
+        return ta - tb;
+      },
+      email_asc: (a, b) => (a.username || "").localeCompare(b.username || ""),
+      name_asc: (a, b) => (a.display_name || a.username || "").localeCompare(b.display_name || b.username || ""),
+      logins_30d_desc: (a, b) =>
+        (statsByUser.get(b.user_id)?.logins_last_30d || 0) -
+        (statsByUser.get(a.user_id)?.logins_last_30d || 0),
+    };
+    return [...list].sort(cmp[sortMode]);
+  })();
+
+  const neverAccessed = (profiles || []).filter(
+    (p: any) => (statsByUser.get(p.user_id)?.total_logins || 0) === 0
+  );
+
+  const downloadCsv = (filename: string, rows: string[][]) => {
+    const csv = rows
+      .map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportNeverAccessed = () => {
+    const rows = [["Email", "Nome", "Criado em"]];
+    neverAccessed.forEach((p: any) =>
+      rows.push([p.username || "", p.display_name || "", fmtDate(p.created_at)])
+    );
+    downloadCsv(`usuarios-nunca-acessaram-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    toast.success(`${neverAccessed.length} usuários exportados`);
+  };
+
+  const exportAccess30d = () => {
+    const rows = [["Email", "Nome", "Acessos 30d", "Total acessos", "Último acesso"]];
+    (profiles || [])
+      .map((p: any) => ({ p, s: statsByUser.get(p.user_id) }))
+      .sort((a, b) => (b.s?.logins_last_30d || 0) - (a.s?.logins_last_30d || 0))
+      .forEach(({ p, s }) =>
+        rows.push([
+          p.username || "",
+          p.display_name || "",
+          String(s?.logins_last_30d || 0),
+          String(s?.total_logins || 0),
+          fmtDate(s?.last_login_at || null),
+        ])
+      );
+    downloadCsv(`relatorio-acessos-30d-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    toast.success("Relatório exportado");
+  };
 
   // Load user categories when editing
   useEffect(() => {
@@ -268,25 +380,93 @@ const UserManagement = () => {
 
       <Card>
         <CardHeader>
+          <CardTitle>Relatórios de Acesso</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <div className="p-3 rounded-lg bg-secondary">
+              <p className="text-xs text-muted-foreground">Total de usuários</p>
+              <p className="text-2xl font-bold">{profiles?.length || 0}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-secondary">
+              <p className="text-xs text-muted-foreground">Nunca acessaram</p>
+              <p className="text-2xl font-bold text-destructive">{neverAccessed.length}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-secondary">
+              <p className="text-xs text-muted-foreground">Ativos (30d)</p>
+              <p className="text-2xl font-bold text-primary">
+                {(accessStats || []).filter((s) => (s.logins_last_30d || 0) > 0).length}
+              </p>
+            </div>
+            <div className="p-3 rounded-lg bg-secondary">
+              <p className="text-xs text-muted-foreground">Acessos nos últimos 30d</p>
+              <p className="text-2xl font-bold">
+                {(accessStats || []).reduce((acc, s) => acc + (s.logins_last_30d || 0), 0)}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={exportNeverAccessed} disabled={!neverAccessed.length}>
+              <Download className="h-4 w-4 mr-1" /> Exportar nunca acessaram ({neverAccessed.length})
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportAccess30d}>
+              <Download className="h-4 w-4 mr-1" /> Exportar acessos 30 dias
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Usuários Cadastrados</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="flex flex-col md:flex-row gap-2 mb-4">
+            <Input
+              placeholder="Buscar por nome ou email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="md:max-w-xs"
+            />
+            <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
+              <SelectTrigger className="md:w-64">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="recent">Mais recentes (cadastro)</SelectItem>
+                <SelectItem value="last_login_desc">Último online (mais recente)</SelectItem>
+                <SelectItem value="last_login_asc">Último online (mais antigo)</SelectItem>
+                <SelectItem value="email_asc">E-mail (A → Z)</SelectItem>
+                <SelectItem value="name_asc">Nome (A → Z)</SelectItem>
+                <SelectItem value="logins_30d_desc">Mais acessos (30d)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           {isLoading ? (
             <p className="text-muted-foreground">Carregando...</p>
-          ) : !profiles?.length ? (
-            <p className="text-muted-foreground">Nenhum usuário cadastrado</p>
+          ) : !sortedProfiles.length ? (
+            <p className="text-muted-foreground">Nenhum usuário encontrado</p>
           ) : (
             <div className="space-y-2">
-              {profiles.map((p) => (
-                <div key={p.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
-                  <div>
-                    <p className="font-medium text-foreground">{p.display_name || p.username}</p>
-                    <p className="text-xs text-muted-foreground">{p.username}</p>
+              {sortedProfiles.map((p: any) => {
+                const s = statsByUser.get(p.user_id);
+                return (
+                <div key={p.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-foreground truncate">{p.display_name || p.username}</p>
+                    <p className="text-xs text-muted-foreground truncate">{p.username}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Último online: {fmtDate(s?.last_login_at || null)}
+                      {" · "}
+                      {s?.logins_last_30d || 0} acessos (30d)
+                      {" · "}
+                      total {s?.total_logins || 0}
+                    </p>
                     {p.hubsoft_client_id && (
                       <p className="text-xs text-muted-foreground">Hubsoft ID: {p.hubsoft_client_id}</p>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <UserStatusBadge userId={p.user_id} />
                     <span className={`text-xs px-2 py-0.5 rounded ${p.is_blocked ? "bg-destructive/20 text-destructive" : p.is_active ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
                       {p.is_blocked ? "Bloqueado" : p.is_active ? "Ativo" : "Inativo"}
@@ -305,7 +485,8 @@ const UserManagement = () => {
                     </Button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
