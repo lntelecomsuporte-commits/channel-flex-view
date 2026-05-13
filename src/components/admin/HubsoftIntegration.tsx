@@ -214,7 +214,9 @@ const HubsoftIntegration = () => {
       password: form.password,
       package_id: form.package_id,
       is_active: form.is_active,
-    };
+      trial_enabled: form.trial_enabled,
+      trial_days: Math.max(1, Number(form.trial_days) || 30),
+    } as any;
 
     let configId = editingId;
 
@@ -235,7 +237,7 @@ const HubsoftIntegration = () => {
       configId = data.id;
     }
 
-    // Sync categories
+    // Sync categories (normal + trial)
     if (configId) {
       await supabase.from("hubsoft_config_categories").delete().eq("hubsoft_config_id", configId);
       if (form.category_ids.length > 0) {
@@ -244,6 +246,15 @@ const HubsoftIntegration = () => {
           category_id: cid,
         }));
         await supabase.from("hubsoft_config_categories").insert(rows);
+      }
+
+      await supabase.from("hubsoft_config_trial_categories").delete().eq("hubsoft_config_id", configId);
+      if (form.trial_enabled && form.trial_category_ids.length > 0) {
+        const trialRows = form.trial_category_ids.map((cid) => ({
+          hubsoft_config_id: configId!,
+          category_id: cid,
+        }));
+        await supabase.from("hubsoft_config_trial_categories").insert(trialRows);
       }
     }
 
