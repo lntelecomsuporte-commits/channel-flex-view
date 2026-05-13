@@ -488,7 +488,42 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      user_access_stats: {
+        Row: {
+          created_at: string | null
+          display_name: string | null
+          is_active: boolean | null
+          is_blocked: boolean | null
+          last_login_at: string | null
+          logins_last_30d: number | null
+          total_logins: number | null
+          user_id: string | null
+          username: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          display_name?: string | null
+          is_active?: boolean | null
+          is_blocked?: boolean | null
+          last_login_at?: never
+          logins_last_30d?: never
+          total_logins?: never
+          user_id?: string | null
+          username?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          display_name?: string | null
+          is_active?: boolean | null
+          is_blocked?: boolean | null
+          last_login_at?: never
+          logins_last_30d?: never
+          total_logins?: never
+          user_id?: string | null
+          username?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       cleanup_old_monitoring_data: { Args: never; Returns: undefined }
