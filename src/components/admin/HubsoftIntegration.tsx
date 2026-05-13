@@ -76,6 +76,42 @@ const emptyForm: FormState = {
   category_ids: [],
 };
 
+async function syncCategoriesToExistingUsers(configId: string, categoryIds: string[]): Promise<number> {
+  // Pega todos os usuários que já foram criados por essa integração
+  const { data: existingAccess, error: accessErr } = await supabase
+    .from("user_category_access")
+    .select("user_id")
+    .eq("hubsoft_config_id", configId);
+  if (accessErr) throw accessErr;
+
+  const userIds = Array.from(new Set((existingAccess ?? []).map((a) => a.user_id)));
+  if (userIds.length === 0) return 0;
+
+  // Remove acessos antigos vinculados a essa integração
+  const { error: delErr } = await supabase
+    .from("user_category_access")
+    .delete()
+    .eq("hubsoft_config_id", configId)
+    .in("user_id", userIds);
+  if (delErr) throw delErr;
+
+  // Insere novos acessos pra cada user × cada categoria selecionada
+  if (categoryIds.length > 0) {
+    const rows = userIds.flatMap((uid) =>
+      categoryIds.map((cid) => ({
+        user_id: uid,
+        category_id: cid,
+        hubsoft_config_id: configId,
+        is_active: true,
+      })),
+    );
+    const { error: insErr } = await supabase.from("user_category_access").insert(rows);
+    if (insErr) throw insErr;
+  }
+
+  return userIds.length;
+}
+
 const HubsoftIntegration = () => {
   const { data: configs, isLoading } = useHubsoftConfigs();
   const { data: configCategories } = useHubsoftConfigCategories();
