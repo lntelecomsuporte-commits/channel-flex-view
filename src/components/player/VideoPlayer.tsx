@@ -497,19 +497,47 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
       if (autoPlay) video.play().catch(() => {});
     }
 
-    // === Watchdog global de playback ===
-    // Em live, currentTime deve avançar continuamente. Se ficar parado por
-    // >30s e o player não estiver pausado, força um reload completo do stream
-    // (recria hls.js / mpegts.js / native). Cobre o caso "trava após horas
-    // sem disparar erro" comum em devices fracos onde o decoder reinicializa
-    // mal após GC.
+    // === Watchdog agressivo de playback ===
+    // No APK travamos mais cedo (8s) — devices fracos engasgam silenciosamente
+    // sem disparar erro do hls.js. Na web damos 30s pra evitar reload em zaps
+    // lentos legítimos. Também detectamos "tela preta" (readyState < 2) por
+    // mais de 12s mesmo com play() chamado.
+    const isNative = Capacitor.isNativePlatform();
+    const STUCK_THRESHOLD_MS = isNative ? 8_000 : 30_000;
+    const NO_DATA_THRESHOLD_MS = isNative ? 12_000 : 25_000;
     let lastTime = 0;
     let lastTimeCheckedAt = Date.now();
+    let noDataSince: number | null = null;
+    const triggerReload = (reason: string) => {
+      console.warn(`[Watchdog] ${reason} — recarregando stream`);
+      lastTimeCheckedAt = Date.now();
+      noDataSince = null;
+      if (hlsRef.current) {
+        try { hlsRef.current.destroy(); } catch { /* ignore */ }
+        hlsRef.current = null;
+      }
+      if (mpegtsRef.current) {
+        try { mpegtsRef.current.destroy(); } catch { /* ignore */ }
+        mpegtsRef.current = null;
+      }
+      currentEngineRef.current = null;
+      setResolvedContentType((c) => c + " ");
+    };
     const watchdog = window.setInterval(() => {
       if (!video || video.paused || video.ended) {
         lastTimeCheckedAt = Date.now();
         lastTime = video?.currentTime ?? 0;
+        noDataSince = null;
         return;
+      }
+      // Sem dados decodáveis (HAVE_NOTHING/HAVE_METADATA) por muito tempo = tela preta.
+      if (video.readyState < 2) {
+        if (noDataSince === null) noDataSince = Date.now();
+        else if (Date.now() - noDataSince > NO_DATA_THRESHOLD_MS) {
+          triggerReload(`Sem dados de vídeo por ${((Date.now() - noDataSince) / 1000).toFixed(0)}s (readyState=${video.readyState})`);
+        }
+      } else {
+        noDataSince = null;
       }
       const now = video.currentTime;
       if (Math.abs(now - lastTime) > 0.25) {
@@ -518,23 +546,10 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         return;
       }
       const stuckMs = Date.now() - lastTimeCheckedAt;
-      if (stuckMs > 30_000) {
-        console.warn(`[Watchdog] Playback travado por ${(stuckMs / 1000).toFixed(0)}s — recarregando stream`);
-        lastTimeCheckedAt = Date.now();
-        // Força reload: derruba engines atuais e re-dispara o effect via toggle no estado.
-        if (hlsRef.current) {
-          try { hlsRef.current.destroy(); } catch { /* ignore */ }
-          hlsRef.current = null;
-        }
-        if (mpegtsRef.current) {
-          try { mpegtsRef.current.destroy(); } catch { /* ignore */ }
-          mpegtsRef.current = null;
-        }
-        currentEngineRef.current = null;
-        // Trigger re-mount do effect mexendo no resolvedUrl (vai voltar ao mesmo valor logo depois).
-        setResolvedContentType((c) => c + " ");
+      if (stuckMs > STUCK_THRESHOLD_MS) {
+        triggerReload(`Playback travado por ${(stuckMs / 1000).toFixed(0)}s`);
       }
-    }, 5_000);
+    }, isNative ? 2_000 : 5_000);
 
     return () => {
       clearInterval(watchdog);

@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabaseLocal";
 import { toast } from "sonner";
 import { isSelectKey } from "@/lib/remoteKeys";
 import PinPrompt from "./PinPrompt";
+import NetworkDiagnostics from "./NetworkDiagnostics";
 
 interface SettingsMenuProps {
   onClose: () => void;
@@ -11,11 +12,12 @@ interface SettingsMenuProps {
   userEmail?: string | null;
 }
 
-type View = "menu" | "change-password" | "change-pin-current" | "change-pin-new" | "about";
+type View = "menu" | "change-password" | "change-pin-current" | "change-pin-new" | "about" | "diagnostics";
 
 const ITEMS = [
   { id: "change-password", label: "🔑 Trocar senha de login" },
   { id: "change-pin", label: "🔞 Trocar PIN dos canais adultos" },
+  { id: "diagnostics", label: "📶 Diagnóstico de rede" },
   { id: "about", label: "ℹ️ Sobre o aplicativo" },
   { id: "logout", label: "🚪 Sair da conta" },
 ] as const;
@@ -54,7 +56,7 @@ export default function SettingsMenu({ onClose, onLogout, userId, userEmail }: S
 
   // Captura teclas do menu (não na sub-view de PIN — PinPrompt cuida)
   useEffect(() => {
-    if (view === "change-pin-current" || view === "change-pin-new") return;
+    if (view === "change-pin-current" || view === "change-pin-new" || view === "diagnostics") return;
     const handler = (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -90,6 +92,8 @@ export default function SettingsMenu({ onClose, onLogout, userId, userEmail }: S
           setTimeout(() => pwdInputRef.current?.focus(), 50);
         } else if (id === "change-pin") {
           setView("change-pin-current");
+        } else if (id === "diagnostics") {
+          setView("diagnostics");
         } else if (id === "about") {
           setView("about");
         }
@@ -159,6 +163,7 @@ export default function SettingsMenu({ onClose, onLogout, userId, userEmail }: S
                     if (item.id === "logout") { onLogout(); onClose(); }
                     else if (item.id === "change-password") { setView("change-password"); setTimeout(() => pwdInputRef.current?.focus(), 50); }
                     else if (item.id === "change-pin") setView("change-pin-current");
+                    else if (item.id === "diagnostics") setView("diagnostics");
                     else if (item.id === "about") setView("about");
                   }}
                 >
@@ -255,6 +260,10 @@ export default function SettingsMenu({ onClose, onLogout, userId, userEmail }: S
           }}
           onCancel={() => setView("menu")}
         />
+      )}
+
+      {view === "diagnostics" && (
+        <NetworkDiagnostics onClose={() => setView("menu")} />
       )}
     </div>
   );

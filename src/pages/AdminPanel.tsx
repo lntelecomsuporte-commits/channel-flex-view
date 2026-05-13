@@ -38,7 +38,7 @@ const AdminPanel = () => {
 
   const [channelForm, setChannelForm] = useState({ ...emptyChannelForm });
   const [extraEpgUrls, setExtraEpgUrls] = useState<string[]>([]);
-  const [categoryForm, setCategoryForm] = useState({ name: "", position: "", includedCategoryIds: [] as string[] });
+  const [categoryForm, setCategoryForm] = useState({ name: "", position: "", includedCategoryIds: [] as string[], requiresPin: false });
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -206,7 +206,7 @@ const AdminPanel = () => {
     });
   };
 
-  const resetCategoryForm = () => setCategoryForm({ name: "", position: "", includedCategoryIds: [] });
+  const resetCategoryForm = () => setCategoryForm({ name: "", position: "", includedCategoryIds: [], requiresPin: false });
 
   const handleSaveCategory = async () => {
     if (!categoryForm.name) { toast.error("Informe o nome da categoria"); return; }
@@ -214,10 +214,10 @@ const AdminPanel = () => {
     let categoryId = editingCategoryId;
 
     if (editingCategoryId) {
-      const { error } = await supabase.from("categories").update({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0 }).eq("id", editingCategoryId);
+      const { error } = await supabase.from("categories").update({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0, requires_pin: categoryForm.requiresPin } as any).eq("id", editingCategoryId);
       if (error) { toast.error("Erro: " + error.message); setSaving(false); return; }
     } else {
-      const { data, error } = await supabase.from("categories").insert({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0 }).select("id").single();
+      const { data, error } = await supabase.from("categories").insert({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0, requires_pin: categoryForm.requiresPin } as any).select("id").single();
       if (error) { toast.error("Erro ao salvar categoria: " + error.message); setSaving(false); return; }
       categoryId = data.id;
     }
@@ -244,7 +244,7 @@ const AdminPanel = () => {
   const handleEditCategory = (cat: NonNullable<typeof categories>[0]) => {
     setEditingCategoryId(cat.id);
     const includes = categoryIncludes?.filter((ci) => ci.category_id === cat.id).map((ci) => ci.included_category_id) || [];
-    setCategoryForm({ name: cat.name, position: String(cat.position), includedCategoryIds: includes });
+    setCategoryForm({ name: cat.name, position: String(cat.position), includedCategoryIds: includes, requiresPin: !!(cat as any).requires_pin });
     requestAnimationFrame(() => {
       categoryFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -544,6 +544,17 @@ const AdminPanel = () => {
                   </div>
                 </div>
 
+                <label className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted">
+                  <Checkbox
+                    checked={categoryForm.requiresPin}
+                    onCheckedChange={(v) => setCategoryForm((f) => ({ ...f, requiresPin: !!v }))}
+                  />
+                  <div>
+                    <p className="text-sm text-foreground">🔞 Exige PIN parental para todos os canais desta categoria</p>
+                    <p className="text-xs text-muted-foreground">Ao marcar, qualquer canal dentro desta categoria pedirá o PIN — não precisa marcar canal por canal.</p>
+                  </div>
+                </label>
+
                 {categories && categories.filter((c) => c.id !== editingCategoryId).length > 0 && (
                   <div className="space-y-2">
                     <Label>Inclui canais de outras categorias</Label>
@@ -593,7 +604,10 @@ const AdminPanel = () => {
                       return (
                         <div key={cat.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
                           <div>
-                            <p className="font-medium text-foreground">{cat.name} <span className="text-xs text-muted-foreground">(pos: {cat.position})</span></p>
+                            <p className="font-medium text-foreground">
+                              {cat.name} <span className="text-xs text-muted-foreground">(pos: {cat.position})</span>
+                              {(cat as any).requires_pin && <span className="ml-2 text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive">🔞 PIN</span>}
+                            </p>
                             {includes.length > 0 && (
                               <p className="text-xs text-muted-foreground">
                                 Inclui: {includes.map((inc) => categories.find((c) => c.id === inc.included_category_id)?.name).filter(Boolean).join(", ")}

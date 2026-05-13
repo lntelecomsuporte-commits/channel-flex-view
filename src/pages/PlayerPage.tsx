@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useChannels, type Channel } from "@/hooks/useChannels";
+import { useChannels, useCategories, type Channel } from "@/hooks/useChannels";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTouchControls } from "@/hooks/useTouchControls";
 import { useAuth } from "@/hooks/useAuth";
@@ -80,6 +80,13 @@ const PlayerPage = () => {
 
 
   const { data: channels, isLoading } = useChannels();
+  const { data: categories } = useCategories();
+  const pinCategoryIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    pinCategoryIds.current = new Set(
+      (categories ?? []).filter((c: any) => c.requires_pin).map((c) => c.id)
+    );
+  }, [categories]);
   const [currentIndex, setCurrentIndex] = useState(0);
   // Inicia no canal de menor número APENAS na primeira carga da sessão.
   // Em qualquer refetch (focus/reconnect/staleTime) NUNCA voltamos pro 0 —
@@ -144,10 +151,18 @@ const PlayerPage = () => {
   const focusedChannel: Channel | null = previewChannel ?? currentChannel;
 
   // Mantém ID lembrado em memória quando o usuário troca de canal (não persiste).
+  // Também guarda o índice do canal ANTERIOR pra que o botão Voltar possa
+  // alternar entre o atual e o anterior (igual a tecla "Last" de TVs).
+  const previousIndexRef = useRef<number | null>(null);
+  const lastIndexSeenRef = useRef<number>(0);
   useEffect(() => {
     if (!currentChannel?.id) return;
     currentChannelIdRef.current = currentChannel.id;
-  }, [currentChannel?.id]);
+    if (currentIndex !== lastIndexSeenRef.current) {
+      previousIndexRef.current = lastIndexSeenRef.current;
+      lastIndexSeenRef.current = currentIndex;
+    }
+  }, [currentChannel?.id, currentIndex]);
 
   // Mantém sessão viva no banco (admin enxerga online/canal atual)
   useSessionHeartbeat({
@@ -198,17 +213,20 @@ const PlayerPage = () => {
       });
   }, [user]);
 
-  // Guard: ao cair num canal adulto não-liberado, segura e pede PIN
+  // Guard: ao cair num canal restrito (canal adulto OU canal de categoria
+  // com requires_pin) não-liberado, segura e pede PIN.
   useEffect(() => {
     if (!currentChannel) return;
-    const isAdult = (currentChannel as any).is_adult;
-    if (!isAdult || unlockedAdult.has(currentChannel.id)) {
+    const ch: any = currentChannel;
+    const categoryRequiresPin = ch.category_id && pinCategoryIds.current.has(ch.category_id);
+    const isRestricted = !!ch.is_adult || categoryRequiresPin;
+    if (!isRestricted || unlockedAdult.has(currentChannel.id)) {
       lastSafeIndexRef.current = currentIndex;
       setPendingAdult((p) => (p && p.id === currentChannel.id ? null : p));
       return;
     }
     setPendingAdult((prev) => prev ?? { id: currentChannel.id, revertIndex: lastSafeIndexRef.current });
-  }, [currentChannel?.id, unlockedAdult, currentIndex]);
+  }, [currentChannel?.id, unlockedAdult, currentIndex, categories]);
 
   const playerRef = useRef<VideoPlayerHandle>(null);
   const comboRef = useRef<string[]>([]);
@@ -436,13 +454,30 @@ const PlayerPage = () => {
       return false;
     }
 
+    // Primeiro toque: se houver canal anterior, alterna pra ele (tecla "Last").
+    // Mantém o contador rodando — se o usuário insistir 3x rápido, sai do APK.
+    if (
+      backPressRef.current.count === 1 &&
+      channels &&
+      previousIndexRef.current !== null &&
+      previousIndexRef.current !== currentIndex &&
+      previousIndexRef.current < channels.length
+    ) {
+      setCurrentIndex(previousIndexRef.current);
+      showOSDTemporarily();
+      backPressRef.current.timer = setTimeout(() => {
+        backPressRef.current.count = 0;
+      }, 2000);
+      return true;
+    }
+
     const remaining = 3 - backPressRef.current.count;
     toast(`Pressione Voltar mais ${remaining}x para sair`, { duration: 2000 });
     backPressRef.current.timer = setTimeout(() => {
       backPressRef.current.count = 0;
     }, 2000);
     return true;
-  }, [pendingAdult, settingsOpen, showStats, synopsisProgram, searchActive, showChannelList, favFocusIndex, showPreview, previewTimeout, showOSD, showFavoritesBar, osdTimeout]);
+  }, [pendingAdult, settingsOpen, showStats, synopsisProgram, searchActive, showChannelList, favFocusIndex, showPreview, previewTimeout, showOSD, showFavoritesBar, osdTimeout, channels, currentIndex, showOSDTemporarily]);
 
   useNativeBackButton(handleBackPress);
 
