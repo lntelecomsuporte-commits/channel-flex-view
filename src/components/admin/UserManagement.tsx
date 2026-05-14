@@ -127,12 +127,12 @@ const UserManagement = () => {
   (accessStats || []).forEach((s) => statsByUser.set(s.user_id, s));
   const allProfiles = profiles || [];
   const neverAccessed = allProfiles.filter(
-    (p: any) => (statsByUser.get(p.user_id)?.total_logins || 0) === 0
+    (p) => (statsByUser.get(p.user_id)?.total_logins || 0) === 0
   );
   const active30dProfiles = allProfiles.filter(
-    (p: any) => (statsByUser.get(p.user_id)?.logins_last_30d || 0) > 0
+    (p) => (statsByUser.get(p.user_id)?.logins_last_30d || 0) > 0
   );
-  const trialProfiles = allProfiles.filter((p: any) => trialMap?.has(p.user_id));
+  const trialProfiles = allProfiles.filter((p) => trialMap?.has(p.user_id));
   const reportLabels: Record<Exclude<ReportFilter, null>, string> = {
     all: "Total de usuários",
     never: "Nunca acessaram",
@@ -148,7 +148,7 @@ const UserManagement = () => {
   const sortedProfiles = (() => {
     if (!profiles) return [];
     const term = searchTerm.trim().toLowerCase();
-    const list = allProfiles.filter((p: any) => {
+    const list = allProfiles.filter((p) => {
       if (activeReport === "never" && (statsByUser.get(p.user_id)?.total_logins || 0) !== 0) return false;
       if (activeReport === "active30d" && (statsByUser.get(p.user_id)?.logins_last_30d || 0) <= 0) return false;
       if (activeReport === "trial" && !trialMap?.has(p.user_id)) return false;
@@ -158,11 +158,11 @@ const UserManagement = () => {
         (p.display_name || "").toLowerCase().includes(term)
       );
     });
-    const ts = (p: any) => {
+    const ts = (p: Profile) => {
       const t = statsByUser.get(p.user_id)?.last_login_at;
       return t ? new Date(t).getTime() : 0;
     };
-    const cmp: Record<SortMode, (a: any, b: any) => number> = {
+    const cmp: Record<SortMode, (a: Profile, b: Profile) => number> = {
       recent: (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
       last_login_desc: (a, b) => ts(b) - ts(a),
       last_login_asc: (a, b) => {
@@ -196,7 +196,7 @@ const UserManagement = () => {
 
   const exportNeverAccessed = () => {
     const rows = [["Email", "Nome", "Criado em"]];
-    neverAccessed.forEach((p: any) =>
+    neverAccessed.forEach((p) =>
       rows.push([p.username || "", p.display_name || "", fmtDate(p.created_at)])
     );
     downloadCsv(`usuarios-nunca-acessaram-${new Date().toISOString().slice(0, 10)}.csv`, rows);
@@ -205,8 +205,8 @@ const UserManagement = () => {
 
   const exportAccess30d = () => {
     const rows = [["Email", "Nome", "Acessos 30d", "Total acessos", "Último acesso"]];
-    (profiles || [])
-      .map((p: any) => ({ p, s: statsByUser.get(p.user_id) }))
+    allProfiles
+      .map((p) => ({ p, s: statsByUser.get(p.user_id) }))
       .sort((a, b) => (b.s?.logins_last_30d || 0) - (a.s?.logins_last_30d || 0))
       .forEach(({ p, s }) =>
         rows.push([
