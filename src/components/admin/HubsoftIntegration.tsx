@@ -141,7 +141,9 @@ async function syncCategoriesToExistingUsers(configId: string, categoryIds: stri
         is_active: true,
       })),
     );
-    const { error: insErr } = await supabase.from("user_category_access").insert(rows);
+    const { error: insErr } = await supabase
+      .from("user_category_access")
+      .upsert(rows, { onConflict: "user_id,category_id" });
     if (insErr) throw insErr;
   }
 
