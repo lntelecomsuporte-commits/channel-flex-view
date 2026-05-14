@@ -207,8 +207,8 @@ const HubsoftIntegration = () => {
     try {
       const count = await syncCategoriesToExistingUsers(configId, categoryIds);
       toast.success(count > 0 ? `Categorias aplicadas a ${count} usuário(s)` : "Nenhum usuário cadastrado por essa integração");
-    } catch (e: any) {
-      toast.error("Erro ao sincronizar: " + (e?.message ?? e));
+    } catch (e) {
+      toast.error("Erro ao sincronizar: " + getErrorMessage(e));
     } finally {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       setSyncingId(null);
@@ -235,8 +235,8 @@ const HubsoftIntegration = () => {
     try {
       const count = await syncTrialToExistingUsers(configId, trialCategoryIds, trialDays);
       toast.success(count > 0 ? `Degustação aplicada a ${count} usuário(s)` : "Nenhum usuário cadastrado por essa integração");
-    } catch (e: any) {
-      toast.error("Erro ao aplicar degustação: " + (e?.message ?? e));
+    } catch (e) {
+      toast.error("Erro ao aplicar degustação: " + getErrorMessage(e));
     } finally {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       queryClient.invalidateQueries({ queryKey: ["user_trial_access"] });
@@ -270,8 +270,8 @@ const HubsoftIntegration = () => {
       package_id: config.package_id,
       is_active: config.is_active,
       category_ids: getCategoryIdsForConfig(config.id),
-      trial_enabled: !!(config as any).trial_enabled,
-      trial_days: Number((config as any).trial_days) || 30,
+      trial_enabled: !!config.trial_enabled,
+      trial_days: Number(config.trial_days) || 30,
       trial_category_ids: getTrialCategoryIdsForConfig(config.id),
     });
     setApplyToExisting(false);
@@ -302,7 +302,7 @@ const HubsoftIntegration = () => {
       is_active: form.is_active,
       trial_enabled: form.trial_enabled,
       trial_days: Math.max(1, Number(form.trial_days) || 30),
-    } as any;
+    };
 
     let configId = editingId;
 
