@@ -30,6 +30,9 @@
                color="0xffffffff"
                focusedColor="0xffffffff" />
 
+    <Label id="updateBanner" text="" font="font:MediumBoldSystemFont"
+           color="0xfbbf24ff" translation="[60, 970]" visible="false" />
+
     <Label id="hint"
            text="OK: assistir   ★ (info): favoritar   ◀ ▶: trocar coluna   Voltar: sair"
            font="font:SmallSystemFont" color="0x6b7280ff"

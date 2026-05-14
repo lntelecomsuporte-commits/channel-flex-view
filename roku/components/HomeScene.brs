@@ -13,6 +13,16 @@ sub init()
     m.catList.observeField("itemFocused", "OnCatFocused")
     m.chList.observeField("itemSelected", "OnChSelected")
     LoadAll()
+    CheckUpdate()
+end sub
+
+sub CheckUpdate()
+    info = CheckForRokuUpdate()
+    if info.hasUpdate = true
+        banner = m.top.findNode("updateBanner")
+        banner.text = "⚠ Nova versão do app disponível (v" + info.remote.toStr() + ") — peça pro provedor atualizar"
+        banner.visible = true
+    end if
 end sub
 
 sub LoadAll()
