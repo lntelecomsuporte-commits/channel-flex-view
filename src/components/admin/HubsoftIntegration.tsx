@@ -550,7 +550,7 @@ const HubsoftIntegration = () => {
                 <div className="text-sm">
                   <p className="font-medium text-foreground">Aplicar também aos usuários já cadastrados</p>
                   <p className="text-xs text-muted-foreground">
-                    Substitui os acessos dos usuários criados por esta integração pelas categorias selecionadas acima.
+                    Se a degustação estiver ativa, aplica as categorias de degustação com nova expiração; caso contrário, aplica as categorias normais selecionadas acima.
                   </p>
                 </div>
               </label>
