@@ -288,7 +288,7 @@ const UserManagement = () => {
       .select("adult_pin")
       .eq("user_id", profile.user_id)
       .maybeSingle();
-    setEditForm({ password: "", display_name: profile.display_name || "", adult_pin: (data as any)?.adult_pin || "" });
+    setEditForm({ password: "", display_name: profile.display_name || "", adult_pin: data?.adult_pin || "" });
     const { data: roleRow } = await supabase
       .from("user_roles")
       .select("id")
@@ -548,7 +548,7 @@ const UserManagement = () => {
             <p className="text-muted-foreground">Nenhum usuário encontrado</p>
           ) : (
             <div className="space-y-2">
-              {sortedProfiles.map((p: any) => {
+              {sortedProfiles.map((p) => {
                 const s = statsByUser.get(p.user_id);
                 return (
                 <div key={p.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg bg-secondary gap-3">
