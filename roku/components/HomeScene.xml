@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="HomeScene" extends="Group">
+  <interface>
+    <field id="logoutRequested" type="boolean" alwaysNotify="true" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/HomeScene.brs" />
+  <children>
+    <Rectangle width="1920" height="1080" color="0x0a0a0aff" />
+
+    <Label id="brand" text="LN TV" font="font:LargeBoldSystemFont"
+           color="0xdc2626ff" translation="[60, 40]" />
+    <Label id="status" text="Carregando..." font="font:MediumSystemFont"
+           color="0x9ca3afff" translation="[60, 120]" />
+
+    <!-- Categorias (esquerda) -->
+    <LabelList id="catList"
+               translation="[60, 200]"
+               itemSize="[360, 64]"
+               numRows="11"
+               focusBitmapBlendColor="0xdc2626ff"
+               color="0xffffffff"
+               focusedColor="0xffffffff" />
+
+    <!-- Canais (direita) -->
+    <LabelList id="chList"
+               translation="[460, 200]"
+               itemSize="[700, 64]"
+               numRows="11"
+               focusBitmapBlendColor="0xdc2626ff"
+               color="0xffffffff"
+               focusedColor="0xffffffff" />
+
+    <Label id="updateBanner" text="" font="font:MediumBoldSystemFont"
+           color="0xfbbf24ff" translation="[60, 970]" visible="false" />
+
+    <Label id="hint"
+           text="OK: assistir   ★ (info): favoritar   ◀ ▶: trocar coluna   Voltar: sair"
+           font="font:SmallSystemFont" color="0x6b7280ff"
+           translation="[60, 1020]" />
+  </children>
+</component>

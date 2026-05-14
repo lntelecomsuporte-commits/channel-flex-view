@@ -22,3 +22,4 @@ SEMPRE ao final de QUALQUER mudança (frontend, edge function, migration), inclu
 - [Proxies](mem://architecture/proxies) — hls-proxy for mixed content/CORS fallback
 - [UI & Styling](mem://design/ui) — Scroll locks, overlay layout, branding assets
 - [Project Setup](mem://project/setup) — PWA configuration and environments
+- [Roku Channel](mem://features/roku-channel) — App BrightScript em roku/, build no mesmo workflow do APK, sync via sync-lntv-apk.sh

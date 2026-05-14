@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="LoginScene" extends="Group">
+  <interface>
+    <field id="loginOk" type="boolean" alwaysNotify="true" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/LoginScene.brs" />
+  <children>
+    <Rectangle width="1920" height="1080" color="0x0a0a0aff" />
+    <Label id="title" text="LN TV" font="font:LargeBoldSystemFont" color="0xdc2626ff"
+           translation="[860, 240]" width="200" horizAlign="center" />
+    <Label id="subtitle" text="Acesse com seu e-mail e senha" font="font:MediumSystemFont"
+           color="0x9ca3afff" translation="[700, 320]" width="520" horizAlign="center" />
+
+    <Label id="emailLabel" text="E-mail:" font="font:MediumBoldSystemFont"
+           color="0xffffffff" translation="[680, 420]" />
+    <Rectangle id="emailBox" width="560" height="60" color="0x1f2937ff"
+               translation="[680, 460]" />
+    <Label id="emailValue" text="" font="font:MediumSystemFont"
+           color="0xffffffff" translation="[700, 475]" width="520" />
+
+    <Label id="passLabel" text="Senha:" font="font:MediumBoldSystemFont"
+           color="0xffffffff" translation="[680, 550]" />
+    <Rectangle id="passBox" width="560" height="60" color="0x1f2937ff"
+               translation="[680, 590]" />
+    <Label id="passValue" text="" font="font:MediumSystemFont"
+           color="0xffffffff" translation="[700, 605]" width="520" />
+
+    <Rectangle id="loginBtn" width="260" height="70" color="0xdc2626ff"
+               translation="[830, 700]" />
+    <Label id="loginBtnLabel" text="ENTRAR (OK)" font="font:MediumBoldSystemFont"
+           color="0xffffffff" translation="[830, 718]" width="260" horizAlign="center" />
+
+    <Label id="status" text="" font="font:SmallSystemFont"
+           color="0xfca5a5ff" translation="[680, 800]" width="560" horizAlign="center" />
+
+    <Label id="hint" text="Use os botões  ⏪ Limpar  ▶ Login  *  Mudar campo"
+           font="font:SmallSystemFont" color="0x6b7280ff"
+           translation="[680, 900]" width="560" horizAlign="center" />
+  </children>
+</component>
