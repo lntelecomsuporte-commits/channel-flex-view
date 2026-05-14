@@ -12,6 +12,23 @@ import { Save, Copy, RefreshCw, Plus, Trash2, Edit2, X } from "lucide-react";
 import { useCategories } from "@/hooks/useChannels";
 import { getLocalFunctionUrl } from "@/lib/localBackend";
 
+type HubsoftConfig = {
+  id: string;
+  name: string;
+  api_url: string;
+  api_key: string;
+  username: string;
+  password: string;
+  package_id: string;
+  is_active: boolean;
+  trial_enabled: boolean;
+  trial_days: number;
+};
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function useHubsoftConfigs() {
   return useQuery({
     queryKey: ["hubsoft-configs"],
@@ -21,7 +38,7 @@ function useHubsoftConfigs() {
         .select("*")
         .order("created_at", { ascending: true });
       if (error) throw error;
-      return data;
+      return data as HubsoftConfig[];
     },
   });
 }
