@@ -362,8 +362,8 @@ const HubsoftIntegration = () => {
         } else {
           syncedCount = await syncCategoriesToExistingUsers(configId, form.category_ids);
         }
-      } catch (e: any) {
-        toast.error("Integração salva, mas erro ao aplicar a usuários: " + (e?.message ?? e));
+      } catch (e) {
+        toast.error("Integração salva, mas erro ao aplicar a usuários: " + getErrorMessage(e));
       }
     }
 
@@ -640,7 +640,7 @@ const HubsoftIntegration = () => {
                       >
                         <RefreshCw className={`h-4 w-4 ${syncingId === config.id ? "animate-spin" : ""}`} />
                       </Button>
-                      {(config as any).trial_enabled && (
+                      {config.trial_enabled && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -648,7 +648,7 @@ const HubsoftIntegration = () => {
                             handleSyncTrialExisting(
                               config.id,
                               getTrialCategoryIdsForConfig(config.id),
-                              Number((config as any).trial_days) || 30,
+                              Number(config.trial_days) || 30,
                               config.name,
                             )
                           }
