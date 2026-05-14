@@ -328,22 +328,42 @@ const HubsoftIntegration = () => {
     }
 
     let syncedCount = 0;
+    let syncedTrial = false;
     if (configId && applyToExisting) {
       try {
-        syncedCount = await syncCategoriesToExistingUsers(configId, form.category_ids);
+        if (form.trial_enabled) {
+          if (form.trial_category_ids.length === 0) {
+            toast.error("Integração salva, mas não apliquei degustação: selecione ao menos uma categoria de degustação.");
+          } else {
+            syncedCount = await syncTrialToExistingUsers(
+              configId,
+              form.trial_category_ids,
+              Math.max(1, Number(form.trial_days) || 30),
+            );
+            syncedTrial = true;
+          }
+        } else {
+          syncedCount = await syncCategoriesToExistingUsers(configId, form.category_ids);
+        }
       } catch (e: any) {
-        toast.error("Categorias salvas, mas erro ao aplicar a usuários: " + (e?.message ?? e));
+        toast.error("Integração salva, mas erro ao aplicar a usuários: " + (e?.message ?? e));
       }
     }
 
     setSaving(false);
     const baseMsg = editingId ? "Integração atualizada!" : "Integração criada!";
-    toast.success(applyToExisting && syncedCount > 0 ? `${baseMsg} Categorias aplicadas a ${syncedCount} usuário(s).` : baseMsg);
+    toast.success(
+      applyToExisting && syncedCount > 0
+        ? `${baseMsg} ${syncedTrial ? "Degustação aplicada" : "Categorias aplicadas"} a ${syncedCount} usuário(s).`
+        : baseMsg,
+    );
     cancelForm();
     queryClient.invalidateQueries({ queryKey: ["hubsoft-configs"] });
     queryClient.invalidateQueries({ queryKey: ["hubsoft-config-categories"] });
     queryClient.invalidateQueries({ queryKey: ["hubsoft-config-trial-categories"] });
     queryClient.invalidateQueries({ queryKey: ["users"] });
+    queryClient.invalidateQueries({ queryKey: ["profiles"] });
+    queryClient.invalidateQueries({ queryKey: ["user_trial_access"] });
   };
 
   const handleDelete = async (id: string) => {
