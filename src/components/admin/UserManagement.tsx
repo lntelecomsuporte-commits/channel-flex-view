@@ -38,12 +38,13 @@ function useTrialAccess() {
   return useQuery({
     queryKey: ["user_trial_access"],
     queryFn: async () => {
+      const now = new Date().toISOString();
       const { data, error } = await supabase
         .from("user_category_access")
         .select("user_id,trial_expires_at")
         .eq("is_trial", true)
         .eq("is_active", true)
-        .not("trial_expires_at", "is", null);
+        .gt("trial_expires_at", now);
       if (error) throw error;
       // earliest expiration per user
       const map = new Map<string, string>();
@@ -84,6 +85,7 @@ function useAccessStats() {
 }
 
 type SortMode = "recent" | "last_login_desc" | "last_login_asc" | "email_asc" | "name_asc" | "logins_30d_desc";
+type ReportFilter = "all" | "never" | "active30d" | "trial" | null;
 
 type Profile = {
   id: string;
@@ -113,9 +115,24 @@ const UserManagement = () => {
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeReport, setActiveReport] = useState<ReportFilter>(null);
 
   const statsByUser = new Map<string, AccessStats>();
   (accessStats || []).forEach((s) => statsByUser.set(s.user_id, s));
+  const allProfiles = profiles || [];
+  const neverAccessed = allProfiles.filter(
+    (p: any) => (statsByUser.get(p.user_id)?.total_logins || 0) === 0
+  );
+  const active30dProfiles = allProfiles.filter(
+    (p: any) => (statsByUser.get(p.user_id)?.logins_last_30d || 0) > 0
+  );
+  const trialProfiles = allProfiles.filter((p: any) => trialMap?.has(p.user_id));
+  const reportLabels: Record<Exclude<ReportFilter, null>, string> = {
+    all: "Total de usuários",
+    never: "Nunca acessaram",
+    active30d: "Ativos (30d)",
+    trial: "Em degustação",
+  };
 
   const fmtDate = (iso: string | null) => {
     if (!iso) return "Nunca";
@@ -125,7 +142,10 @@ const UserManagement = () => {
   const sortedProfiles = (() => {
     if (!profiles) return [];
     const term = searchTerm.trim().toLowerCase();
-    const list = profiles.filter((p: any) => {
+    const list = allProfiles.filter((p: any) => {
+      if (activeReport === "never" && (statsByUser.get(p.user_id)?.total_logins || 0) !== 0) return false;
+      if (activeReport === "active30d" && (statsByUser.get(p.user_id)?.logins_last_30d || 0) <= 0) return false;
+      if (activeReport === "trial" && !trialMap?.has(p.user_id)) return false;
       if (!term) return true;
       return (
         (p.username || "").toLowerCase().includes(term) ||
@@ -154,10 +174,6 @@ const UserManagement = () => {
     };
     return [...list].sort(cmp[sortMode]);
   })();
-
-  const neverAccessed = (profiles || []).filter(
-    (p: any) => (statsByUser.get(p.user_id)?.total_logins || 0) === 0
-  );
 
   const downloadCsv = (filename: string, rows: string[][]) => {
     const csv = rows
