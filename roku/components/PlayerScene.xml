@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="PlayerScene" extends="Group">
+  <interface>
+    <field id="channelData" type="assocarray" />
+    <field id="playerClosed" type="boolean" alwaysNotify="true" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/PlayerScene.brs" />
+  <children>
+    <Rectangle width="1920" height="1080" color="0x000000ff" />
+    <Video id="video" width="1920" height="1080" translation="[0, 0]" />
+    <Rectangle id="osdBg" width="1920" height="120" translation="[0, 960]" color="0x000000aa" visible="false" />
+    <Label id="osdName" text="" font="font:LargeBoldSystemFont"
+           color="0xffffffff" translation="[60, 985]" visible="false" />
+    <Label id="osdNum" text="" font="font:MediumSystemFont"
+           color="0xdc2626ff" translation="[60, 1040]" visible="false" />
+    <Label id="errLabel" text="" font="font:MediumSystemFont"
+           color="0xfca5a5ff" translation="[60, 60]" visible="false" />
+    <Timer id="osdTimer" repeat="false" duration="4" />
+  </children>
+</component>
