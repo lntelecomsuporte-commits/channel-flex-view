@@ -7,6 +7,7 @@ on:
       - 'src/**'
       - 'android/**'
       - 'resources/**'
+      - 'roku/**'
       - 'capacitor.config.ts'
       - 'package.json'
       - '.github/workflows/android-apk.yml'
@@ -162,6 +163,16 @@ jobs:
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon
 
+      - name: Package Roku channel
+        run: |
+          mkdir -p out
+          # Bake build_version do manifest com o run_number, pra app saber sua versão
+          sed -i "s/^build_version=.*/build_version=${VERSION_CODE}/" roku/manifest
+          sed -i "s/^minor_version=.*/minor_version=${{ github.run_number }}/" roku/manifest
+          grep -E "^(major|minor|build)_version" roku/manifest
+          (cd roku && zip -r "../out/lntv-roku.zip" manifest source components images)
+          ls -lh out/lntv-roku.zip
+
       - name: Rename APK + generate version.json
         run: |
           mkdir -p out
@@ -174,7 +185,11 @@ jobs:
             "versionName": "${VERSION_NAME}",
             "url": "https://tv2.lntelecom.net/downloads/lntv-latest.apk",
             "legacyUrl": "https://tv2.lntelecom.net/downloads/lntv-legacy.apk",
-            "notes": "Build #${{ github.run_number }} — ${{ github.event.head_commit.message }}"
+            "notes": "Build #${{ github.run_number }} — ${{ github.event.head_commit.message }}",
+            "rokuVersionCode": ${VERSION_CODE},
+            "rokuVersionName": "${VERSION_NAME}",
+            "rokuUrl": "https://tv2.lntelecom.net/downloads/lntv-roku.zip",
+            "rokuNotes": "Build #${{ github.run_number }}"
           }
           EOF
           cat out/version.json
