@@ -20,6 +20,25 @@ type AccessStats = {
   logins_last_30d: number;
 };
 
+type TrialAccessRow = {
+  user_id: string;
+  trial_expires_at: string;
+};
+
+type SortMode = "recent" | "last_login_desc" | "last_login_asc" | "email_asc" | "name_asc" | "logins_30d_desc";
+type ReportFilter = "all" | "never" | "active30d" | "trial" | null;
+
+type Profile = {
+  id: string;
+  user_id: string;
+  username: string | null;
+  display_name: string | null;
+  is_blocked: boolean;
+  is_active: boolean;
+  hubsoft_client_id: string | null;
+  created_at: string;
+};
+
 function useProfiles() {
   return useQuery({
     queryKey: ["profiles"],
@@ -29,7 +48,7 @@ function useProfiles() {
         .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data;
+      return data as Profile[];
     },
   });
 }
@@ -48,7 +67,7 @@ function useTrialAccess() {
       if (error) throw error;
       // earliest expiration per user
       const map = new Map<string, string>();
-      (data || []).forEach((row: any) => {
+      ((data || []) as TrialAccessRow[]).forEach((row) => {
         const cur = map.get(row.user_id);
         if (!cur || new Date(row.trial_expires_at) < new Date(cur)) {
           map.set(row.user_id, row.trial_expires_at);
@@ -74,7 +93,7 @@ function useAccessStats() {
   return useQuery({
     queryKey: ["user_access_stats"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("user_access_stats")
         .select("user_id,last_login_at,total_logins,logins_last_30d");
       if (error) throw error;
@@ -83,19 +102,6 @@ function useAccessStats() {
     refetchInterval: 60000,
   });
 }
-
-type SortMode = "recent" | "last_login_desc" | "last_login_asc" | "email_asc" | "name_asc" | "logins_30d_desc";
-type ReportFilter = "all" | "never" | "active30d" | "trial" | null;
-
-type Profile = {
-  id: string;
-  user_id: string;
-  username: string | null;
-  display_name: string | null;
-  is_blocked: boolean;
-  is_active: boolean;
-  hubsoft_client_id: string | null;
-};
 
 const UserManagement = () => {
   const { data: profiles, isLoading } = useProfiles();
