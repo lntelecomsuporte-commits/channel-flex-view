@@ -252,6 +252,13 @@ jobs:
             out/version.json
           retention-days: 30
 
+      - name: Upload Roku artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lntv-roku
+          path: out/lntv-roku.zip
+          retention-days: 30
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -265,11 +272,15 @@ jobs:
             - **lntv-latest.apk** — Android 6.0+ (minSdk 23) — recomendado, com auto-update
             - **lntv-legacy.apk** — Android 5.0+ (minSdk 21) — TV boxes/dispositivos antigos
 
+            Roku:
+            - **lntv-roku.zip** — Sideload via http://<ip-do-roku>/ → Upload
+
             versionCode: ${{ env.VERSION_CODE }}
             versionName: ${{ env.VERSION_NAME }}
           files: |
             out/lntv-latest.apk
             out/lntv-legacy.apk
+            out/lntv-roku.zip
             out/version.json
           make_latest: "true"
         env:
