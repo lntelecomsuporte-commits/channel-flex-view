@@ -403,6 +403,33 @@ const UserManagement = () => {
     queryClient.invalidateQueries({ queryKey: ["profiles"] });
   };
 
+  const toggleReport = (filter: Exclude<ReportFilter, null>) => {
+    setActiveReport((current) => (current === filter ? null : filter));
+    setSearchTerm("");
+  };
+
+  const ReportCard = ({
+    filter,
+    label,
+    value,
+    valueClass = "",
+  }: {
+    filter: Exclude<ReportFilter, null>;
+    label: string;
+    value: number;
+    valueClass?: string;
+  }) => (
+    <button
+      type="button"
+      onClick={() => toggleReport(filter)}
+      className={`p-3 rounded-lg bg-secondary text-left transition border border-transparent hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${activeReport === filter ? "border-primary ring-1 ring-primary" : ""}`}
+      title={`Ver ${label.toLowerCase()}`}
+    >
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className={`text-2xl font-bold ${valueClass}`}>{value}</p>
+    </button>
+  );
+
   const CategoryCheckboxes = ({ selected, onToggle }: { selected: string[]; onToggle: (id: string) => void }) => (
     <div className="space-y-2">
       <Label>Categorias de Acesso</Label>
