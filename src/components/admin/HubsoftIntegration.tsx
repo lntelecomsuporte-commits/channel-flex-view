@@ -153,15 +153,30 @@ async function syncTrialToExistingUsers(
   trialCategoryIds: string[],
   trialDays: number,
 ): Promise<number> {
+  // Pega TODOS os usuários cadastrados via Hubsoft (qualquer integração),
+  // não apenas os que já estavam vinculados a essa config.
+  const { data: hubsoftProfiles, error: profErr } = await supabase
+    .from("profiles")
+    .select("user_id")
+    .not("hubsoft_client_id", "is", null);
+  if (profErr) throw profErr;
+
+  // Também inclui quem já tem qualquer linha em user_category_access dessa config
   const { data: existingAccess, error: accessErr } = await supabase
     .from("user_category_access")
     .select("user_id")
     .eq("hubsoft_config_id", configId);
   if (accessErr) throw accessErr;
 
-  const userIds = Array.from(new Set((existingAccess ?? []).map((a) => a.user_id)));
+  const userIds = Array.from(
+    new Set([
+      ...(hubsoftProfiles ?? []).map((p) => p.user_id),
+      ...(existingAccess ?? []).map((a) => a.user_id),
+    ]),
+  );
   if (userIds.length === 0) return 0;
 
+  // Limpa qualquer acesso prévio desses users vinculado a essa config
   const { error: delErr } = await supabase
     .from("user_category_access")
     .delete()
