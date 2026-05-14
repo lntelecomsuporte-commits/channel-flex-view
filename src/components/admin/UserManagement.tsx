@@ -486,24 +486,10 @@ const UserManagement = () => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-            <div className="p-3 rounded-lg bg-secondary">
-              <p className="text-xs text-muted-foreground">Total de usuários</p>
-              <p className="text-2xl font-bold">{profiles?.length || 0}</p>
-            </div>
-            <div className="p-3 rounded-lg bg-secondary">
-              <p className="text-xs text-muted-foreground">Nunca acessaram</p>
-              <p className="text-2xl font-bold text-destructive">{neverAccessed.length}</p>
-            </div>
-            <div className="p-3 rounded-lg bg-secondary">
-              <p className="text-xs text-muted-foreground">Ativos (30d)</p>
-              <p className="text-2xl font-bold text-primary">
-                {(accessStats || []).filter((s) => (s.logins_last_30d || 0) > 0).length}
-              </p>
-            </div>
-            <div className="p-3 rounded-lg bg-secondary">
-              <p className="text-xs text-muted-foreground">Em degustação</p>
-              <p className="text-2xl font-bold text-amber-500">{trialMap?.size || 0}</p>
-            </div>
+            <ReportCard filter="all" label="Total de usuários" value={allProfiles.length} />
+            <ReportCard filter="never" label="Nunca acessaram" value={neverAccessed.length} valueClass="text-destructive" />
+            <ReportCard filter="active30d" label="Ativos (30d)" value={active30dProfiles.length} valueClass="text-primary" />
+            <ReportCard filter="trial" label="Em degustação" value={trialProfiles.length} valueClass="text-primary" />
             <div className="p-3 rounded-lg bg-secondary">
               <p className="text-xs text-muted-foreground">Acessos nos últimos 30d</p>
               <p className="text-2xl font-bold">
@@ -524,7 +510,9 @@ const UserManagement = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Usuários Cadastrados</CardTitle>
+          <CardTitle>
+            Usuários Cadastrados{activeReport ? ` · ${reportLabels[activeReport]}` : ""}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col md:flex-row gap-2 mb-4">
