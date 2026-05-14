@@ -141,7 +141,9 @@ async function syncCategoriesToExistingUsers(configId: string, categoryIds: stri
         is_active: true,
       })),
     );
-    const { error: insErr } = await supabase.from("user_category_access").insert(rows);
+    const { error: insErr } = await supabase
+      .from("user_category_access")
+      .upsert(rows, { onConflict: "user_id,category_id" });
     if (insErr) throw insErr;
   }
 
@@ -176,13 +178,23 @@ async function syncTrialToExistingUsers(
   );
   if (userIds.length === 0) return 0;
 
-  // Limpa qualquer acesso prévio desses users vinculado a essa config
-  const { error: delErr } = await supabase
+  // Limpa acesso prévio desses users tanto da config alvo quanto das categorias de trial
+  // (a tabela tem UNIQUE(user_id, category_id), então qualquer linha existente bloquearia o insert)
+  const { error: delErr1 } = await supabase
     .from("user_category_access")
     .delete()
     .eq("hubsoft_config_id", configId)
     .in("user_id", userIds);
-  if (delErr) throw delErr;
+  if (delErr1) throw delErr1;
+
+  if (trialCategoryIds.length > 0) {
+    const { error: delErr2 } = await supabase
+      .from("user_category_access")
+      .delete()
+      .in("user_id", userIds)
+      .in("category_id", trialCategoryIds);
+    if (delErr2) throw delErr2;
+  }
 
   if (trialCategoryIds.length === 0) return 0;
 
@@ -197,7 +209,9 @@ async function syncTrialToExistingUsers(
       trial_expires_at: expiresAt,
     })),
   );
-  const { error: insErr } = await supabase.from("user_category_access").insert(rows);
+  const { error: insErr } = await supabase
+    .from("user_category_access")
+    .upsert(rows, { onConflict: "user_id,category_id" });
   if (insErr) throw insErr;
 
   return userIds.length;
