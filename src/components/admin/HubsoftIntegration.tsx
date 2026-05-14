@@ -12,6 +12,23 @@ import { Save, Copy, RefreshCw, Plus, Trash2, Edit2, X } from "lucide-react";
 import { useCategories } from "@/hooks/useChannels";
 import { getLocalFunctionUrl } from "@/lib/localBackend";
 
+type HubsoftConfig = {
+  id: string;
+  name: string;
+  api_url: string;
+  api_key: string;
+  username: string;
+  password: string;
+  package_id: string;
+  is_active: boolean;
+  trial_enabled: boolean;
+  trial_days: number;
+};
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function useHubsoftConfigs() {
   return useQuery({
     queryKey: ["hubsoft-configs"],
@@ -21,7 +38,7 @@ function useHubsoftConfigs() {
         .select("*")
         .order("created_at", { ascending: true });
       if (error) throw error;
-      return data;
+      return data as HubsoftConfig[];
     },
   });
 }
@@ -190,8 +207,8 @@ const HubsoftIntegration = () => {
     try {
       const count = await syncCategoriesToExistingUsers(configId, categoryIds);
       toast.success(count > 0 ? `Categorias aplicadas a ${count} usuário(s)` : "Nenhum usuário cadastrado por essa integração");
-    } catch (e: any) {
-      toast.error("Erro ao sincronizar: " + (e?.message ?? e));
+    } catch (e) {
+      toast.error("Erro ao sincronizar: " + getErrorMessage(e));
     } finally {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       setSyncingId(null);
@@ -218,8 +235,8 @@ const HubsoftIntegration = () => {
     try {
       const count = await syncTrialToExistingUsers(configId, trialCategoryIds, trialDays);
       toast.success(count > 0 ? `Degustação aplicada a ${count} usuário(s)` : "Nenhum usuário cadastrado por essa integração");
-    } catch (e: any) {
-      toast.error("Erro ao aplicar degustação: " + (e?.message ?? e));
+    } catch (e) {
+      toast.error("Erro ao aplicar degustação: " + getErrorMessage(e));
     } finally {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       queryClient.invalidateQueries({ queryKey: ["user_trial_access"] });
@@ -253,8 +270,8 @@ const HubsoftIntegration = () => {
       package_id: config.package_id,
       is_active: config.is_active,
       category_ids: getCategoryIdsForConfig(config.id),
-      trial_enabled: !!(config as any).trial_enabled,
-      trial_days: Number((config as any).trial_days) || 30,
+      trial_enabled: !!config.trial_enabled,
+      trial_days: Number(config.trial_days) || 30,
       trial_category_ids: getTrialCategoryIdsForConfig(config.id),
     });
     setApplyToExisting(false);
@@ -285,7 +302,7 @@ const HubsoftIntegration = () => {
       is_active: form.is_active,
       trial_enabled: form.trial_enabled,
       trial_days: Math.max(1, Number(form.trial_days) || 30),
-    } as any;
+    };
 
     let configId = editingId;
 
@@ -328,22 +345,42 @@ const HubsoftIntegration = () => {
     }
 
     let syncedCount = 0;
+    let syncedTrial = false;
     if (configId && applyToExisting) {
       try {
-        syncedCount = await syncCategoriesToExistingUsers(configId, form.category_ids);
-      } catch (e: any) {
-        toast.error("Categorias salvas, mas erro ao aplicar a usuários: " + (e?.message ?? e));
+        if (form.trial_enabled) {
+          if (form.trial_category_ids.length === 0) {
+            toast.error("Integração salva, mas não apliquei degustação: selecione ao menos uma categoria de degustação.");
+          } else {
+            syncedCount = await syncTrialToExistingUsers(
+              configId,
+              form.trial_category_ids,
+              Math.max(1, Number(form.trial_days) || 30),
+            );
+            syncedTrial = true;
+          }
+        } else {
+          syncedCount = await syncCategoriesToExistingUsers(configId, form.category_ids);
+        }
+      } catch (e) {
+        toast.error("Integração salva, mas erro ao aplicar a usuários: " + getErrorMessage(e));
       }
     }
 
     setSaving(false);
     const baseMsg = editingId ? "Integração atualizada!" : "Integração criada!";
-    toast.success(applyToExisting && syncedCount > 0 ? `${baseMsg} Categorias aplicadas a ${syncedCount} usuário(s).` : baseMsg);
+    toast.success(
+      applyToExisting && syncedCount > 0
+        ? `${baseMsg} ${syncedTrial ? "Degustação aplicada" : "Categorias aplicadas"} a ${syncedCount} usuário(s).`
+        : baseMsg,
+    );
     cancelForm();
     queryClient.invalidateQueries({ queryKey: ["hubsoft-configs"] });
     queryClient.invalidateQueries({ queryKey: ["hubsoft-config-categories"] });
     queryClient.invalidateQueries({ queryKey: ["hubsoft-config-trial-categories"] });
     queryClient.invalidateQueries({ queryKey: ["users"] });
+    queryClient.invalidateQueries({ queryKey: ["profiles"] });
+    queryClient.invalidateQueries({ queryKey: ["user_trial_access"] });
   };
 
   const handleDelete = async (id: string) => {
@@ -530,7 +567,7 @@ const HubsoftIntegration = () => {
                 <div className="text-sm">
                   <p className="font-medium text-foreground">Aplicar também aos usuários já cadastrados</p>
                   <p className="text-xs text-muted-foreground">
-                    Substitui os acessos dos usuários criados por esta integração pelas categorias selecionadas acima.
+                    Se a degustação estiver ativa, aplica as categorias de degustação com nova expiração; caso contrário, aplica as categorias normais selecionadas acima.
                   </p>
                 </div>
               </label>
@@ -603,7 +640,7 @@ const HubsoftIntegration = () => {
                       >
                         <RefreshCw className={`h-4 w-4 ${syncingId === config.id ? "animate-spin" : ""}`} />
                       </Button>
-                      {(config as any).trial_enabled && (
+                      {config.trial_enabled && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -611,7 +648,7 @@ const HubsoftIntegration = () => {
                             handleSyncTrialExisting(
                               config.id,
                               getTrialCategoryIdsForConfig(config.id),
-                              Number((config as any).trial_days) || 30,
+                              Number(config.trial_days) || 30,
                               config.name,
                             )
                           }

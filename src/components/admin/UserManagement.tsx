@@ -20,6 +20,25 @@ type AccessStats = {
   logins_last_30d: number;
 };
 
+type TrialAccessRow = {
+  user_id: string;
+  trial_expires_at: string;
+};
+
+type SortMode = "recent" | "last_login_desc" | "last_login_asc" | "email_asc" | "name_asc" | "logins_30d_desc";
+type ReportFilter = "all" | "never" | "active30d" | "trial" | null;
+
+type Profile = {
+  id: string;
+  user_id: string;
+  username: string | null;
+  display_name: string | null;
+  is_blocked: boolean;
+  is_active: boolean;
+  hubsoft_client_id: string | null;
+  created_at: string;
+};
+
 function useProfiles() {
   return useQuery({
     queryKey: ["profiles"],
@@ -29,7 +48,7 @@ function useProfiles() {
         .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data;
+      return data as Profile[];
     },
   });
 }
@@ -38,16 +57,17 @@ function useTrialAccess() {
   return useQuery({
     queryKey: ["user_trial_access"],
     queryFn: async () => {
+      const now = new Date().toISOString();
       const { data, error } = await supabase
         .from("user_category_access")
         .select("user_id,trial_expires_at")
         .eq("is_trial", true)
         .eq("is_active", true)
-        .not("trial_expires_at", "is", null);
+        .gt("trial_expires_at", now);
       if (error) throw error;
       // earliest expiration per user
       const map = new Map<string, string>();
-      (data || []).forEach((row: any) => {
+      ((data || []) as TrialAccessRow[]).forEach((row) => {
         const cur = map.get(row.user_id);
         if (!cur || new Date(row.trial_expires_at) < new Date(cur)) {
           map.set(row.user_id, row.trial_expires_at);
@@ -73,7 +93,7 @@ function useAccessStats() {
   return useQuery({
     queryKey: ["user_access_stats"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("user_access_stats")
         .select("user_id,last_login_at,total_logins,logins_last_30d");
       if (error) throw error;
@@ -82,18 +102,6 @@ function useAccessStats() {
     refetchInterval: 60000,
   });
 }
-
-type SortMode = "recent" | "last_login_desc" | "last_login_asc" | "email_asc" | "name_asc" | "logins_30d_desc";
-
-type Profile = {
-  id: string;
-  user_id: string;
-  username: string | null;
-  display_name: string | null;
-  is_blocked: boolean;
-  is_active: boolean;
-  hubsoft_client_id: string | null;
-};
 
 const UserManagement = () => {
   const { data: profiles, isLoading } = useProfiles();
@@ -113,9 +121,24 @@ const UserManagement = () => {
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeReport, setActiveReport] = useState<ReportFilter>(null);
 
   const statsByUser = new Map<string, AccessStats>();
   (accessStats || []).forEach((s) => statsByUser.set(s.user_id, s));
+  const allProfiles = profiles || [];
+  const neverAccessed = allProfiles.filter(
+    (p) => (statsByUser.get(p.user_id)?.total_logins || 0) === 0
+  );
+  const active30dProfiles = allProfiles.filter(
+    (p) => (statsByUser.get(p.user_id)?.logins_last_30d || 0) > 0
+  );
+  const trialProfiles = allProfiles.filter((p) => trialMap?.has(p.user_id));
+  const reportLabels: Record<Exclude<ReportFilter, null>, string> = {
+    all: "Total de usuários",
+    never: "Nunca acessaram",
+    active30d: "Ativos (30d)",
+    trial: "Em degustação",
+  };
 
   const fmtDate = (iso: string | null) => {
     if (!iso) return "Nunca";
@@ -125,18 +148,21 @@ const UserManagement = () => {
   const sortedProfiles = (() => {
     if (!profiles) return [];
     const term = searchTerm.trim().toLowerCase();
-    const list = profiles.filter((p: any) => {
+    const list = allProfiles.filter((p) => {
+      if (activeReport === "never" && (statsByUser.get(p.user_id)?.total_logins || 0) !== 0) return false;
+      if (activeReport === "active30d" && (statsByUser.get(p.user_id)?.logins_last_30d || 0) <= 0) return false;
+      if (activeReport === "trial" && !trialMap?.has(p.user_id)) return false;
       if (!term) return true;
       return (
         (p.username || "").toLowerCase().includes(term) ||
         (p.display_name || "").toLowerCase().includes(term)
       );
     });
-    const ts = (p: any) => {
+    const ts = (p: Profile) => {
       const t = statsByUser.get(p.user_id)?.last_login_at;
       return t ? new Date(t).getTime() : 0;
     };
-    const cmp: Record<SortMode, (a: any, b: any) => number> = {
+    const cmp: Record<SortMode, (a: Profile, b: Profile) => number> = {
       recent: (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
       last_login_desc: (a, b) => ts(b) - ts(a),
       last_login_asc: (a, b) => {
@@ -155,10 +181,6 @@ const UserManagement = () => {
     return [...list].sort(cmp[sortMode]);
   })();
 
-  const neverAccessed = (profiles || []).filter(
-    (p: any) => (statsByUser.get(p.user_id)?.total_logins || 0) === 0
-  );
-
   const downloadCsv = (filename: string, rows: string[][]) => {
     const csv = rows
       .map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(","))
@@ -174,7 +196,7 @@ const UserManagement = () => {
 
   const exportNeverAccessed = () => {
     const rows = [["Email", "Nome", "Criado em"]];
-    neverAccessed.forEach((p: any) =>
+    neverAccessed.forEach((p) =>
       rows.push([p.username || "", p.display_name || "", fmtDate(p.created_at)])
     );
     downloadCsv(`usuarios-nunca-acessaram-${new Date().toISOString().slice(0, 10)}.csv`, rows);
@@ -183,8 +205,8 @@ const UserManagement = () => {
 
   const exportAccess30d = () => {
     const rows = [["Email", "Nome", "Acessos 30d", "Total acessos", "Último acesso"]];
-    (profiles || [])
-      .map((p: any) => ({ p, s: statsByUser.get(p.user_id) }))
+    allProfiles
+      .map((p) => ({ p, s: statsByUser.get(p.user_id) }))
       .sort((a, b) => (b.s?.logins_last_30d || 0) - (a.s?.logins_last_30d || 0))
       .forEach(({ p, s }) =>
         rows.push([
@@ -266,7 +288,7 @@ const UserManagement = () => {
       .select("adult_pin")
       .eq("user_id", profile.user_id)
       .maybeSingle();
-    setEditForm({ password: "", display_name: profile.display_name || "", adult_pin: (data as any)?.adult_pin || "" });
+    setEditForm({ password: "", display_name: profile.display_name || "", adult_pin: data?.adult_pin || "" });
     const { data: roleRow } = await supabase
       .from("user_roles")
       .select("id")
@@ -387,6 +409,33 @@ const UserManagement = () => {
     queryClient.invalidateQueries({ queryKey: ["profiles"] });
   };
 
+  const toggleReport = (filter: Exclude<ReportFilter, null>) => {
+    setActiveReport((current) => (current === filter ? null : filter));
+    setSearchTerm("");
+  };
+
+  const ReportCard = ({
+    filter,
+    label,
+    value,
+    valueClass = "",
+  }: {
+    filter: Exclude<ReportFilter, null>;
+    label: string;
+    value: number;
+    valueClass?: string;
+  }) => (
+    <button
+      type="button"
+      onClick={() => toggleReport(filter)}
+      className={`p-3 rounded-lg bg-secondary text-left transition border border-transparent hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${activeReport === filter ? "border-primary ring-1 ring-primary" : ""}`}
+      title={`Ver ${label.toLowerCase()}`}
+    >
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className={`text-2xl font-bold ${valueClass}`}>{value}</p>
+    </button>
+  );
+
   const CategoryCheckboxes = ({ selected, onToggle }: { selected: string[]; onToggle: (id: string) => void }) => (
     <div className="space-y-2">
       <Label>Categorias de Acesso</Label>
@@ -443,24 +492,10 @@ const UserManagement = () => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-            <div className="p-3 rounded-lg bg-secondary">
-              <p className="text-xs text-muted-foreground">Total de usuários</p>
-              <p className="text-2xl font-bold">{profiles?.length || 0}</p>
-            </div>
-            <div className="p-3 rounded-lg bg-secondary">
-              <p className="text-xs text-muted-foreground">Nunca acessaram</p>
-              <p className="text-2xl font-bold text-destructive">{neverAccessed.length}</p>
-            </div>
-            <div className="p-3 rounded-lg bg-secondary">
-              <p className="text-xs text-muted-foreground">Ativos (30d)</p>
-              <p className="text-2xl font-bold text-primary">
-                {(accessStats || []).filter((s) => (s.logins_last_30d || 0) > 0).length}
-              </p>
-            </div>
-            <div className="p-3 rounded-lg bg-secondary">
-              <p className="text-xs text-muted-foreground">Em degustação</p>
-              <p className="text-2xl font-bold text-amber-500">{trialMap?.size || 0}</p>
-            </div>
+            <ReportCard filter="all" label="Total de usuários" value={allProfiles.length} />
+            <ReportCard filter="never" label="Nunca acessaram" value={neverAccessed.length} valueClass="text-destructive" />
+            <ReportCard filter="active30d" label="Ativos (30d)" value={active30dProfiles.length} valueClass="text-primary" />
+            <ReportCard filter="trial" label="Em degustação" value={trialProfiles.length} valueClass="text-primary" />
             <div className="p-3 rounded-lg bg-secondary">
               <p className="text-xs text-muted-foreground">Acessos nos últimos 30d</p>
               <p className="text-2xl font-bold">
@@ -481,7 +516,9 @@ const UserManagement = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Usuários Cadastrados</CardTitle>
+          <CardTitle>
+            Usuários Cadastrados{activeReport ? ` · ${reportLabels[activeReport]}` : ""}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col md:flex-row gap-2 mb-4">
@@ -511,7 +548,7 @@ const UserManagement = () => {
             <p className="text-muted-foreground">Nenhum usuário encontrado</p>
           ) : (
             <div className="space-y-2">
-              {sortedProfiles.map((p: any) => {
+              {sortedProfiles.map((p) => {
                 const s = statsByUser.get(p.user_id);
                 return (
                 <div key={p.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg bg-secondary gap-3">
