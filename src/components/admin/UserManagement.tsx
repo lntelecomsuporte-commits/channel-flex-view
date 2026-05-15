@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Plus, Trash2, ShieldOff, ShieldCheck, Pencil, LogOut, Download, ListVideo, Copy, RefreshCw } from "lucide-react";
-import { PRODUCTION_HOST } from "@/lib/stream";
+const PLAYLIST_HOST = "https://tv2.lntelecom.net";
 import { useCategories } from "@/hooks/useChannels";
 import { UserStatusBadge } from "./UserStatusBadge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
