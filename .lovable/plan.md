@@ -1,105 +1,82 @@
-# App LN TV para Roku
+## Objetivo
 
-Roku **não roda APK, JS ou WebView**. A plataforma usa BrightScript + SceneGraph (XML), então o app é um projeto totalmente novo num **repositório separado** — não dá pra reusar nada do React/Capacitor. A boa notícia: o backend (Supabase + nginx + HLS aberto) já está pronto e o app Roku consome as mesmas APIs REST.
+Levar o channel Roku (`roku/`) à paridade funcional com o APK Android, sem ainda mexer em submissão de loja. Foco: usuário final consegue usar no Roku exatamente como usa no Android.
 
-## Repositório novo
+## Escopo (paridade com APK)
 
-`channel-flex-view-roku` (separado do projeto Lovable). Lovable não edita BrightScript — você vai precisar manter esse repo no GitHub manualmente ou via outro editor. Posso gerar o código completo aqui em texto pra você commitar.
+1. **Login por CPF (Hubsoft)** além de e-mail/senha
+   - Toggle na tela de login (CPF | E-mail)
+   - CPF gera login interno `cpf+<digitos>@lntelecom.local` (mesma regra do APK)
+2. **EPG**
+   - Fetch via `epg-proxy` edge function (mesma fonte do APK)
+   - Cache em `roRegistry` por canal (TTL 1h)
+   - OSD do player mostra: programa atual + próximo + barra de progresso
+   - Botão **▲** na Home abre grid de timeline (categorias × tempo) — versão simplificada (3h visíveis)
+3. **PIN adulto**
+   - Antes de abrir canal com `is_adult=true`, pede PIN (`profiles.adult_pin`)
+   - Diálogo numérico nativo Roku (`PinPad` / `KeyboardDialog` numérico)
+   - Cache de "PIN ok" por 30min na sessão
+4. **Heartbeat / kick global**
+   - Task em background (`roSGNode Task`) chama `session-heartbeat` a cada 60s
+   - Se `force_signout_at > login_at` ou usuário bloqueado → logout imediato + tela "Sessão encerrada"
+5. **Busca de canais**
+   - Botão **search** (controle Roku tem tecla dedicada) → `KeyboardDialog`
+   - Filtra `m.channels` por nome/número em tempo real
+6. **Trial / degustação**
+   - Mostra badge "Degustação até DD/MM" nas categorias `is_trial=true`
+   - Bloqueia automaticamente quando `trial_expires_at` passa (já tratado em `ResolveAllowedCategories`, falta só UI)
+7. **Canais YouTube**
+   - Detecta `stream_format='youtube'` ou URL `youtube.com/watch`
+   - Extrai videoId e usa `roVideoNode` com `streamFormat="hls"` apontando pro endpoint do youtube-dl/proxy existente (ou abre via deep link do app YouTube oficial — fallback)
+8. **Stats overlay** (opcional, baixa prioridade)
+   - Tecla **⏯** no player mostra: bitrate, dropped frames, buffer (`m.video.streamingSegment`, `m.video.measuredBitrate`)
+9. **Splash + ícones reais**
+   - Substituir placeholders em `roku/images/` por arte real LN TV (logo vermelho, fundo escuro)
+   - Gerar via imagegen: `icon_focus_hd.png` 290×218, `splash_hd.jpg` 1280×720, `splash_fhd.jpg` 1920×1080
 
-```
-channel-flex-view-roku/
-├── manifest                    # metadados do channel (versão, nome, ícones)
-├── source/
-│   ├── main.brs                # entrypoint
-│   ├── SupabaseAuth.brs        # POST /auth/v1/token + refresh
-│   ├── SupabaseRest.brs        # GET channels, categories, favorites, EPG
-│   ├── Heartbeat.brs           # session-heartbeat a cada 60s
-│   └── Utils.brs
-├── components/
-│   ├── LoginScene.xml + .brs   # email + senha
-│   ├── HomeScene.xml + .brs    # categorias + lista de canais + EPG
-│   ├── PlayerScene.xml + .brs  # roVideo (HLS nativo)
-│   ├── FavoritesRow.xml
-│   ├── CategoryGrid.xml
-│   ├── ChannelTile.xml         # com logo + número
-│   ├── EpgOsd.xml              # programa atual + barra de progresso
-│   ├── PinDialog.xml           # PIN adulto
-│   └── SettingsScene.xml       # logout, info de versão
-├── images/
-│   ├── icon_focus_hd.png       # 290x218
-│   ├── icon_side_hd.png        # 108x69
-│   └── splash_hd.jpg           # 1280x720
-└── .github/workflows/
-    └── roku-package.yml        # zipa o channel a cada push
-```
+## Arquitetura nova no Roku
 
-## Funcionalidades (paridade Android)
-
-| Feature Android | Equivalente Roku |
-|---|---|
-| Login email/senha (Supabase Auth) | `LoginScene` faz POST `/auth/v1/token?grant_type=password` |
-| Persistência de sessão | `roRegistrySection("LNTV")` salva access_token + refresh_token |
-| Lista de canais | GET `/rest/v1/channels?is_active=eq.true` |
-| Categorias hierárquicas (`category_includes`) | Resolvido client-side em BrightScript |
-| Acesso por usuário (`user_category_access` + Hubsoft) | GET filtrado por `user_id`; respeita `is_trial`, `trial_expires_at`, `is_active` |
-| Favoritos | GET/POST/DELETE `/rest/v1/user_favorites` |
-| Player HLS | `roVideoNode` (suporte HLS nativo no Roku) |
-| EPG (OSD com programa atual + barra) | Mesmo edge function `epg-proxy`, parse XMLTV |
-| Sinopse | Modal `EpgSynopsisDialog` |
-| PIN adulto | `PinDialog` lê `profiles.adult_pin` |
-| Heartbeat / kick global | `session-heartbeat` a cada 60s; checa `force_signout_at` no profile |
-| Bloqueio (`profiles.is_blocked`) | Heartbeat retorna 401 → volta pra login |
-| Degustação | Mesma lógica do Android (filtro client-side por `trial_expires_at > now`) |
-| Atualização automática do app | **Channel Store/Beta** atualiza sozinho — não precisa de `version.json` nem download manual de APK |
-| Busca de canais | `KeyboardDialog` do Roku |
-| Stats overlay | `roDeviceInfo` + métricas do `roVideoNode` |
-
-Sem suporte: YouTube embed (iframe não existe no Roku — pra canais YouTube precisaria parsear o ID e chamar a API do YouTube ou pular esses canais), Capacitor APIs (irrelevantes).
-
-## Autenticação reaproveitando cadastros atuais
-
-```brightscript
-' POST direto pra https://tv2.lntelecom.net/auth/v1/token?grant_type=password
-' Headers: apikey + Content-Type
-' Body: { "email": user, "password": pass }
-' Resposta: { access_token, refresh_token, expires_in, user }
-' Salva no roRegistry; usa Bearer em todas as chamadas REST
+```text
+roku/
+  components/
+    HomeScene.{xml,brs}       (+ EPG OSD, busca, badge trial)
+    LoginScene.{xml,brs}      (+ toggle CPF/email)
+    PlayerScene.{xml,brs}     (+ EPG OSD, stats overlay)
+    PinDialog.{xml,brs}       NEW
+    SearchOverlay.{xml,brs}   NEW
+    EpgGrid.{xml,brs}         NEW
+    HeartbeatTask.{xml,brs}   NEW (Task node)
+  source/
+    EpgClient.brs             NEW  (fetch + cache via epg-proxy)
+    Heartbeat.brs             NEW  (chama session-heartbeat)
+    SupabaseAuth.brs          (+ SbLoginCpf, força logout em kick)
+    SupabaseRest.brs          (+ FetchProfile pra adult_pin)
 ```
 
-Mesmo email/senha do APK funciona — Supabase é o mesmo.
+## Backend
 
-## Player
+Nada novo no Supabase — todas as edge functions e tabelas já existem (`epg-proxy`, `session-heartbeat`, `profiles.adult_pin`, `user_category_access.trial_expires_at`).
 
-`roVideoNode` toca HLS direto (sem Hls.js). Stream URL vai com Bearer token nos headers se for proxy autenticado, ou aberto direto se for o caso. Mapeamento `stream_format`:
-- `hls` / `auto` → `streamFormat = "hls"`
-- `mp4` → `streamFormat = "mp4"`
+## Build / Deploy
 
-Backup streams (`backup_stream_urls`) entram como `Content.streamUrls` array — Roku tenta sequencialmente em caso de falha.
+Sem mudança no workflow nem no script `sync-lntv-apk.sh` — já estão prontos. Cada push em `main` empacota, anexa no release, e o cron do servidor publica em `https://tv2.lntelecom.net/downloads/lntv-roku.zip`. Usuários com app instalado verão o banner de "nova versão disponível" via `UpdateCheck.brs`.
 
-## Distribuição via sideload (escolhido)
+## Ordem de execução
 
-1. **Conta de developer Roku gratuita** (não precisa pagar): habilitar developer mode em qualquer Roku digitando `Home×3, Up×2, Right, Left, Right, Left, Right` no controle.
-2. GitHub Action `roku-package.yml` zipa `manifest + source + components + images` em `lntv-roku.zip` a cada push pra `main`.
-3. Cliente acessa `http://<ip-do-roku>` no navegador (porta 8060 do dev server), faz upload do zip → instala.
-4. Pra atualizar: novo zip, mesmo upload. Roku substitui sem perder a sessão (registry persiste).
-5. Hospedo o `lntv-roku.zip` em `https://tv2.lntelecom.net/downloads/lntv-roku.zip` (mesmo padrão do APK) — clientes baixam de lá.
+1. EpgClient + OSD do player com programa atual (maior valor pro usuário)
+2. PIN adulto (bloqueio de segurança)
+3. Heartbeat + kick global (paridade de segurança)
+4. Login CPF (cobertura dos clientes Hubsoft)
+5. Busca + badge trial + EPG grid
+6. YouTube + stats overlay
+7. Splash/ícones reais (visual final)
 
-Sem submissão pública, sem aprovação Roku, sem custo.
+Cada etapa é um commit independente — pode testar no Roku via sideload sem esperar tudo.
 
-## Plano de execução
+## Fora de escopo agora
 
-Como Lovable não compila BrightScript, eu entrego o código pronto em mensagens (você commita no novo repo). Ordem sugerida:
+- Deep linking, trick play, closed captions, política de privacidade, screenshots de marketing, Roku Pay → tudo isso fica pra fase de submissão na loja.
 
-1. **Esqueleto + Login + lista de canais simples** (MVP que já toca canal) — uma resposta minha
-2. **Categorias hierárquicas + favoritos + busca** — segunda iteração
-3. **EPG + OSD + sinopse + PIN adulto** — terceira iteração
-4. **Heartbeat + kick global + degustação** — quarta iteração
-5. **GitHub Action de build + script de hospedagem do .zip no servidor** — última
+## Pergunta antes de começar
 
-Cada etapa testável no Roku em minutos via dev server.
-
-## O que preciso de você antes de começar
-
-- Confirmação pra eu seguir gerando o código BrightScript em texto (Lovable não tem suporte nativo a `.brs`/`.xml` Roku).
-- Nome do novo repo no seu GitHub (sugestão: `channel-flex-view-roku`).
-- Você tem um Roku físico pra testar, ou vai testar só nos clientes finais?
+Faço **tudo de uma vez** (1 commit grande, ~7 arquivos novos + 4 editados) ou **etapa por etapa** (você sideload e testa cada uma antes da próxima)?
