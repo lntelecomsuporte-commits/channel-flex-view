@@ -293,6 +293,8 @@ export type Database = {
           id: string
           is_active: boolean
           is_blocked: boolean
+          playlist_password: string
+          playlist_token: string
           updated_at: string
           user_id: string
           username: string | null
@@ -306,6 +308,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_blocked?: boolean
+          playlist_password?: string
+          playlist_token?: string
           updated_at?: string
           user_id: string
           username?: string | null
@@ -319,6 +323,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_blocked?: boolean
+          playlist_password?: string
+          playlist_token?: string
           updated_at?: string
           user_id?: string
           username?: string | null
