@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Plus, Trash2, ShieldOff, ShieldCheck, Pencil, LogOut, Download } from "lucide-react";
+import { Plus, Trash2, ShieldOff, ShieldCheck, Pencil, LogOut, Download, ListVideo, Copy, RefreshCw } from "lucide-react";
+import { PRODUCTION_HOST } from "@/lib/stream";
 import { useCategories } from "@/hooks/useChannels";
 import { UserStatusBadge } from "./UserStatusBadge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -37,6 +38,8 @@ type Profile = {
   is_active: boolean;
   hubsoft_client_id: string | null;
   created_at: string;
+  playlist_token: string | null;
+  playlist_password: string | null;
 };
 
 function useProfiles() {
