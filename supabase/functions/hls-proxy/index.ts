@@ -464,11 +464,44 @@ Deno.serve(async (request) => {
   const uid = requestUrl.searchParams.get("uid");
   const ch = requestUrl.searchParams.get("ch");
   const expRaw = requestUrl.searchParams.get("exp");
+  const playlistToken = requestUrl.searchParams.get("pt");
 
   let userId: string | null = null;
   let authCtx: AuthCtx;
 
-  if (st && uid && ch && expRaw) {
+  if (playlistToken && ch) {
+    try {
+      const { data: profile } = await adminClient
+        .from("profiles")
+        .select("user_id,is_active,is_blocked")
+        .eq("playlist_token", playlistToken)
+        .maybeSingle();
+      if (!profile || profile.is_blocked || profile.is_active === false) {
+        return new Response("Invalid playlist token", { status: 401, headers: corsHeaders });
+      }
+
+      const { data: channel } = await adminClient
+        .from("channels")
+        .select("stream_url,is_active")
+        .eq("id", ch)
+        .maybeSingle();
+      if (!channel?.stream_url || channel.is_active === false) {
+        return new Response("Channel not found", { status: 404, headers: corsHeaders });
+      }
+
+      userId = profile.user_id;
+      authCtx = { playlist: { pt: playlistToken, uid: profile.user_id, ch } };
+      if (uCipher) {
+        const decrypted = await decryptUrl(uCipher);
+        if (!decrypted) return new Response("Invalid encrypted url", { status: 400, headers: corsHeaders });
+        target = decrypted;
+      } else {
+        target = channel.stream_url;
+      }
+    } catch {
+      return new Response("Playlist auth failed", { status: 500, headers: corsHeaders });
+    }
+  } else if (st && uid && ch && expRaw) {
     const exp = parseInt(expRaw, 10);
     const ok = await verifyStreamToken(st, uid, ch, exp);
     if (!ok) {
