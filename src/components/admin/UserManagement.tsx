@@ -125,6 +125,7 @@ const UserManagement = () => {
     trial_categories: string[];
     trial_expires_at: string | null;
   }>>([]);
+  const [editIntegrationCategoryIds, setEditIntegrationCategoryIds] = useState<string[]>([]);
   const [editIsAdmin, setEditIsAdmin] = useState(false);
   const [editWasAdmin, setEditWasAdmin] = useState(false);
   const [updating, setUpdating] = useState(false);
