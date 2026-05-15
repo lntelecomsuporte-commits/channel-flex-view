@@ -785,6 +785,7 @@ const UserManagement = () => {
               <CategoryCheckboxes
                 selected={editCategories}
                 onToggle={(id) => toggleCategory(id, editCategories, setEditCategories)}
+                lockedIds={editIntegrationCategoryIds}
               />
             </div>
 
