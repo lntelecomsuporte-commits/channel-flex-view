@@ -125,6 +125,7 @@ const UserManagement = () => {
     trial_categories: string[];
     trial_expires_at: string | null;
   }>>([]);
+  const [editIntegrationCategoryIds, setEditIntegrationCategoryIds] = useState<string[]>([]);
   const [editIsAdmin, setEditIsAdmin] = useState(false);
   const [editWasAdmin, setEditWasAdmin] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -286,6 +287,7 @@ const UserManagement = () => {
     if (!editingUser) {
       setEditCategories([]);
       setEditIntegrationAccess([]);
+      setEditIntegrationCategoryIds([]);
       return;
     }
     (async () => {
@@ -366,6 +368,7 @@ const UserManagement = () => {
       });
 
       setEditIntegrationAccess(Array.from(byConfig.values()));
+      setEditIntegrationCategoryIds(Array.from(new Set([...catIds, ...configuredCatIds])));
     })();
   }, [editingUser]);
 
@@ -571,19 +574,25 @@ const UserManagement = () => {
     </button>
   );
 
-  const CategoryCheckboxes = ({ selected, onToggle }: { selected: string[]; onToggle: (id: string) => void }) => (
+  const CategoryCheckboxes = ({ selected, onToggle, lockedIds = [] }: { selected: string[]; onToggle: (id: string) => void; lockedIds?: string[] }) => (
     <div className="space-y-2">
       <Label>Categorias de Acesso</Label>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto border rounded-md p-2">
-        {categories?.length ? categories.map((cat) => (
-          <label key={cat.id} className="flex items-center gap-2 text-sm cursor-pointer">
-            <Checkbox
-              checked={selected.includes(cat.id)}
-              onCheckedChange={() => onToggle(cat.id)}
-            />
-            {cat.name}
-          </label>
-        )) : (
+        {categories?.length ? categories.map((cat) => {
+          const locked = lockedIds.includes(cat.id);
+          const checked = locked || selected.includes(cat.id);
+          return (
+            <label key={cat.id} className={`flex items-center gap-2 text-sm ${locked ? "cursor-not-allowed opacity-80" : "cursor-pointer"}`} title={locked ? "Liberada pela integração Hubsoft" : undefined}>
+              <Checkbox
+                checked={checked}
+                disabled={locked}
+                onCheckedChange={() => !locked && onToggle(cat.id)}
+              />
+              <span>{cat.name}</span>
+              {locked && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary ml-auto">integração</span>}
+            </label>
+          );
+        }) : (
           <p className="text-xs text-muted-foreground col-span-full">Nenhuma categoria cadastrada</p>
         )}
       </div>
@@ -776,6 +785,7 @@ const UserManagement = () => {
               <CategoryCheckboxes
                 selected={editCategories}
                 onToggle={(id) => toggleCategory(id, editCategories, setEditCategories)}
+                lockedIds={editIntegrationCategoryIds}
               />
             </div>
 
