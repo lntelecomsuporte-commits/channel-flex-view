@@ -201,7 +201,24 @@ Deno.serve(async (req) => {
 
       if (useTrial) {
         const expiresAt = new Date(Date.now() + trialDays * 86400_000).toISOString();
-        for (const categoryId of trialCategoryIds) {
+        // Always grant the FIXED categories of the integration as non-trial
+        for (const categoryId of linkedCategoryIds) {
+          await supabaseAdmin.from("user_category_access").upsert(
+            {
+              user_id: userId,
+              category_id: categoryId,
+              hubsoft_config_id: config.id,
+              is_active: true,
+              is_trial: false,
+              trial_expires_at: null,
+            },
+            { onConflict: "user_id,category_id" },
+          );
+        }
+        // Grant TRIAL only for categories that are NOT already fixed
+        const fixedSet = new Set(linkedCategoryIds);
+        const trialOnly = trialCategoryIds.filter((id: string) => !fixedSet.has(id));
+        for (const categoryId of trialOnly) {
           await supabaseAdmin.from("user_category_access").upsert(
             {
               user_id: userId,
@@ -214,7 +231,7 @@ Deno.serve(async (req) => {
             { onConflict: "user_id,category_id" },
           );
         }
-        console.log(`Granted TRIAL (${trialCategoryIds.length} cats, ${trialDays}d) to user ${userId}`);
+        console.log(`Granted FIXED (${linkedCategoryIds.length}) + TRIAL (${trialOnly.length} cats, ${trialDays}d) to user ${userId}`);
         return;
       }
 
