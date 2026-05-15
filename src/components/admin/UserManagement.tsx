@@ -283,15 +283,38 @@ const UserManagement = () => {
 
   // Load user categories when editing
   useEffect(() => {
-    if (!editingUser) return;
-    supabase
-      .from("user_category_access")
-      .select("category_id")
-      .eq("user_id", editingUser.user_id)
-      .eq("is_active", true)
-      .then(({ data }) => {
-        setEditCategories(data?.map((d) => d.category_id) || []);
-      });
+    if (!editingUser) {
+      setEditCategories([]);
+      setEditTrialAccess([]);
+      return;
+    }
+    (async () => {
+      // Manual access only (no hubsoft_config_id) — these are editable
+      const { data: manual } = await supabase
+        .from("user_category_access")
+        .select("category_id")
+        .eq("user_id", editingUser.user_id)
+        .eq("is_active", true)
+        .is("hubsoft_config_id", null);
+      setEditCategories(manual?.map((d: any) => d.category_id) || []);
+
+      // Integration-managed access (read-only display, includes trial info)
+      const { data: integ } = await supabase
+        .from("user_category_access")
+        .select("category_id, trial_expires_at, is_trial, hubsoft_config_id, categories(name), hubsoft_config(name)")
+        .eq("user_id", editingUser.user_id)
+        .eq("is_active", true)
+        .not("hubsoft_config_id", "is", null);
+      setEditTrialAccess(
+        (integ || []).map((r: any) => ({
+          category_id: r.category_id,
+          category_name: r.categories?.name || "(categoria)",
+          trial_expires_at: r.trial_expires_at,
+          is_trial: !!r.is_trial,
+          hubsoft_config_name: r.hubsoft_config?.name || null,
+        })),
+      );
+    })();
   }, [editingUser]);
 
   const toggleCategory = (id: string, list: string[], setList: (v: string[]) => void) => {
