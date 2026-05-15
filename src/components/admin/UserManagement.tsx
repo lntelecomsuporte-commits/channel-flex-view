@@ -730,10 +730,74 @@ const UserManagement = () => {
               />
               <p className="text-xs text-muted-foreground">Senha pedida ao abrir canais marcados como adulto.</p>
             </div>
-            <CategoryCheckboxes
-              selected={editCategories}
-              onToggle={(id) => toggleCategory(id, editCategories, setEditCategories)}
-            />
+            <div className="space-y-2">
+              <Label>Categorias de Acesso (manuais)</Label>
+              <p className="text-xs text-muted-foreground">
+                Categorias marcadas aqui são adicionadas manualmente. Não afetam o acesso vindo de integrações Hubsoft (mostrado abaixo).
+              </p>
+              <CategoryCheckboxes
+                selected={editCategories}
+                onToggle={(id) => toggleCategory(id, editCategories, setEditCategories)}
+              />
+            </div>
+
+            {editTrialAccess.length > 0 && (() => {
+              const trials = editTrialAccess.filter((a) => a.is_trial);
+              const normals = editTrialAccess.filter((a) => !a.is_trial);
+              const trialsByCfg = new Map<string, { name: string; expires: string | null; cats: string[] }>();
+              trials.forEach((t) => {
+                const key = t.hubsoft_config_name || "Integração";
+                const cur = trialsByCfg.get(key) || { name: key, expires: t.trial_expires_at, cats: [] };
+                cur.cats.push(t.category_name);
+                if (t.trial_expires_at && (!cur.expires || new Date(t.trial_expires_at) < new Date(cur.expires))) {
+                  cur.expires = t.trial_expires_at;
+                }
+                trialsByCfg.set(key, cur);
+              });
+              const normalsByCfg = new Map<string, string[]>();
+              normals.forEach((n) => {
+                const key = n.hubsoft_config_name || "Integração";
+                const arr = normalsByCfg.get(key) || [];
+                arr.push(n.category_name);
+                normalsByCfg.set(key, arr);
+              });
+              return (
+                <div className="space-y-2">
+                  <Label>Acesso vindo de integrações Hubsoft</Label>
+                  <div className="space-y-2 border rounded-md p-3 bg-secondary/40">
+                    {Array.from(normalsByCfg.entries()).map(([cfg, cats]) => (
+                      <div key={`n-${cfg}`} className="text-sm">
+                        <span className="font-medium">{cfg}</span>
+                        <span className="text-xs text-muted-foreground ml-2">(acesso permanente)</span>
+                        <div className="text-xs text-muted-foreground mt-0.5">{cats.join(", ")}</div>
+                      </div>
+                    ))}
+                    {Array.from(trialsByCfg.values()).map((g) => {
+                      const t = g.expires ? formatTrialRemaining(g.expires) : null;
+                      return (
+                        <div key={`t-${g.name}`} className="text-sm">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium">{g.name}</span>
+                            {t && (
+                              <span className={`text-xs px-2 py-0.5 rounded ${t.expired ? "bg-destructive/20 text-destructive" : "bg-amber-500/20 text-amber-600 dark:text-amber-400"}`}>
+                                🎁 Degustação · {t.label}
+                              </span>
+                            )}
+                            {g.expires && (
+                              <span className="text-xs text-muted-foreground">expira {fmtDate(g.expires)}</span>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">{g.cats.join(", ")}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Esses acessos são gerenciados pelo webhook da integração. Para alterar, use o painel de Integração Hubsoft ou aguarde o evento do ERP.
+                  </p>
+                </div>
+              );
+            })()}
             <label className="flex items-center gap-2 text-sm cursor-pointer p-3 rounded-md border border-border bg-secondary/50">
               <Checkbox checked={editIsAdmin} onCheckedChange={(v) => setEditIsAdmin(!!v)} />
               <span className="font-medium">Administrador do painel</span>
