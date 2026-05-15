@@ -11,6 +11,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const STREAM_TOKEN_SECRET = Deno.env.get("STREAM_TOKEN_SECRET") ?? "";
+const FALLBACK_PROXY_ENDPOINT = "https://tv2.lntelecom.net/functions/v1/hls-proxy";
 
 // ===== Validação de token assinado (HMAC) — opção "Ocultar URL" =====
 const fromBase64Url = (s: string): Uint8Array => {
@@ -147,10 +148,14 @@ const getProxyEndpoint = (request: Request, requestUrl: URL) => {
   // 1) Override explícito por env tem prioridade máxima
   if (PUBLIC_PROXY_BASE) return `${PUBLIC_PROXY_BASE}/functions/v1/hls-proxy`;
 
+  if (!request.headers.get("x-forwarded-host") && !request.headers.get("host")) {
+    return FALLBACK_PROXY_ENDPOINT;
+  }
+
   const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
   const host = forwardedHost || request.headers.get("host") || requestUrl.host;
   if (!host || isLocalProxyHost(host) || isInternalDockerHost(host)) {
-    return "https://tv2.lntelecom.net/functions/v1/hls-proxy";
+    return FALLBACK_PROXY_ENDPOINT;
   }
   const forwardedProtocol = getForwardedProtocol(request, requestUrl);
   // Se o host NÃO é local, sempre força HTTPS (evita mixed content quando o
