@@ -582,7 +582,8 @@ Deno.serve(async (request) => {
   } catch { /* noop */ }
 
   const upstreamHeaders = new Headers();
-  const range = request.headers.get("range");
+  const isLikelyManifestRequest = upstreamUrl.pathname.toLowerCase().endsWith(".m3u8");
+  const range = isLikelyManifestRequest ? null : request.headers.get("range");
   const accept = request.headers.get("accept");
   if (range) upstreamHeaders.set("range", range);
   if (accept) upstreamHeaders.set("accept", accept);
@@ -646,7 +647,7 @@ Deno.serve(async (request) => {
     const rewrittenPlaylist = await rewritePlaylist(playlist, upstreamResponse.url, proxyEndpoint, authCtx);
 
     return new Response(rewrittenPlaylist, {
-      status: upstreamResponse.status,
+      status: 200,
       headers: {
         ...corsHeaders,
         "Content-Type": "application/vnd.apple.mpegurl",
