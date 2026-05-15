@@ -371,8 +371,11 @@ const AdminPanel = () => {
                     <p className="text-xs text-muted-foreground">Uma URL por linha — testadas em ordem após esgotar tentativas na principal (~3s por URL).</p>
                   </div>
                   <div className="space-y-2">
-                    <Label>URL do Logo (opcional)</Label>
+                    <Label>URL do Logo (fonte original)</Label>
                     <Input value={channelForm.logo_url} onChange={(e) => setChannelForm((f) => ({ ...f, logo_url: e.target.value }))} placeholder="https://..." />
+                    <p className="text-xs text-muted-foreground">
+                      Cole a URL externa da logo (Wikipedia, site oficial, etc.). O sincronizador baixa pro servidor e mantém esta fonte salva pra atualizar quando precisar.
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label>Categoria</Label>
