@@ -368,6 +368,7 @@ const UserManagement = () => {
       });
 
       setEditIntegrationAccess(Array.from(byConfig.values()));
+      setEditIntegrationCategoryIds(Array.from(new Set([...catIds, ...configuredCatIds])));
     })();
   }, [editingUser]);
 
