@@ -197,7 +197,16 @@ const AdminPanel = () => {
     setChannelForm({
       name: ch.name, channel_number: String(ch.channel_number), stream_url: ch.stream_url,
       backup_stream_urls: (((ch as any).backup_stream_urls ?? []) as string[]).join("\n"),
-      logo_url: ch.logo_url ?? "", category_id: ch.category_id ?? "", is_active: ch.is_active,
+      // Mostra a fonte (URL original) se existir; senão cai pra logo_url.
+      // Se logo_url for /logos/... (local) e não houver fonte, deixa vazio
+      // pra evitar reescrever caminho local no campo.
+      logo_url: (() => {
+        const src = (ch as any).logo_source_url as string | null | undefined;
+        if (src) return src;
+        const lu = ch.logo_url ?? "";
+        return lu.startsWith("/logos/") ? "" : lu;
+      })(),
+      category_id: ch.category_id ?? "", is_active: ch.is_active,
       epg_type: (() => {
         const t = (ch as any).epg_type ?? "";
         // Migra valores legados para o novo "xmltv"
