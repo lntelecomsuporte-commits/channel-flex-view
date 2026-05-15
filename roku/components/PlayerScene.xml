@@ -8,13 +8,20 @@
   <children>
     <Rectangle width="1920" height="1080" color="0x000000ff" />
     <Video id="video" width="1920" height="1080" translation="[0, 0]" />
-    <Rectangle id="osdBg" width="1920" height="120" translation="[0, 960]" color="0x000000aa" visible="false" />
+
+    <!-- OSD inferior -->
+    <Rectangle id="osdBg" width="1920" height="180" translation="[0, 900]" color="0x000000cc" visible="false" />
     <Label id="osdName" text="" font="font:LargeBoldSystemFont"
-           color="0xffffffff" translation="[60, 985]" visible="false" />
+           color="0xffffffff" translation="[60, 920]" visible="false" />
     <Label id="osdNum" text="" font="font:MediumSystemFont"
-           color="0xdc2626ff" translation="[60, 1040]" visible="false" />
+           color="0xdc2626ff" translation="[60, 970]" visible="false" />
+    <Label id="osdNow" text="" font="font:MediumBoldSystemFont"
+           color="0xffffffff" translation="[700, 920]" width="1160" visible="false" />
+    <Label id="osdNext" text="" font="font:SmallSystemFont"
+           color="0x9ca3afff" translation="[700, 970]" width="1160" visible="false" />
+
     <Label id="errLabel" text="" font="font:MediumSystemFont"
            color="0xfca5a5ff" translation="[60, 60]" visible="false" />
-    <Timer id="osdTimer" repeat="false" duration="4" />
+    <Timer id="osdTimer" repeat="false" duration="5" />
   </children>
 </component>
