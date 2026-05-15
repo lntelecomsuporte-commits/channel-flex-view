@@ -170,9 +170,9 @@ const AdminPanel = () => {
 
     let error;
     if (editingChannelId) {
-      ({ error } = await supabase.from("channels").update(payload).eq("id", editingChannelId));
+      ({ error } = await supabase.from("channels").update(payload as any).eq("id", editingChannelId));
     } else {
-      ({ error } = await supabase.from("channels").insert(payload));
+      ({ error } = await supabase.from("channels").insert(payload as any));
     }
     setSaving(false);
     if (error) {
