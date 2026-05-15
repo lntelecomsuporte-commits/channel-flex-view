@@ -99,6 +99,11 @@ const isLocalProxyHost = (host: string) => {
   return ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(hostname) || hostname.endsWith(".local");
 };
 
+const isInternalDockerHost = (host: string) => {
+  const hostname = host.split(":")[0]?.toLowerCase() ?? "";
+  return hostname === "kong" || hostname === "functions" || hostname.startsWith("supabase-");
+};
+
 const getForwardedProtocol = (req: Request, requestUrl: URL) => {
   const forwardedValues = req.headers
     .get("x-forwarded-proto")
@@ -118,8 +123,9 @@ const getPublicOrigin = (req: Request, requestUrl: URL) => {
   const forwardedHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
   const host = forwardedHost || req.headers.get("host") || requestUrl.host;
   if (!host) return FALLBACK_ORIGIN;
+  if (isLocalProxyHost(host) || isInternalDockerHost(host)) return FALLBACK_ORIGIN;
 
-  const protocol = isLocalProxyHost(host) ? getForwardedProtocol(req, requestUrl) : "https";
+  const protocol = "https";
   return `${protocol}://${host}`;
 };
 
