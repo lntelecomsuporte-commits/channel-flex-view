@@ -125,6 +125,56 @@ const UserManagement = () => {
   const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [searchTerm, setSearchTerm] = useState("");
   const [activeReport, setActiveReport] = useState<ReportFilter>(null);
+  const [playlistUser, setPlaylistUser] = useState<Profile | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
+
+  const buildPlaylistUrls = (p: Profile) => {
+    const token = p.playlist_token ?? "";
+    const u = encodeURIComponent(p.username ?? "");
+    const pwd = encodeURIComponent(p.playlist_password ?? "");
+    return {
+      tokenUrl: `${PLAYLIST_HOST}/functions/v1/playlist?token=${token}&type=m3u`,
+      hlsUrl: `${PLAYLIST_HOST}/functions/v1/playlist?u=${u}&p=${pwd}&type=hls`,
+    };
+  };
+
+  const copyText = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copiado`);
+    } catch {
+      toast.error("Falha ao copiar");
+    }
+  };
+
+  const regeneratePlaylistCreds = async () => {
+    if (!playlistUser || regenerating) return;
+    setRegenerating(true);
+    try {
+      const newPwd = Math.random().toString(36).slice(2, 14);
+      const { data, error } = await supabase
+        .from("profiles")
+        .update({
+          playlist_token: crypto.randomUUID(),
+          playlist_password: newPwd,
+        })
+        .eq("id", playlistUser.id)
+        .select("playlist_token, playlist_password")
+        .single();
+      if (error) throw error;
+      setPlaylistUser({
+        ...playlistUser,
+        playlist_token: data.playlist_token,
+        playlist_password: data.playlist_password,
+      });
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
+      toast.success("Credenciais regeneradas — links anteriores invalidados");
+    } catch (e) {
+      toast.error("Erro ao regenerar: " + (e as Error).message);
+    } finally {
+      setRegenerating(false);
+    }
+  };
 
   const statsByUser = new Map<string, AccessStats>();
   (accessStats || []).forEach((s) => statsByUser.set(s.user_id, s));
