@@ -239,6 +239,11 @@ const isMediaRequest = (pathname: string) => {
 
 interface AuthCtx {
   jwt?: string;          // JWT do usuário (modo legado)
+  playlist?: {           // Token de playlist M3U (modo VLC/IPTV)
+    pt: string;
+    uid: string;
+    ch: string;
+  };
   signed?: {             // Token assinado (modo "Ocultar URL")
     st: string;          // signature
     uid: string;
@@ -272,6 +277,12 @@ const buildProxyUrl = async (
     proxyUrl.searchParams.set("uid", ctx.signed.uid);
     proxyUrl.searchParams.set("ch", ctx.signed.ch);
     proxyUrl.searchParams.set("exp", String(ctx.signed.exp));
+  } else if (ctx.playlist) {
+    const cipher = await encryptUrl(targetUrl);
+    proxyUrl.searchParams.set("u", cipher);
+    proxyUrl.searchParams.set("pt", ctx.playlist.pt);
+    proxyUrl.searchParams.set("uid", ctx.playlist.uid);
+    proxyUrl.searchParams.set("ch", ctx.playlist.ch);
   } else {
     proxyUrl.searchParams.set("url", targetUrl);
     if (ctx.jwt) proxyUrl.searchParams.set("token", ctx.jwt);
