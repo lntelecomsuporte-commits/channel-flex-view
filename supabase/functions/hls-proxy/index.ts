@@ -234,14 +234,19 @@ interface AuthCtx {
   };
 }
 
-const buildProxyUrl = async (targetUrl: string, proxyEndpoint: string, ctx: AuthCtx): Promise<string> => {
+const buildProxyUrl = async (
+  targetUrl: string,
+  proxyEndpoint: string,
+  ctx: AuthCtx,
+  forceManifestPath = false,
+): Promise<string> => {
   // VLC e alguns players (em master playlists) só reconhecem variantes cujo path
   // termina em .m3u8. Detectamos pelo upstream e embutimos um sufixo no path
   // do nosso proxy (Kong/Deno faz match por prefixo, então /hls-proxy/<algo> funciona).
   let endpoint = proxyEndpoint;
   try {
     const lower = new URL(targetUrl).pathname.toLowerCase();
-    if (lower.endsWith(".m3u8")) endpoint = `${proxyEndpoint.replace(/\/$/, "")}/playlist.m3u8`;
+    if (forceManifestPath || lower.endsWith(".m3u8")) endpoint = `${proxyEndpoint.replace(/\/$/, "")}/playlist.m3u8`;
     else if (lower.endsWith(".ts")) endpoint = `${proxyEndpoint.replace(/\/$/, "")}/segment.ts`;
   } catch { /* mantém endpoint base */ }
   const proxyUrl = new URL(endpoint);
@@ -264,9 +269,10 @@ const buildProxyUrl = async (targetUrl: string, proxyEndpoint: string, ctx: Auth
 const rewriteTagUris = async (line: string, baseUrl: string, proxyEndpoint: string, ctx: AuthCtx) => {
   const matches = [...line.matchAll(/URI="([^"]+)"/g)];
   let result = line;
+  const forceManifestPath = /^#EXT-X-(I-FRAME-STREAM-INF|MEDIA)\b/.test(line.trim());
   for (const m of matches) {
     const absoluteUrl = new URL(m[1], baseUrl).toString();
-    const replacement = `URI="${await buildProxyUrl(absoluteUrl, proxyEndpoint, ctx)}"`;
+    const replacement = `URI="${await buildProxyUrl(absoluteUrl, proxyEndpoint, ctx, forceManifestPath)}"`;
     result = result.replace(`URI="${m[1]}"`, replacement);
   }
   return result;
@@ -275,6 +281,7 @@ const rewriteTagUris = async (line: string, baseUrl: string, proxyEndpoint: stri
 const rewritePlaylist = async (playlist: string, baseUrl: string, proxyEndpoint: string, ctx: AuthCtx): Promise<string> => {
   const lines = playlist.split(/\r?\n/);
   const out: string[] = [];
+  let nextUriIsVariantManifest = false;
   for (const line of lines) {
     const trimmedLine = line.trim();
     if (!trimmedLine) {
@@ -283,10 +290,12 @@ const rewritePlaylist = async (playlist: string, baseUrl: string, proxyEndpoint:
     }
     if (trimmedLine.startsWith("#")) {
       out.push(trimmedLine.includes('URI="') ? await rewriteTagUris(line, baseUrl, proxyEndpoint, ctx) : line);
+      nextUriIsVariantManifest = trimmedLine.startsWith("#EXT-X-STREAM-INF");
       continue;
     }
     const absoluteUrl = new URL(trimmedLine, baseUrl).toString();
-    out.push(await buildProxyUrl(absoluteUrl, proxyEndpoint, ctx));
+    out.push(await buildProxyUrl(absoluteUrl, proxyEndpoint, ctx, nextUriIsVariantManifest));
+    nextUriIsVariantManifest = false;
   }
   return out.join("\n");
 };
