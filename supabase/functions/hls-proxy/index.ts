@@ -235,7 +235,16 @@ interface AuthCtx {
 }
 
 const buildProxyUrl = async (targetUrl: string, proxyEndpoint: string, ctx: AuthCtx): Promise<string> => {
-  const proxyUrl = new URL(proxyEndpoint);
+  // VLC e alguns players (em master playlists) só reconhecem variantes cujo path
+  // termina em .m3u8. Detectamos pelo upstream e embutimos um sufixo no path
+  // do nosso proxy (Kong/Deno faz match por prefixo, então /hls-proxy/<algo> funciona).
+  let endpoint = proxyEndpoint;
+  try {
+    const lower = new URL(targetUrl).pathname.toLowerCase();
+    if (lower.endsWith(".m3u8")) endpoint = `${proxyEndpoint.replace(/\/$/, "")}/playlist.m3u8`;
+    else if (lower.endsWith(".ts")) endpoint = `${proxyEndpoint.replace(/\/$/, "")}/segment.ts`;
+  } catch { /* mantém endpoint base */ }
+  const proxyUrl = new URL(endpoint);
   if (ctx.signed) {
     // Modo "Ocultar URL": cifra a URL real com AES-GCM (chave derivada do secret).
     // Cliente nunca vê plaintext da URL upstream.
