@@ -155,8 +155,8 @@ Deno.serve(async (req) => {
       return errorResponse("Method not allowed", 405);
     }
 
-    if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !SECRET) {
-      console.error("[playlist] Missing SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY or STREAM_TOKEN_SECRET");
+    if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+      console.error("[playlist] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
       return errorResponse("Server misconfigured", 500);
     }
 
@@ -228,16 +228,13 @@ Deno.serve(async (req) => {
 
     for (const ch of channelRows) {
       if (!ch.category_id || !allowed.has(ch.category_id)) continue;
-      const st = await sign(`${profile.user_id}.${ch.id}.${exp}`);
       // VLC usa a extensão no path para decidir o demuxer antes mesmo de ler
       // o Content-Type. Portanto a URL inicial da playlist também precisa
       // parecer um HLS manifest, não só os manifests reescritos pelo proxy.
       const proxyUrl =
         `${publicOrigin}/functions/v1/hls-proxy/playlist.m3u8` +
         `?ch=${encodeURIComponent(ch.id)}` +
-        `&uid=${encodeURIComponent(profile.user_id)}` +
-        `&exp=${exp}` +
-        `&st=${st}`;
+        `&pt=${encodeURIComponent(profile.playlist_token)}`;
 
       const tvgId = ch.epg_channel_id ? ` tvg-id="${escAttr(ch.epg_channel_id)}"` : "";
       const tvgLogo = ch.logo_url ? ` tvg-logo="${escAttr(ch.logo_url)}"` : "";
