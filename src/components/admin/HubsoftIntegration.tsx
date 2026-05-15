@@ -177,9 +177,31 @@ async function syncTrialToExistingUsers(
     ]),
   );
   if (userIds.length === 0) return 0;
+  if (trialCategoryIds.length === 0) return 0;
 
-  // Limpa acesso prévio desses users tanto da config alvo quanto das categorias de trial
-  // (a tabela tem UNIQUE(user_id, category_id), então qualquer linha existente bloquearia o insert)
+  // Preserva trial_expires_at de quem já tem trial ativo dessa config.
+  // Só atribui nova data (agora + trialDays) pra quem nunca teve trial aqui.
+  const { data: existingTrials, error: existErr } = await supabase
+    .from("user_category_access")
+    .select("user_id, trial_expires_at")
+    .eq("hubsoft_config_id", configId)
+    .eq("is_trial", true)
+    .in("user_id", userIds);
+  if (existErr) throw existErr;
+
+  // Pega a maior trial_expires_at por user (caso haja múltiplas categorias)
+  const existingExpiryByUser = new Map<string, string>();
+  for (const row of existingTrials ?? []) {
+    if (!row.trial_expires_at) continue;
+    const prev = existingExpiryByUser.get(row.user_id);
+    if (!prev || new Date(row.trial_expires_at) > new Date(prev)) {
+      existingExpiryByUser.set(row.user_id, row.trial_expires_at);
+    }
+  }
+
+  const freshExpiry = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString();
+
+  // Limpa apenas o vínculo dessa config pros users alvo (sem mexer em trial_expires_at de outras configs)
   const { error: delErr1 } = await supabase
     .from("user_category_access")
     .delete()
@@ -187,28 +209,25 @@ async function syncTrialToExistingUsers(
     .in("user_id", userIds);
   if (delErr1) throw delErr1;
 
-  if (trialCategoryIds.length > 0) {
-    const { error: delErr2 } = await supabase
-      .from("user_category_access")
-      .delete()
-      .in("user_id", userIds)
-      .in("category_id", trialCategoryIds);
-    if (delErr2) throw delErr2;
-  }
+  // Limpa também conflitos por (user_id, category_id) das categorias de trial
+  const { error: delErr2 } = await supabase
+    .from("user_category_access")
+    .delete()
+    .in("user_id", userIds)
+    .in("category_id", trialCategoryIds);
+  if (delErr2) throw delErr2;
 
-  if (trialCategoryIds.length === 0) return 0;
-
-  const expiresAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString();
-  const rows = userIds.flatMap((uid) =>
-    trialCategoryIds.map((cid) => ({
+  const rows = userIds.flatMap((uid) => {
+    const expiresAt = existingExpiryByUser.get(uid) ?? freshExpiry;
+    return trialCategoryIds.map((cid) => ({
       user_id: uid,
       category_id: cid,
       hubsoft_config_id: configId,
       is_active: true,
       is_trial: true,
       trial_expires_at: expiresAt,
-    })),
-  );
+    }));
+  });
   const { error: insErr } = await supabase
     .from("user_category_access")
     .upsert(rows, { onConflict: "user_id,category_id" });
