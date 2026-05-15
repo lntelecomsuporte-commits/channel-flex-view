@@ -287,6 +287,7 @@ const UserManagement = () => {
     if (!editingUser) {
       setEditCategories([]);
       setEditIntegrationAccess([]);
+      setEditIntegrationCategoryIds([]);
       return;
     }
     (async () => {
