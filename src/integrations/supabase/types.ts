@@ -93,6 +93,7 @@ export type Database = {
           id: string
           is_active: boolean
           is_adult: boolean
+          logo_source_url: string | null
           logo_url: string | null
           name: string
           stream_format: string
@@ -115,6 +116,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_adult?: boolean
+          logo_source_url?: string | null
           logo_url?: string | null
           name: string
           stream_format?: string
@@ -137,6 +139,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_adult?: boolean
+          logo_source_url?: string | null
           logo_url?: string | null
           name?: string
           stream_format?: string

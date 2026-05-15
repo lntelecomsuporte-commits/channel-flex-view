@@ -140,7 +140,12 @@ const AdminPanel = () => {
       .split(/\r?\n/)
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
-    const payload = {
+
+    // Mantém a URL fonte (original) sempre que o admin informa uma URL externa.
+    // Assim, quando o sync baixa e troca logo_url para /logos/N.png, ainda
+    // sabemos onde re-baixar quando precisar atualizar.
+    const isExternalLogo = !!logoUrl && !logoUrl.startsWith("/logos/");
+    const payload: Record<string, unknown> = {
       name: channelForm.name, channel_number: parseInt(channelForm.channel_number),
       stream_url: channelForm.stream_url,
       backup_stream_urls: backupList,
@@ -156,11 +161,18 @@ const AdminPanel = () => {
       force_proxy_native: channelForm.force_proxy_native,
       is_adult: channelForm.is_adult,
     };
+    if (isExternalLogo) {
+      payload.logo_source_url = logoUrl;
+    } else if (!logoUrl) {
+      payload.logo_source_url = null;
+    }
+    // Se for /logos/... (local), NÃO sobrescreve logo_source_url — preserva a fonte salva no banco.
+
     let error;
     if (editingChannelId) {
-      ({ error } = await supabase.from("channels").update(payload).eq("id", editingChannelId));
+      ({ error } = await supabase.from("channels").update(payload as any).eq("id", editingChannelId));
     } else {
-      ({ error } = await supabase.from("channels").insert(payload));
+      ({ error } = await supabase.from("channels").insert(payload as any));
     }
     setSaving(false);
     if (error) {
@@ -185,7 +197,16 @@ const AdminPanel = () => {
     setChannelForm({
       name: ch.name, channel_number: String(ch.channel_number), stream_url: ch.stream_url,
       backup_stream_urls: (((ch as any).backup_stream_urls ?? []) as string[]).join("\n"),
-      logo_url: ch.logo_url ?? "", category_id: ch.category_id ?? "", is_active: ch.is_active,
+      // Mostra a fonte (URL original) se existir; senão cai pra logo_url.
+      // Se logo_url for /logos/... (local) e não houver fonte, deixa vazio
+      // pra evitar reescrever caminho local no campo.
+      logo_url: (() => {
+        const src = (ch as any).logo_source_url as string | null | undefined;
+        if (src) return src;
+        const lu = ch.logo_url ?? "";
+        return lu.startsWith("/logos/") ? "" : lu;
+      })(),
+      category_id: ch.category_id ?? "", is_active: ch.is_active,
       epg_type: (() => {
         const t = (ch as any).epg_type ?? "";
         // Migra valores legados para o novo "xmltv"
@@ -350,8 +371,11 @@ const AdminPanel = () => {
                     <p className="text-xs text-muted-foreground">Uma URL por linha — testadas em ordem após esgotar tentativas na principal (~3s por URL).</p>
                   </div>
                   <div className="space-y-2">
-                    <Label>URL do Logo (opcional)</Label>
+                    <Label>URL do Logo (fonte original)</Label>
                     <Input value={channelForm.logo_url} onChange={(e) => setChannelForm((f) => ({ ...f, logo_url: e.target.value }))} placeholder="https://..." />
+                    <p className="text-xs text-muted-foreground">
+                      Cole a URL externa da logo (Wikipedia, site oficial, etc.). O sincronizador baixa pro servidor e mantém esta fonte salva pra atualizar quando precisar.
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label>Categoria</Label>

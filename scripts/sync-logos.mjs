@@ -134,7 +134,9 @@ async function fileExists(p) { try { await stat(p); return true; } catch { retur
 
 function fetchChannels() {
   const sql = `
-    SELECT channel_number, name, COALESCE(logo_url, ''),
+    SELECT channel_number, name,
+           COALESCE(logo_url, ''),
+           COALESCE(logo_source_url, ''),
            EXTRACT(EPOCH FROM updated_at)::bigint
     FROM public.channels
     WHERE is_active = true
@@ -143,19 +145,27 @@ function fetchChannels() {
   const raw = psql(sql).trim();
   if (!raw) return [];
   return raw.split("\n").map((line) => {
-    const [channel_number, name, logo_url, epoch] = line.split("\t");
+    const [channel_number, name, logo_url, logo_source_url, epoch] = line.split("\t");
     return {
       channel_number: parseInt(channel_number, 10),
       name,
       logo_url: logo_url || null,
+      logo_source_url: logo_source_url || null,
       updated_at_epoch: parseInt(epoch, 10) * 1000,
     };
   });
 }
 
-function updateChannelLogo(channel_number, version) {
+function updateChannelLogo(channel_number, version, sourceUrl) {
   const newUrl = `/logos/${channel_number}.png?v=${version}`;
-  const sql = `UPDATE public.channels SET logo_url = ${sqlEscape(newUrl)} WHERE channel_number = ${channel_number}`;
+  // Sempre atualiza logo_url (servida) e GARANTE que logo_source_url existe.
+  // COALESCE: se logo_source_url já estava preenchida, mantém; senão grava sourceUrl.
+  const sql = `
+    UPDATE public.channels
+    SET logo_url = ${sqlEscape(newUrl)},
+        logo_source_url = COALESCE(logo_source_url, ${sqlEscape(sourceUrl)})
+    WHERE channel_number = ${channel_number}
+  `;
   psql(sql);
 }
 
@@ -185,17 +195,27 @@ async function main() {
   const summary = { synced: 0, unchanged: 0, skipped: 0, versionBumped: 0, error: 0 };
 
   for (const ch of channels) {
-    const { channel_number, name, logo_url, updated_at_epoch } = ch;
-    if (!logo_url) { log(`⏭  #${channel_number} ${name} — sem logo_url`); summary.skipped++; continue; }
+    const { channel_number, name, logo_url, logo_source_url, updated_at_epoch } = ch;
+
+    // Fonte de download: prioriza logo_source_url; se não tiver, usa logo_url se for externa.
+    const sourceUrl =
+      logo_source_url ||
+      (logo_url && !isLocalLogo(logo_url) ? logo_url : null);
+
+    if (!logo_url && !sourceUrl) {
+      log(`⏭  #${channel_number} ${name} — sem logo`); summary.skipped++; continue;
+    }
 
     const localPath = join(LOGOS_DIR, `${channel_number}.png`);
     const version = updated_at_epoch;
     const versionedUrl = `/logos/${channel_number}.png?v=${version}`;
 
+    // Caso 1: logo_url já é local E o arquivo existe
     if (!FORCE && isLocalLogo(logo_url) && (await fileExists(localPath))) {
       if (logo_url === versionedUrl) { summary.unchanged++; continue; }
       try {
-        updateChannelLogo(channel_number, version);
+        const sql = `UPDATE public.channels SET logo_url = ${sqlEscape(versionedUrl)} WHERE channel_number = ${channel_number}`;
+        psql(sql);
         summary.versionBumped++;
         log(`🔄 #${channel_number} ${name} — version bump`);
       } catch (e) {
@@ -205,18 +225,22 @@ async function main() {
       continue;
     }
 
-    if (isLocalLogo(logo_url)) {
-      if (await fileExists(localPath)) { summary.unchanged++; continue; }
+    // Caso 2: logo_url é local mas arquivo sumiu E não tem fonte externa
+    if (isLocalLogo(logo_url) && !sourceUrl) {
       log(`⚠️  #${channel_number} ${name} — URL local, arquivo sumiu, sem fonte externa`);
       summary.error++;
       continue;
     }
 
+    if (!sourceUrl) {
+      log(`⏭  #${channel_number} ${name} — sem fonte para baixar`); summary.skipped++; continue;
+    }
+
     try {
-      log(`⬇️  #${channel_number} ${name} — baixando ${logo_url}`);
-      const buf = await downloadAndResize(logo_url);
+      log(`⬇️  #${channel_number} ${name} — baixando ${sourceUrl}`);
+      const buf = await downloadAndResize(sourceUrl);
       await writeFile(localPath, buf);
-      updateChannelLogo(channel_number, version);
+      updateChannelLogo(channel_number, version, sourceUrl);
       summary.synced++;
       log(`✅ #${channel_number} ${name} — salvo`);
     } catch (e) {
