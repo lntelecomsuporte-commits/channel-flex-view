@@ -376,6 +376,28 @@ const AdminPanel = () => {
                     <p className="text-xs text-muted-foreground">
                       Cole a URL externa da logo (Wikipedia, site oficial, etc.). O sincronizador baixa pro servidor e mantém esta fonte salva pra atualizar quando precisar.
                     </p>
+                    {editingChannelId && (() => {
+                      const ch = channels?.find((c) => c.id === editingChannelId) as any;
+                      if (!ch) return null;
+                      const served = ch.logo_url as string | null;
+                      const source = ch.logo_source_url as string | null;
+                      return (
+                        <div className="rounded-md border border-border bg-muted/30 p-2 text-xs space-y-1">
+                          <div>
+                            <span className="text-muted-foreground">Fonte salva: </span>
+                            {source ? (
+                              <a href={source} target="_blank" rel="noreferrer" className="text-primary underline break-all">{source}</a>
+                            ) : (
+                              <span className="text-muted-foreground italic">nenhuma</span>
+                            )}
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Servida pelo servidor: </span>
+                            {served ? <span className="break-all">{served}</span> : <span className="text-muted-foreground italic">nenhuma</span>}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div className="space-y-2">
                     <Label>Categoria</Label>
