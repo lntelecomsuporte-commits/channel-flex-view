@@ -118,6 +118,13 @@ const UserManagement = () => {
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
   const [editForm, setEditForm] = useState({ password: "", display_name: "", adult_pin: "" });
   const [editCategories, setEditCategories] = useState<string[]>([]);
+  const [editTrialAccess, setEditTrialAccess] = useState<Array<{
+    category_id: string;
+    category_name: string;
+    trial_expires_at: string | null;
+    is_trial: boolean;
+    hubsoft_config_name: string | null;
+  }>>([]);
   const [editIsAdmin, setEditIsAdmin] = useState(false);
   const [editWasAdmin, setEditWasAdmin] = useState(false);
   const [updating, setUpdating] = useState(false);
