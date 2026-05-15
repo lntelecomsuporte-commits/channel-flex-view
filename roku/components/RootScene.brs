@@ -24,6 +24,7 @@ sub ShowHome()
     m.home = createObject("roSGNode", "HomeScene")
     m.top.appendChild(m.home)
     m.home.observeField("logoutRequested", "OnLogout")
+    m.home.observeField("forceSignout", "OnForceSignout")
     m.home.setFocus(true)
 end sub
 
@@ -33,5 +34,23 @@ end sub
 
 sub OnLogout(evt as Object)
     SbLogout()
+    ShowLogin()
+end sub
+
+sub OnForceSignout(evt as Object)
+    ' Sessão revogada pelo admin (ou usuário bloqueado).
+    SbLogout()
+    dlg = createObject("roSGNode", "Dialog")
+    dlg.title = "Sessão encerrada"
+    dlg.message = "Seu acesso foi encerrado pelo administrador. Faça login novamente."
+    dlg.buttons = ["OK"]
+    dlg.observeField("buttonSelected", "OnForceSignoutAck")
+    m.signoutDlg = dlg
+    m.top.dialog = dlg
+end sub
+
+sub OnForceSignoutAck(evt as Object)
+    if m.signoutDlg <> invalid then m.signoutDlg.close = true
+    m.signoutDlg = invalid
     ShowLogin()
 end sub

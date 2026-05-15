@@ -7,33 +7,38 @@
   <children>
     <Rectangle width="1920" height="1080" color="0x0a0a0aff" />
     <Label id="title" text="LN TV" font="font:LargeBoldSystemFont" color="0xdc2626ff"
-           translation="[860, 240]" width="200" horizAlign="center" />
-    <Label id="subtitle" text="Acesse com seu e-mail e senha" font="font:MediumSystemFont"
-           color="0x9ca3afff" translation="[700, 320]" width="520" horizAlign="center" />
+           translation="[860, 200]" width="200" horizAlign="center" />
+    <Label id="subtitle" text="Acesse com sua conta" font="font:MediumSystemFont"
+           color="0x9ca3afff" translation="[700, 280]" width="520" horizAlign="center" />
+
+    <!-- Toggle CPF / E-mail -->
+    <Rectangle id="modeBox" width="560" height="50" color="0x111827ff" translation="[680, 350]" />
+    <Label id="modeLabel" text="Login por: E-MAIL  (◀▶ trocar)" font="font:MediumBoldSystemFont"
+           color="0xfbbf24ff" translation="[680, 360]" width="560" horizAlign="center" />
 
     <Label id="emailLabel" text="E-mail:" font="font:MediumBoldSystemFont"
-           color="0xffffffff" translation="[680, 420]" />
+           color="0xffffffff" translation="[680, 430]" />
     <Rectangle id="emailBox" width="560" height="60" color="0x1f2937ff"
-               translation="[680, 460]" />
+               translation="[680, 470]" />
     <Label id="emailValue" text="" font="font:MediumSystemFont"
-           color="0xffffffff" translation="[700, 475]" width="520" />
+           color="0xffffffff" translation="[700, 485]" width="520" />
 
     <Label id="passLabel" text="Senha:" font="font:MediumBoldSystemFont"
-           color="0xffffffff" translation="[680, 550]" />
+           color="0xffffffff" translation="[680, 560]" />
     <Rectangle id="passBox" width="560" height="60" color="0x1f2937ff"
-               translation="[680, 590]" />
+               translation="[680, 600]" />
     <Label id="passValue" text="" font="font:MediumSystemFont"
-           color="0xffffffff" translation="[700, 605]" width="520" />
+           color="0xffffffff" translation="[700, 615]" width="520" />
 
     <Rectangle id="loginBtn" width="260" height="70" color="0xdc2626ff"
-               translation="[830, 700]" />
-    <Label id="loginBtnLabel" text="ENTRAR (OK)" font="font:MediumBoldSystemFont"
-           color="0xffffffff" translation="[830, 718]" width="260" horizAlign="center" />
+               translation="[830, 710]" />
+    <Label id="loginBtnLabel" text="ENTRAR (▶)" font="font:MediumBoldSystemFont"
+           color="0xffffffff" translation="[830, 728]" width="260" horizAlign="center" />
 
     <Label id="status" text="" font="font:SmallSystemFont"
-           color="0xfca5a5ff" translation="[680, 800]" width="560" horizAlign="center" />
+           color="0xfca5a5ff" translation="[680, 810]" width="560" horizAlign="center" />
 
-    <Label id="hint" text="Use os botões  ⏪ Limpar  ▶ Login  *  Mudar campo"
+    <Label id="hint" text="OK editar  •  ▲▼ trocar campo  •  ◀▶ trocar modo  •  ⏪ Limpar  •  ▶ Login"
            font="font:SmallSystemFont" color="0x6b7280ff"
            translation="[680, 900]" width="560" horizAlign="center" />
   </children>

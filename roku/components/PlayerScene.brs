@@ -3,6 +3,8 @@ sub init()
     m.osdBg = m.top.findNode("osdBg")
     m.osdName = m.top.findNode("osdName")
     m.osdNum = m.top.findNode("osdNum")
+    m.osdNow = m.top.findNode("osdNow")
+    m.osdNext = m.top.findNode("osdNext")
     m.errLabel = m.top.findNode("errLabel")
     m.osdTimer = m.top.findNode("osdTimer")
     m.top.observeField("channelData", "OnChannelData")
@@ -13,21 +15,25 @@ end sub
 sub OnChannelData()
     ch = m.top.channelData
     if ch = invalid then return
+    fmt = "hls"
+    if ch.stream_format = "mp4" then fmt = "mp4"
+    if ch.stream_format = "youtube"
+        m.errLabel.text = "Canais YouTube não são suportados no Roku ainda."
+        m.errLabel.visible = true
+        return
+    end if
+
     urls = [ch.stream_url]
     if ch.backup_stream_urls <> invalid
         for each u in ch.backup_stream_urls
             urls.push(u)
         end for
     end if
-    fmt = "hls"
-    if ch.stream_format = "mp4" then fmt = "mp4"
 
     content = createObject("roSGNode", "ContentNode")
     content.streamFormat = fmt
     content.url = urls[0]
-    if urls.count() > 1
-        content.streamUrls = urls
-    end if
+    if urls.count() > 1 then content.streamUrls = urls
     content.title = ch.name
 
     m.video.content = content
@@ -40,11 +46,26 @@ sub ShowOsd()
     m.osdBg.visible = true
     m.osdName.visible = true
     m.osdNum.visible = true
+    m.osdNow.visible = true
+    m.osdNext.visible = true
     m.osdName.text = ch.name
     if ch.channel_number <> invalid
         m.osdNum.text = "Canal " + ch.channel_number.toStr()
     else
         m.osdNum.text = ""
+    end if
+    epgId = invalid
+    if ch.epg_channel_id <> invalid then epgId = ch.epg_channel_id
+    info = EpgCurrentAndNext(epgId)
+    if info.current <> invalid
+        m.osdNow.text = "▶ " + FormatHHMM(info.current.start_date) + "  " + info.current.title
+    else
+        m.osdNow.text = ""
+    end if
+    if info.nextProg <> invalid
+        m.osdNext.text = "↳ " + FormatHHMM(info.nextProg.start_date) + "  " + info.nextProg.title
+    else
+        m.osdNext.text = ""
     end if
     m.osdTimer.control = "stop"
     m.osdTimer.control = "start"
@@ -54,6 +75,8 @@ sub HideOsd()
     m.osdBg.visible = false
     m.osdName.visible = false
     m.osdNum.visible = false
+    m.osdNow.visible = false
+    m.osdNext.visible = false
 end sub
 
 sub OnState(evt as Object)
