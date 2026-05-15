@@ -1,13 +1,27 @@
 sub init()
     m.email = ""
     m.password = ""
-    m.activeField = "email"  ' or "password"
+    m.mode = "email"   ' or "cpf"
+    m.activeField = "email"
     m.emailValue = m.top.findNode("emailValue")
     m.passValue = m.top.findNode("passValue")
     m.emailBox = m.top.findNode("emailBox")
     m.passBox = m.top.findNode("passBox")
+    m.emailLabel = m.top.findNode("emailLabel")
+    m.modeLabel = m.top.findNode("modeLabel")
     m.status = m.top.findNode("status")
+    UpdateMode()
     UpdateActive()
+end sub
+
+sub UpdateMode()
+    if m.mode = "cpf"
+        m.modeLabel.text = "Login por: CPF  (◀▶ trocar)"
+        m.emailLabel.text = "CPF (só números):"
+    else
+        m.modeLabel.text = "Login por: E-MAIL  (◀▶ trocar)"
+        m.emailLabel.text = "E-mail:"
+    end if
 end sub
 
 sub UpdateActive()
@@ -37,20 +51,19 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return true
     end if
     if key = "down" or key = "up"
-        if m.activeField = "email"
-            m.activeField = "password"
-        else
-            m.activeField = "email"
-        end if
+        if m.activeField = "email" then m.activeField = "password" else m.activeField = "email"
         UpdateActive()
         return true
     end if
+    if key = "left" or key = "right"
+        if m.mode = "email" then m.mode = "cpf" else m.mode = "email"
+        m.email = ""
+        UpdateValues()
+        UpdateMode()
+        return true
+    end if
     if key = "rewind"
-        if m.activeField = "email"
-            m.email = ""
-        else
-            m.password = ""
-        end if
+        if m.activeField = "email" then m.email = "" else m.password = ""
         UpdateValues()
         return true
     end if
@@ -58,22 +71,18 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         DoLogin()
         return true
     end if
-    if key = "back"
-        ' fecha o app
-        return false
-    end if
     return false
 end function
 
 sub ShowKeyboard()
     dlg = createObject("roSGNode", "KeyboardDialog")
-    dlg.title = "Digite seu " + m.activeField
-    if m.activeField = "password" then dlg.textEditBox.secureMode = true
     if m.activeField = "email"
-        dlg.textEditBox.text = m.email
+        if m.mode = "cpf" then dlg.title = "Digite seu CPF" else dlg.title = "Digite seu e-mail"
     else
-        dlg.textEditBox.text = m.password
+        dlg.title = "Digite sua senha"
     end if
+    if m.activeField = "password" then dlg.textEditBox.secureMode = true
+    if m.activeField = "email" then dlg.textEditBox.text = m.email else dlg.textEditBox.text = m.password
     dlg.buttons = ["OK", "Cancelar"]
     dlg.observeField("buttonSelected", "OnKbButton")
     m.kbDialog = dlg
@@ -85,11 +94,7 @@ sub OnKbButton(evt as Object)
     dlg = m.kbDialog
     if idx = 0 and dlg <> invalid
         txt = dlg.textEditBox.text
-        if m.activeField = "email"
-            m.email = txt
-        else
-            m.password = txt
-        end if
+        if m.activeField = "email" then m.email = txt else m.password = txt
         UpdateValues()
     end if
     if dlg <> invalid then dlg.close = true
@@ -98,11 +103,15 @@ end sub
 
 sub DoLogin()
     if m.email = "" or m.password = ""
-        m.status.text = "Preencha e-mail e senha"
+        m.status.text = "Preencha os dois campos"
         return
     end if
     m.status.text = "Entrando..."
-    res = SbLogin(m.email, m.password)
+    if m.mode = "cpf"
+        res = SbLoginCpf(m.email, m.password)
+    else
+        res = SbLogin(m.email, m.password)
+    end if
     if res.ok
         m.status.text = ""
         m.top.loginOk = true
