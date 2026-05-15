@@ -116,17 +116,10 @@ const getForwardedProtocol = (req: Request, requestUrl: URL) => {
   return requestUrl.protocol.replace(":", "");
 };
 
-const getPublicOrigin = (req: Request, requestUrl: URL) => {
+const getPublicOrigin = (_req: Request, _requestUrl: URL) => {
   const envOrigin = Deno.env.get("LNTV_PUBLIC_ORIGIN") || Deno.env.get("PUBLIC_PROXY_BASE_URL");
   if (envOrigin) return envOrigin.replace(/\/$/, "");
-
-  const forwardedHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
-  const host = forwardedHost || req.headers.get("host") || requestUrl.host;
-  if (!host) return FALLBACK_ORIGIN;
-  if (isLocalProxyHost(host) || isInternalDockerHost(host)) return FALLBACK_ORIGIN;
-
-  const protocol = "https";
-  return `${protocol}://${host}`;
+  return FALLBACK_ORIGIN;
 };
 
 Deno.serve(async (req) => {
