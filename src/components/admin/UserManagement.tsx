@@ -118,6 +118,13 @@ const UserManagement = () => {
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
   const [editForm, setEditForm] = useState({ password: "", display_name: "", adult_pin: "" });
   const [editCategories, setEditCategories] = useState<string[]>([]);
+  const [editTrialAccess, setEditTrialAccess] = useState<Array<{
+    category_id: string;
+    category_name: string;
+    trial_expires_at: string | null;
+    is_trial: boolean;
+    hubsoft_config_name: string | null;
+  }>>([]);
   const [editIsAdmin, setEditIsAdmin] = useState(false);
   const [editWasAdmin, setEditWasAdmin] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -276,15 +283,52 @@ const UserManagement = () => {
 
   // Load user categories when editing
   useEffect(() => {
-    if (!editingUser) return;
-    supabase
-      .from("user_category_access")
-      .select("category_id")
-      .eq("user_id", editingUser.user_id)
-      .eq("is_active", true)
-      .then(({ data }) => {
-        setEditCategories(data?.map((d) => d.category_id) || []);
-      });
+    if (!editingUser) {
+      setEditCategories([]);
+      setEditTrialAccess([]);
+      return;
+    }
+    (async () => {
+      // Manual access only (no hubsoft_config_id) — these are editable
+      const { data: manual } = await supabase
+        .from("user_category_access")
+        .select("category_id")
+        .eq("user_id", editingUser.user_id)
+        .eq("is_active", true)
+        .is("hubsoft_config_id", null);
+      setEditCategories(manual?.map((d: any) => d.category_id) || []);
+
+      // Integration-managed access (read-only display, includes trial info)
+      const { data: integ } = await supabase
+        .from("user_category_access")
+        .select("category_id, trial_expires_at, is_trial, hubsoft_config_id")
+        .eq("user_id", editingUser.user_id)
+        .eq("is_active", true)
+        .not("hubsoft_config_id", "is", null);
+
+      const catIds = Array.from(new Set((integ || []).map((r: any) => r.category_id)));
+      const cfgIds = Array.from(new Set((integ || []).map((r: any) => r.hubsoft_config_id).filter(Boolean)));
+      const [catsRes, cfgsRes] = await Promise.all([
+        catIds.length
+          ? supabase.from("categories").select("id,name").in("id", catIds)
+          : Promise.resolve({ data: [] as any[] }),
+        cfgIds.length
+          ? supabase.from("hubsoft_config").select("id,name").in("id", cfgIds)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+      const catMap = new Map((catsRes.data || []).map((c: any) => [c.id, c.name]));
+      const cfgMap = new Map((cfgsRes.data || []).map((c: any) => [c.id, c.name]));
+
+      setEditTrialAccess(
+        (integ || []).map((r: any) => ({
+          category_id: r.category_id,
+          category_name: catMap.get(r.category_id) || "(categoria)",
+          trial_expires_at: r.trial_expires_at,
+          is_trial: !!r.is_trial,
+          hubsoft_config_name: cfgMap.get(r.hubsoft_config_id) || null,
+        })),
+      );
+    })();
   }, [editingUser]);
 
   const toggleCategory = (id: string, list: string[], setList: (v: string[]) => void) => {
@@ -686,10 +730,74 @@ const UserManagement = () => {
               />
               <p className="text-xs text-muted-foreground">Senha pedida ao abrir canais marcados como adulto.</p>
             </div>
-            <CategoryCheckboxes
-              selected={editCategories}
-              onToggle={(id) => toggleCategory(id, editCategories, setEditCategories)}
-            />
+            <div className="space-y-2">
+              <Label>Categorias de Acesso (manuais)</Label>
+              <p className="text-xs text-muted-foreground">
+                Categorias marcadas aqui são adicionadas manualmente. Não afetam o acesso vindo de integrações Hubsoft (mostrado abaixo).
+              </p>
+              <CategoryCheckboxes
+                selected={editCategories}
+                onToggle={(id) => toggleCategory(id, editCategories, setEditCategories)}
+              />
+            </div>
+
+            {editTrialAccess.length > 0 && (() => {
+              const trials = editTrialAccess.filter((a) => a.is_trial);
+              const normals = editTrialAccess.filter((a) => !a.is_trial);
+              const trialsByCfg = new Map<string, { name: string; expires: string | null; cats: string[] }>();
+              trials.forEach((t) => {
+                const key = t.hubsoft_config_name || "Integração";
+                const cur = trialsByCfg.get(key) || { name: key, expires: t.trial_expires_at, cats: [] };
+                cur.cats.push(t.category_name);
+                if (t.trial_expires_at && (!cur.expires || new Date(t.trial_expires_at) < new Date(cur.expires))) {
+                  cur.expires = t.trial_expires_at;
+                }
+                trialsByCfg.set(key, cur);
+              });
+              const normalsByCfg = new Map<string, string[]>();
+              normals.forEach((n) => {
+                const key = n.hubsoft_config_name || "Integração";
+                const arr = normalsByCfg.get(key) || [];
+                arr.push(n.category_name);
+                normalsByCfg.set(key, arr);
+              });
+              return (
+                <div className="space-y-2">
+                  <Label>Acesso vindo de integrações Hubsoft</Label>
+                  <div className="space-y-2 border rounded-md p-3 bg-secondary/40">
+                    {Array.from(normalsByCfg.entries()).map(([cfg, cats]) => (
+                      <div key={`n-${cfg}`} className="text-sm">
+                        <span className="font-medium">{cfg}</span>
+                        <span className="text-xs text-muted-foreground ml-2">(acesso permanente)</span>
+                        <div className="text-xs text-muted-foreground mt-0.5">{cats.join(", ")}</div>
+                      </div>
+                    ))}
+                    {Array.from(trialsByCfg.values()).map((g) => {
+                      const t = g.expires ? formatTrialRemaining(g.expires) : null;
+                      return (
+                        <div key={`t-${g.name}`} className="text-sm">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium">{g.name}</span>
+                            {t && (
+                              <span className={`text-xs px-2 py-0.5 rounded ${t.expired ? "bg-destructive/20 text-destructive" : "bg-amber-500/20 text-amber-600 dark:text-amber-400"}`}>
+                                🎁 Degustação · {t.label}
+                              </span>
+                            )}
+                            {g.expires && (
+                              <span className="text-xs text-muted-foreground">expira {fmtDate(g.expires)}</span>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">{g.cats.join(", ")}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Esses acessos são gerenciados pelo webhook da integração. Para alterar, use o painel de Integração Hubsoft ou aguarde o evento do ERP.
+                  </p>
+                </div>
+              );
+            })()}
             <label className="flex items-center gap-2 text-sm cursor-pointer p-3 rounded-md border border-border bg-secondary/50">
               <Checkbox checked={editIsAdmin} onCheckedChange={(v) => setEditIsAdmin(!!v)} />
               <span className="font-medium">Administrador do painel</span>
