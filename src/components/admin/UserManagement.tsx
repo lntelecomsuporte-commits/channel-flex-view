@@ -118,12 +118,12 @@ const UserManagement = () => {
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
   const [editForm, setEditForm] = useState({ password: "", display_name: "", adult_pin: "" });
   const [editCategories, setEditCategories] = useState<string[]>([]);
-  const [editTrialAccess, setEditTrialAccess] = useState<Array<{
-    category_id: string;
-    category_name: string;
+  const [editIntegrationAccess, setEditIntegrationAccess] = useState<Array<{
+    hubsoft_config_id: string;
+    hubsoft_config_name: string;
+    normal_categories: string[];
+    trial_categories: string[];
     trial_expires_at: string | null;
-    is_trial: boolean;
-    hubsoft_config_name: string | null;
   }>>([]);
   const [editIsAdmin, setEditIsAdmin] = useState(false);
   const [editWasAdmin, setEditWasAdmin] = useState(false);
@@ -285,7 +285,7 @@ const UserManagement = () => {
   useEffect(() => {
     if (!editingUser) {
       setEditCategories([]);
-      setEditTrialAccess([]);
+      setEditIntegrationAccess([]);
       return;
     }
     (async () => {
@@ -295,6 +295,7 @@ const UserManagement = () => {
         .select("category_id")
         .eq("user_id", editingUser.user_id)
         .eq("is_active", true)
+        .eq("is_trial", false)
         .is("hubsoft_config_id", null);
       setEditCategories(manual?.map((d: any) => d.category_id) || []);
 
@@ -308,26 +309,63 @@ const UserManagement = () => {
 
       const catIds = Array.from(new Set((integ || []).map((r: any) => r.category_id)));
       const cfgIds = Array.from(new Set((integ || []).map((r: any) => r.hubsoft_config_id).filter(Boolean)));
-      const [catsRes, cfgsRes] = await Promise.all([
-        catIds.length
-          ? supabase.from("categories").select("id,name").in("id", catIds)
-          : Promise.resolve({ data: [] as any[] }),
+      const [cfgsRes, cfgCatsRes] = await Promise.all([
         cfgIds.length
           ? supabase.from("hubsoft_config").select("id,name").in("id", cfgIds)
           : Promise.resolve({ data: [] as any[] }),
+        cfgIds.length
+          ? supabase.from("hubsoft_config_categories").select("hubsoft_config_id,category_id").in("hubsoft_config_id", cfgIds)
+          : Promise.resolve({ data: [] as any[] }),
       ]);
+      const configuredCatIds = (cfgCatsRes.data || []).map((c: any) => c.category_id);
+      const allCatIds = Array.from(new Set([...catIds, ...configuredCatIds]));
+      const catsRes = allCatIds.length
+        ? await supabase.from("categories").select("id,name").in("id", allCatIds)
+        : { data: [] as any[] };
       const catMap = new Map((catsRes.data || []).map((c: any) => [c.id, c.name]));
       const cfgMap = new Map((cfgsRes.data || []).map((c: any) => [c.id, c.name]));
 
-      setEditTrialAccess(
-        (integ || []).map((r: any) => ({
-          category_id: r.category_id,
-          category_name: catMap.get(r.category_id) || "(categoria)",
-          trial_expires_at: r.trial_expires_at,
-          is_trial: !!r.is_trial,
-          hubsoft_config_name: cfgMap.get(r.hubsoft_config_id) || null,
-        })),
-      );
+      const byConfig = new Map<string, {
+        hubsoft_config_id: string;
+        hubsoft_config_name: string;
+        normal_categories: string[];
+        trial_categories: string[];
+        trial_expires_at: string | null;
+      }>();
+      const ensureConfig = (configId: string) => {
+        const existing = byConfig.get(configId);
+        if (existing) return existing;
+        const created = {
+          hubsoft_config_id: configId,
+          hubsoft_config_name: cfgMap.get(configId) || "Integração",
+          normal_categories: [],
+          trial_categories: [],
+          trial_expires_at: null,
+        };
+        byConfig.set(configId, created);
+        return created;
+      };
+
+      (cfgCatsRes.data || []).forEach((row: any) => {
+        const group = ensureConfig(row.hubsoft_config_id);
+        const name = catMap.get(row.category_id) || "(categoria)";
+        if (!group.normal_categories.includes(name)) group.normal_categories.push(name);
+      });
+
+      (integ || []).forEach((row: any) => {
+        const group = ensureConfig(row.hubsoft_config_id);
+        const name = catMap.get(row.category_id) || "(categoria)";
+        if (row.is_trial) {
+          if (!group.trial_categories.includes(name)) group.trial_categories.push(name);
+          if (row.trial_expires_at && (!group.trial_expires_at || new Date(row.trial_expires_at) < new Date(group.trial_expires_at))) {
+            group.trial_expires_at = row.trial_expires_at;
+          }
+        } else if (!group.normal_categories.includes(name)) {
+          group.normal_categories.push(name);
+        }
+      });
+
+      setEditIntegrationAccess(Array.from(byConfig.values()));
     })();
   }, [editingUser]);
 
