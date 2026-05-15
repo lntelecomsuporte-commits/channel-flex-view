@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Plus, Trash2, ShieldOff, ShieldCheck, Pencil, LogOut, Download } from "lucide-react";
+import { Plus, Trash2, ShieldOff, ShieldCheck, Pencil, LogOut, Download, ListVideo, Copy, RefreshCw } from "lucide-react";
+const PLAYLIST_HOST = "https://tv2.lntelecom.net";
 import { useCategories } from "@/hooks/useChannels";
 import { UserStatusBadge } from "./UserStatusBadge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -37,6 +38,8 @@ type Profile = {
   is_active: boolean;
   hubsoft_client_id: string | null;
   created_at: string;
+  playlist_token: string | null;
+  playlist_password: string | null;
 };
 
 function useProfiles() {
@@ -122,6 +125,56 @@ const UserManagement = () => {
   const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [searchTerm, setSearchTerm] = useState("");
   const [activeReport, setActiveReport] = useState<ReportFilter>(null);
+  const [playlistUser, setPlaylistUser] = useState<Profile | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
+
+  const buildPlaylistUrls = (p: Profile) => {
+    const token = p.playlist_token ?? "";
+    const u = encodeURIComponent(p.username ?? "");
+    const pwd = encodeURIComponent(p.playlist_password ?? "");
+    return {
+      tokenUrl: `${PLAYLIST_HOST}/functions/v1/playlist?token=${token}&type=m3u`,
+      hlsUrl: `${PLAYLIST_HOST}/functions/v1/playlist?u=${u}&p=${pwd}&type=hls`,
+    };
+  };
+
+  const copyText = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copiado`);
+    } catch {
+      toast.error("Falha ao copiar");
+    }
+  };
+
+  const regeneratePlaylistCreds = async () => {
+    if (!playlistUser || regenerating) return;
+    setRegenerating(true);
+    try {
+      const newPwd = Math.random().toString(36).slice(2, 14);
+      const { data, error } = await supabase
+        .from("profiles")
+        .update({
+          playlist_token: crypto.randomUUID(),
+          playlist_password: newPwd,
+        })
+        .eq("id", playlistUser.id)
+        .select("playlist_token, playlist_password")
+        .single();
+      if (error) throw error;
+      setPlaylistUser({
+        ...playlistUser,
+        playlist_token: data.playlist_token,
+        playlist_password: data.playlist_password,
+      });
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
+      toast.success("Credenciais regeneradas — links anteriores invalidados");
+    } catch (e) {
+      toast.error("Erro ao regenerar: " + (e as Error).message);
+    } finally {
+      setRegenerating(false);
+    }
+  };
 
   const statsByUser = new Map<string, AccessStats>();
   (accessStats || []).forEach((s) => statsByUser.set(s.user_id, s));
@@ -585,6 +638,9 @@ const UserManagement = () => {
                     <Button variant="ghost" size="sm" onClick={() => handleEdit(p as Profile)} title="Editar">
                       <Pencil className="h-4 w-4" />
                     </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setPlaylistUser(p as Profile)} title="Gerar playlist M3U/HLS">
+                      <ListVideo className="h-4 w-4 text-primary" />
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => handleForceSignout(p.id, p.display_name)} title="Deslogar usuário (forçar logout remoto)">
                       <LogOut className="h-4 w-4 text-amber-500" />
                     </Button>
@@ -643,6 +699,79 @@ const UserManagement = () => {
               {updating ? "Salvando..." : "Salvar Alterações"}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!playlistUser} onOpenChange={(open) => !open && setPlaylistUser(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Playlist M3U / HLS</DialogTitle>
+          </DialogHeader>
+          {playlistUser && (() => {
+            const { tokenUrl, hlsUrl } = buildPlaylistUrls(playlistUser);
+            return (
+              <div className="space-y-5">
+                <div className="text-sm text-muted-foreground">
+                  Cliente: <span className="text-foreground font-medium">{playlistUser.display_name || playlistUser.username}</span>
+                  <br />
+                  E-mail: <span className="font-mono">{playlistUser.username}</span>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Link M3U (token)</Label>
+                  <div className="flex gap-2">
+                    <Input readOnly value={tokenUrl} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+                    <Button variant="outline" size="icon" onClick={() => copyText(tokenUrl, "Link M3U")}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">URL única, sem usuário/senha. Funciona em qualquer player M3U.</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Link HLS (usuário + senha)</Label>
+                  <div className="flex gap-2">
+                    <Input readOnly value={hlsUrl} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+                    <Button variant="outline" size="icon" onClick={() => copyText(hlsUrl, "Link HLS")}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 mt-2">
+                    <div>
+                      <Label className="text-xs">Usuário</Label>
+                      <div className="flex gap-1 mt-1">
+                        <Input readOnly value={playlistUser.username ?? ""} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+                        <Button variant="outline" size="icon" onClick={() => copyText(playlistUser.username ?? "", "Usuário")}>
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Senha</Label>
+                      <div className="flex gap-1 mt-1">
+                        <Input readOnly value={playlistUser.playlist_password ?? ""} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+                        <Button variant="outline" size="icon" onClick={() => copyText(playlistUser.playlist_password ?? "", "Senha")}>
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Pra apps que pedem campos separados (Tivimate, IPTV Smarters, etc).</p>
+                </div>
+
+                <div className="rounded-md border border-border bg-secondary/40 p-3 text-xs text-muted-foreground space-y-1">
+                  <p>• Apenas canais que esse cliente tem acesso entram na lista (respeita degustação e categorias).</p>
+                  <p>• Streams passam por <span className="font-mono">hls-proxy</span> com token assinado (validade 30 dias).</p>
+                  <p>• Bloquear ou inativar o cliente derruba o acesso imediatamente.</p>
+                </div>
+
+                <Button variant="outline" onClick={regeneratePlaylistCreds} disabled={regenerating} className="w-full">
+                  <RefreshCw className={`h-4 w-4 mr-2 ${regenerating ? "animate-spin" : ""}`} />
+                  {regenerating ? "Regenerando..." : "Regenerar credenciais (invalida links antigos)"}
+                </Button>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>
