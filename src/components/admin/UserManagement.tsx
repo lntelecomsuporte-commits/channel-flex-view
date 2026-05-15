@@ -301,17 +301,31 @@ const UserManagement = () => {
       // Integration-managed access (read-only display, includes trial info)
       const { data: integ } = await supabase
         .from("user_category_access")
-        .select("category_id, trial_expires_at, is_trial, hubsoft_config_id, categories(name), hubsoft_config(name)")
+        .select("category_id, trial_expires_at, is_trial, hubsoft_config_id")
         .eq("user_id", editingUser.user_id)
         .eq("is_active", true)
         .not("hubsoft_config_id", "is", null);
+
+      const catIds = Array.from(new Set((integ || []).map((r: any) => r.category_id)));
+      const cfgIds = Array.from(new Set((integ || []).map((r: any) => r.hubsoft_config_id).filter(Boolean)));
+      const [catsRes, cfgsRes] = await Promise.all([
+        catIds.length
+          ? supabase.from("categories").select("id,name").in("id", catIds)
+          : Promise.resolve({ data: [] as any[] }),
+        cfgIds.length
+          ? supabase.from("hubsoft_config").select("id,name").in("id", cfgIds)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+      const catMap = new Map((catsRes.data || []).map((c: any) => [c.id, c.name]));
+      const cfgMap = new Map((cfgsRes.data || []).map((c: any) => [c.id, c.name]));
+
       setEditTrialAccess(
         (integ || []).map((r: any) => ({
           category_id: r.category_id,
-          category_name: r.categories?.name || "(categoria)",
+          category_name: catMap.get(r.category_id) || "(categoria)",
           trial_expires_at: r.trial_expires_at,
           is_trial: !!r.is_trial,
-          hubsoft_config_name: r.hubsoft_config?.name || null,
+          hubsoft_config_name: cfgMap.get(r.hubsoft_config_id) || null,
         })),
       );
     })();
