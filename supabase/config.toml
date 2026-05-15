@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.expire-trials]
 verify_jwt = false
+
+[functions.playlist]
+verify_jwt = false
