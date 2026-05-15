@@ -638,6 +638,9 @@ const UserManagement = () => {
                     <Button variant="ghost" size="sm" onClick={() => handleEdit(p as Profile)} title="Editar">
                       <Pencil className="h-4 w-4" />
                     </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setPlaylistUser(p as Profile)} title="Gerar playlist M3U/HLS">
+                      <ListVideo className="h-4 w-4 text-primary" />
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => handleForceSignout(p.id, p.display_name)} title="Deslogar usuário (forçar logout remoto)">
                       <LogOut className="h-4 w-4 text-amber-500" />
                     </Button>
@@ -696,6 +699,79 @@ const UserManagement = () => {
               {updating ? "Salvando..." : "Salvar Alterações"}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!playlistUser} onOpenChange={(open) => !open && setPlaylistUser(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Playlist M3U / HLS</DialogTitle>
+          </DialogHeader>
+          {playlistUser && (() => {
+            const { tokenUrl, hlsUrl } = buildPlaylistUrls(playlistUser);
+            return (
+              <div className="space-y-5">
+                <div className="text-sm text-muted-foreground">
+                  Cliente: <span className="text-foreground font-medium">{playlistUser.display_name || playlistUser.username}</span>
+                  <br />
+                  E-mail: <span className="font-mono">{playlistUser.username}</span>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Link M3U (token)</Label>
+                  <div className="flex gap-2">
+                    <Input readOnly value={tokenUrl} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+                    <Button variant="outline" size="icon" onClick={() => copyText(tokenUrl, "Link M3U")}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">URL única, sem usuário/senha. Funciona em qualquer player M3U.</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Link HLS (usuário + senha)</Label>
+                  <div className="flex gap-2">
+                    <Input readOnly value={hlsUrl} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+                    <Button variant="outline" size="icon" onClick={() => copyText(hlsUrl, "Link HLS")}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 mt-2">
+                    <div>
+                      <Label className="text-xs">Usuário</Label>
+                      <div className="flex gap-1 mt-1">
+                        <Input readOnly value={playlistUser.username ?? ""} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+                        <Button variant="outline" size="icon" onClick={() => copyText(playlistUser.username ?? "", "Usuário")}>
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Senha</Label>
+                      <div className="flex gap-1 mt-1">
+                        <Input readOnly value={playlistUser.playlist_password ?? ""} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+                        <Button variant="outline" size="icon" onClick={() => copyText(playlistUser.playlist_password ?? "", "Senha")}>
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Pra apps que pedem campos separados (Tivimate, IPTV Smarters, etc).</p>
+                </div>
+
+                <div className="rounded-md border border-border bg-secondary/40 p-3 text-xs text-muted-foreground space-y-1">
+                  <p>• Apenas canais que esse cliente tem acesso entram na lista (respeita degustação e categorias).</p>
+                  <p>• Streams passam por <span className="font-mono">hls-proxy</span> com token assinado (validade 30 dias).</p>
+                  <p>• Bloquear ou inativar o cliente derruba o acesso imediatamente.</p>
+                </div>
+
+                <Button variant="outline" onClick={regeneratePlaylistCreds} disabled={regenerating} className="w-full">
+                  <RefreshCw className={`h-4 w-4 mr-2 ${regenerating ? "animate-spin" : ""}`} />
+                  {regenerating ? "Regenerando..." : "Regenerar credenciais (invalida links antigos)"}
+                </Button>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>
