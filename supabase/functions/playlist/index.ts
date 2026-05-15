@@ -13,6 +13,14 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const SECRET = Deno.env.get("STREAM_TOKEN_SECRET") ?? "";
 const TTL_SECONDS = 30 * 24 * 60 * 60;
 const FALLBACK_ORIGIN = "https://tv2.lntelecom.net";
+const REST_TIMEOUT_MS = 4_000;
+
+const REST_BASES = [
+  Deno.env.get("LNTV_SUPABASE_INTERNAL_URL")?.replace(/\/$/, ""),
+  "http://kong:8000",
+  "http://supabase-kong:8000",
+  SUPABASE_URL,
+].filter((value, index, arr): value is string => Boolean(value) && arr.indexOf(value) === index);
 
 type ProfileRow = {
   user_id: string;
@@ -74,24 +82,42 @@ const sign = async (payload: string): Promise<string> => {
 };
 
 const restSelect = async <T>(table: string, params: Record<string, string>): Promise<T[]> => {
-  const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
-  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  let lastError = "no REST base configured";
 
-  const res = await fetch(url, {
-    headers: {
-      apikey: SERVICE_ROLE_KEY,
-      authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-      accept: "application/json",
-    },
-  });
+  for (const base of REST_BASES) {
+    const url = new URL(`${base}/rest/v1/${table}`);
+    for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    console.error(`[playlist] PostgREST ${table} ${res.status}: ${body}`);
-    throw new Error(`Database error on ${table}`);
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), REST_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, {
+        headers: {
+          apikey: SERVICE_ROLE_KEY,
+          authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+          accept: "application/json",
+        },
+        signal: ctrl.signal,
+      });
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        lastError = `${base} ${res.status}: ${body.slice(0, 240)}`;
+        console.error(`[playlist] PostgREST ${table} ${lastError}`);
+        continue;
+      }
+
+      return await res.json() as T[];
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      lastError = `${base}: ${message}`;
+      console.error(`[playlist] PostgREST ${table} failed via ${lastError}`);
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
-  return await res.json() as T[];
+  throw new Error(`Database error on ${table}: ${lastError}`);
 };
 
 const isLocalProxyHost = (host: string) => {
