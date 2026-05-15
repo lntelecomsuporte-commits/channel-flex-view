@@ -70,6 +70,11 @@ function FetchFavorites() as Object
     return SbGet("user_favorites?user_id=eq." + uid + "&select=id,channel_id,position&order=position.asc")
 end function
 
+function FetchProfile() as Object
+    uid = SbUserId()
+    return SbGet("profiles?user_id=eq." + uid + "&select=adult_pin,is_blocked,force_signout_at&limit=1")
+end function
+
 function AddFavorite(channelId as String) as Object
     uid = SbUserId()
     return SbPost("user_favorites", { user_id: uid, channel_id: channelId, position: 0 })

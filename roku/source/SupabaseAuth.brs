@@ -40,6 +40,20 @@ function SbUserId() as String
     return RegistryGet("user_id")
 end function
 
+' Login por CPF (Hubsoft) — gera o e-mail interno {digitos}@tvln.local,
+' mesma regra usada pelo webhook do Hubsoft.
+function SbLoginCpf(cpf as String, password as String) as Object
+    digits = ""
+    for i = 0 to Len(cpf) - 1
+        c = Mid(cpf, i + 1, 1)
+        if Asc(c) >= 48 and Asc(c) <= 57 then digits = digits + c
+    end for
+    if Len(digits) < 11
+        return { ok: false, error: "CPF inválido" }
+    end if
+    return SbLogin(digits + "@tvln.local", password)
+end function
+
 sub SbLogout()
     RegistryClear()
 end sub
