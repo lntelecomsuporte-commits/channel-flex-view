@@ -67,12 +67,6 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
   const [corsFallback, setCorsFallback] = useState(false);
   const [firstFrameReady, setFirstFrameReady] = useState(false);
   
-  // Android WebView mostra um ícone de "player" como poster default da <video>
-  // entre o destroy/attach do MediaSource no zap. Em iOS/Fire TV/web isso não
-  // aparece. Cobrimos com um véu preto APENAS no Android nativo, enquanto
-  // a troca está em andamento (até disparar 'playing' do novo canal).
-  const isAndroidNative = Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
-  const [isSwitching, setIsSwitching] = useState(false);
   const [backupIndex, setBackupIndex] = useState(-1);
   const backups = backupStreamUrls?.filter((u) => !!u && u.trim().length > 0) ?? [];
   const activeStreamUrl = backupIndex < 0 ? streamUrl : (backups[backupIndex] ?? streamUrl);
@@ -158,15 +152,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     setBackupIndex(-1);
     setCorsFallback(false);
     setResolvedContentType("");
-    if (isAndroidNative) setIsSwitching(true);
-  }, [streamUrl, isAndroidNative]);
-
-  // Safety: véu preto não pode ficar travado se 'playing' nunca disparar.
-  useEffect(() => {
-    if (!isSwitching) return;
-    const t = setTimeout(() => setIsSwitching(false), 4000);
-    return () => clearTimeout(t);
-  }, [isSwitching]);
+  }, [streamUrl]);
 
   // Se mudar de backup dentro do mesmo canal, cada URL precisa recomeçar limpa.
   useEffect(() => {
@@ -196,10 +182,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     // congelado até o novo dar 'playing'. Sem isso, todo zap mostraria spinner
     // por ~500ms+. firstFrameReady só vai pra false na primeira montagem
     // (initial state) ou se realmente não houver frame.
-    const onFirstPlaying = () => {
-      setFirstFrameReady(true);
-      setIsSwitching(false);
-    };
+    const onFirstPlaying = () => setFirstFrameReady(true);
     video.addEventListener("playing", onFirstPlaying);
     video.addEventListener("loadeddata", onFirstPlaying);
 
@@ -636,12 +619,6 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         x-webkit-airplay="allow"
         webkit-playsinline="true"
       />
-      {isAndroidNative && isSwitching && (
-        <div
-          className="absolute inset-0 bg-black pointer-events-none z-[4]"
-          aria-hidden="true"
-        />
-      )}
       {isLoadingNewChannel && <DelayedSpinner key={activeStreamUrl} />}
     </>
   );
