@@ -569,7 +569,21 @@ const AdminPanel = () => {
                           <span className="channel-badge text-sm">{ch.channel_number}</span>
                           {ch.logo_url && <img src={ch.logo_url} alt="" className="h-8 w-8 rounded object-contain bg-muted" />}
                           <div>
-                            <p className="font-medium text-foreground">{ch.name}</p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-medium text-foreground">{ch.name}</p>
+                              {(() => {
+                                const cat = categories?.find((c) => c.id === ch.category_id);
+                                return cat ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                                    {cat.name}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                                    sem categoria
+                                  </span>
+                                );
+                              })()}
+                            </div>
                             <p className="text-xs text-muted-foreground truncate max-w-xs">{ch.stream_url}</p>
                           </div>
                         </div>
