@@ -48,7 +48,18 @@ export interface VideoPlayerHandle {
   getHls: () => Hls | null;
 }
 
+// Detecta APK Android (não vale pra iOS nem Web) — nesses casos roteia pro
+// player nativo ExoPlayer/Media3 via plugin Capacitor, que elimina o ícone/
+// flash do WebView entre zaps de canal.
+const isAndroidNativePlatform = () =>
+  Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
+
 const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>((props, ref) => {
+  if (isAndroidNativePlatform()) {
+    // Lazy import pra não carregar Media3 bridge na web/iOS
+    const NativeAndroidPlayer = require("./NativeAndroidPlayer").default;
+    return <NativeAndroidPlayer ref={ref} {...props} />;
+  }
   return <HlsVideoPlayer ref={ref} {...props} />;
 });
 
