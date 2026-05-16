@@ -6,6 +6,7 @@ import { Capacitor } from "@capacitor/core";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 import { getDeviceProfile } from "@/lib/deviceProfile";
 import YouTubePlayer from "./YouTubePlayer";
+import NativeAndroidPlayer from "./NativeAndroidPlayer";
 
 /** Detecta o engine a usar com base na URL (extensão). */
 const detectEngine = (url: string, sourceUrl = url, forcedContentType = ""): "hls" | "mpegts" | "native" => {
@@ -56,8 +57,6 @@ const isAndroidNativePlatform = () =>
 
 const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>((props, ref) => {
   if (isAndroidNativePlatform()) {
-    // Lazy import pra não carregar Media3 bridge na web/iOS
-    const NativeAndroidPlayer = require("./NativeAndroidPlayer").default;
     return <NativeAndroidPlayer ref={ref} {...props} />;
   }
   return <HlsVideoPlayer ref={ref} {...props} />;
