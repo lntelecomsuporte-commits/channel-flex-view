@@ -1,101 +1,90 @@
+# Plano: Player Nativo ExoPlayer no APK Android
+
 ## Objetivo
+Eliminar o ícone/flash do WebView entre zaps e padronizar a reprodução entre Fire TV, Android TV e Mobile usando **ExoPlayer (Media3)** nativo embutido no APK via plugin Capacitor customizado.
 
-Transformar o APK em **shell remoto**, exatamente como já funciona no Legacy: o WebView carrega `https://tv2.lntelecom.net/` direto, sem empacotar `dist/` dentro do APK. Assim, qualquer mudança em `src/**` vai pro ar via `rsync` do frontend e o usuário **não precisa atualizar o APK**.
+## Arquitetura
 
-APK só será regenerado quando algo nativo mudar (Java, Manifest, ícones, Capacitor, gradle, plugins).
+```text
+┌─────────────────────────────────────────┐
+│  React (VideoPlayer.tsx)                │
+│  - Detecta isAndroidNative              │
+│  - Se Android → usa NativePlayer plugin │
+│  - Se Web/iOS → usa Video.js atual      │
+└────────────────┬────────────────────────┘
+                 │ Capacitor Bridge
+┌────────────────▼────────────────────────┐
+│  Plugin: NativePlayer (Kotlin)          │
+│  - load(url, headers, type)             │
+│  - play() / pause() / stop()            │
+│  - destroy()                            │
+│  - eventos: playing, error, ended       │
+└────────────────┬────────────────────────┘
+                 │
+┌────────────────▼────────────────────────┐
+│  ExoPlayer/Media3 (SurfaceView)         │
+│  - HLS via HlsMediaSource               │
+│  - MP4 via ProgressiveMediaSource       │
+│  - SurfaceView posicionado atrás do     │
+│    WebView (WebView transparente)       │
+└─────────────────────────────────────────┘
+```
 
----
+## Etapas
 
-## Como vai funcionar
+### 1. Plugin Capacitor `NativePlayer`
+Criar em `android/app/src/main/java/app/lntv/nativeplayer/`:
+- `NativePlayerPlugin.kt` — métodos `load`, `play`, `pause`, `stop`, `setBounds`
+- `PlayerView` (SurfaceView) montado no `decorView` da Activity, abaixo do WebView
+- ExoPlayer com `DefaultHlsMediaSource.Factory` + `DefaultHttpDataSource.Factory` (suporta headers `Referer`/`User-Agent`)
+- Emite eventos: `playing`, `buffering`, `error`, `ended`
 
-1. `MainActivity` (Capacitor) deixa de servir `file:///android_asset/public/index.html` e passa a apontar pra `https://tv2.lntelecom.net/` via `server.url` no `capacitor.config.ts`.
-2. O bundle web (`dist/`) ainda é gerado, mas só é usado como **fallback offline** (ou nem isso — podemos remover).
-3. O workflow do GitHub Actions passa a rodar **apenas** quando arquivos que afetam o APK mudam.
-4. Auto-update do APK continua existindo, mas só dispara quando o `versionCode` no `version.json` aumenta — e isso só vai aumentar quando o workflow rodar (mudança nativa).
+### 2. Configuração Android
+- `app/build.gradle`: adicionar `androidx.media3:media3-exoplayer`, `media3-exoplayer-hls`, `media3-ui` (v1.4.x)
+- `MainActivity.kt`: registrar plugin e tornar WebView **transparente** (`setBackgroundColor(Color.TRANSPARENT)`) para SurfaceView aparecer por baixo
+- `styles.xml`: `windowBackground` preto (já está)
 
----
-
-## Mudanças
-
-### 1. `capacitor.config.ts` — apontar shell pro site remoto
-
-Adicionar `server.url` apontando pro domínio de produção. O Capacitor passa a carregar a URL remota em vez do bundle local.
-
+### 3. Bridge TypeScript
+Criar `src/plugins/native-player.ts`:
 ```ts
-server: {
-  url: 'https://tv2.lntelecom.net/',
-  cleartext: false,
-  androidScheme: 'https',
-},
+export interface NativePlayerPlugin {
+  load(opts: { url: string; headers?: Record<string,string>; type: 'hls'|'mp4' }): Promise<void>;
+  play(): Promise<void>;
+  stop(): Promise<void>;
+  addListener(event: 'playing'|'error'|'ended', cb: (data:any)=>void): Promise<PluginListenerHandle>;
+}
 ```
 
-Trade-off: o app precisa de internet pra abrir (já é o caso hoje pra tudo funcionar — streams, EPG, login). Sem rede, mostra erro do WebView.
+### 4. Integração no `VideoPlayer.tsx`
+- Detectar `Capacitor.getPlatform() === 'android'`
+- Se nativo: ocultar `<video>` do Video.js, chamar `NativePlayer.load(streamUrl, {Referer, 'User-Agent'}, type)`
+- Manter UI (controles, EPG, OSD) sobre o SurfaceView via WebView transparente
+- Eventos `playing` → `setFirstFrameReady(true)`; `error` → fallback ou retry
+- Cleanup em unmount: `stop()`
 
-### 2. `.github/workflows/android-apk.yml` — filtrar paths
+### 5. Build APK
+- `npx cap sync android`
+- GitHub Actions roda build automático com keystore release (já configurado, mem://security/android-keystore)
 
-Remover `src/**` e `roku/**` (Roku tem o seu próprio ciclo) dos paths que disparam build. Ficar só com o que realmente muda o APK:
+## Detalhes técnicos
+- **Headers**: ExoPlayer aceita Referer/UA via `DefaultHttpDataSource.Factory().setDefaultRequestProperties(headers)`
+- **Posicionamento**: SurfaceView preenche tela toda (`MATCH_PARENT`), `setZOrderMediaOverlay(false)` para ficar atrás
+- **WebView transparente**: necessário no `MainActivity.onCreate` após `super.onCreate`
+- **Zap rápido**: ExoPlayer libera Surface ao trocar `MediaSource`, sem flash do WebView
+- **Compatibilidade**: Media3 requer minSdk 21 (já atende)
 
-```yaml
-on:
-  push:
-    branches: [main]
-    paths:
-      - 'android/**'
-      - 'resources/**'
-      - 'capacitor.config.ts'
-      - 'package.json'
-      - 'package-lock.json'
-      - '.github/workflows/android-apk.yml'
-  workflow_dispatch:
-```
+## Riscos / Notas
+- Aumenta tamanho do APK em ~3-4 MB (Media3)
+- Controles do Video.js (HTML overlay) continuam funcionando pois WebView fica por cima transparente
+- Airplay/Chromecast: não cobertos nesta fase (separado)
+- iOS: não afetado (continua Video.js)
 
-Roku continua sendo empacotado dentro deste mesmo workflow hoje. Opções:
-- **(a)** mover Roku pra um workflow separado disparado por `roku/**`
-- **(b)** manter junto e aceitar que quando Roku muda gera APK também
-
-Recomendo **(a)** — workflow `roku-channel.yml` separado, só com os steps de Roku.
-
-### 3. Plugin Capacitor "live reload" → "remote URL"
-
-Quando `server.url` está setado, o `npx cap sync` já injeta isso no `capacitor.config.json` dentro do `android/app/src/main/assets/`. Não precisa mexer no Java do `MainActivity`.
-
-### 4. Legacy APK
-
-Já carrega `https://tv2.lntelecom.net/` direto (linha 113 do `LegacyMainActivity.java`). Nada muda — já é shell remoto desde sempre. ✅
-
-### 5. Auto-update
-
-`useAppUpdate.ts` continua igual. Como `versionCode` no `version.json` só sobe quando o workflow roda (e o workflow só roda em mudança nativa), o prompt de atualização só aparece pro usuário quando realmente precisa.
-
----
-
-## Riscos e mitigações
-
-| Risco | Mitigação |
-|---|---|
-| App não abre sem internet | Splash do Capacitor + tela "sem conexão" do WebView. Já é a realidade do legacy hoje. |
-| Mixed content / CORS no WebView remoto | Site já é HTTPS, mesmo domínio. Sem problema. |
-| Capacitor plugins nativos (PlaybackKeepAlive, etc.) | Continuam funcionando — `server.url` só muda **de onde** o HTML vem, não desabilita plugins. |
-| Cache do WebView segurando versão antiga do frontend | `index.html` já tem cache-control adequado no nginx; service worker do PWA cuida do resto. |
-| Cookies/localStorage (sessão Supabase) | Mesma origem (`tv2.lntelecom.net`) — sessão persiste igual. |
-
----
-
-## Comandos pro servidor (depois de mergear)
-
-Nenhum no servidor de frontend. Só rebuilds locais de quem quiser testar o APK:
-
+## Comandos pro servidor (após build)
 ```bash
-# Localmente, pra testar o APK shell antes de publicar:
-npm run build
+cd /opt/lntv-frontend && git pull
+npm install
 npx cap sync android
-cd android && ./gradlew assembleRelease
+# GitHub Actions gera APK assinado automaticamente
 ```
 
-Próximo push em `android/**` ou `capacitor.config.ts` dispara o workflow e gera APK novo automaticamente. Pushes só em `src/**` **não** geram APK — usuário recebe a atualização via web normalmente.
-
----
-
-## Pergunta antes de implementar
-
-Quer que eu separe o build do Roku num workflow próprio (`roku-channel.yml` disparado por `roku/**`)? Ou mantenho tudo junto no `android-apk.yml`?
+Posso prosseguir com a implementação?
