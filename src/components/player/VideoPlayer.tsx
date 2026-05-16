@@ -189,7 +189,10 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     // congelado até o novo dar 'playing'. Sem isso, todo zap mostraria spinner
     // por ~500ms+. firstFrameReady só vai pra false na primeira montagem
     // (initial state) ou se realmente não houver frame.
-    const onFirstPlaying = () => setFirstFrameReady(true);
+    const onFirstPlaying = () => {
+      setFirstFrameReady(true);
+      setIsSwitching(false);
+    };
     video.addEventListener("playing", onFirstPlaying);
     video.addEventListener("loadeddata", onFirstPlaying);
 
