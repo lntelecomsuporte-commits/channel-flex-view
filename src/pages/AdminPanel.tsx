@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import UserManagement from "@/components/admin/UserManagement";
 import HubsoftIntegration from "@/components/admin/HubsoftIntegration";
 import ProxyMonitoring from "@/components/admin/ProxyMonitoring";
+import FirewallManager from "@/components/admin/FirewallManager";
 import EpgChannelPicker from "@/components/admin/EpgChannelPicker";
 import EpgUrlPresetSelector from "@/components/admin/EpgUrlPresetSelector";
 import { getLocalFunctionUrl, LOCAL_SUPABASE_PUBLISHABLE_KEY } from "@/lib/localBackend";
