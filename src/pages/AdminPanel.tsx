@@ -338,6 +338,7 @@ const AdminPanel = () => {
             <TabsTrigger value="users"><Users className="h-4 w-4 mr-1" /> Usuários</TabsTrigger>
             <TabsTrigger value="hubsoft"><Link className="h-4 w-4 mr-1" /> Hubsoft</TabsTrigger>
             <TabsTrigger value="monitoring"><Activity className="h-4 w-4 mr-1" /> Monitoramento</TabsTrigger>
+            <TabsTrigger value="firewall"><Shield className="h-4 w-4 mr-1" /> Firewall</TabsTrigger>
           </TabsList>
 
           <TabsContent value="channels">
