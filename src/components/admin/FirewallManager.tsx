@@ -58,6 +58,11 @@ const FirewallManager = () => {
       if (!srcIp.trim() && !srcPort.trim() && !destIp.trim() && !destPort.trim()) {
         throw new Error("Informe pelo menos um campo (IP ou porta)");
       }
+      // UFW exige protocolo quando há porta. Default tcp.
+      let finalProto: string | null = proto || null;
+      if (!finalProto && (srcPort.trim() || destPort.trim())) {
+        finalProto = "tcp";
+      }
       const { error } = await supabase.from("firewall_rules" as any).insert({
         action,
         direction,
@@ -65,7 +70,7 @@ const FirewallManager = () => {
         src_port: srcPort.trim() || null,
         dest_target: destIp.trim() || null,
         port: destPort.trim() || null,
-        proto: proto || null,
+        proto: finalProto,
         note: note.trim() || null,
         is_active: true,
         source: "panel",
