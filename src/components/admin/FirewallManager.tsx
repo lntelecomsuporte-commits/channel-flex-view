@@ -250,6 +250,14 @@ const RuleRow = ({ r, onToggle, onDelete }: { r: Rule; onToggle: (v: boolean) =>
         )}
       </div>
       {r.note && <p className="text-xs text-muted-foreground truncate">{r.note}</p>}
+      {r.last_error && (
+        <p className="text-xs text-destructive mt-1 break-words">
+          <span className="font-semibold">UFW recusou:</span> {r.last_error}
+        </p>
+      )}
+      {!r.applied_at && r.is_active && !r.last_error && r.source !== "imported" && (
+        <p className="text-[10px] text-muted-foreground">aguardando sync (até 1min)</p>
+      )}
     </div>
     <div className="flex gap-1 shrink-0">
       <Button size="sm" variant="ghost" onClick={() => onToggle(!r.is_active)}>
