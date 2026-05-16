@@ -1,82 +1,101 @@
 ## Objetivo
 
-Levar o channel Roku (`roku/`) à paridade funcional com o APK Android, sem ainda mexer em submissão de loja. Foco: usuário final consegue usar no Roku exatamente como usa no Android.
+Transformar o APK em **shell remoto**, exatamente como já funciona no Legacy: o WebView carrega `https://tv2.lntelecom.net/` direto, sem empacotar `dist/` dentro do APK. Assim, qualquer mudança em `src/**` vai pro ar via `rsync` do frontend e o usuário **não precisa atualizar o APK**.
 
-## Escopo (paridade com APK)
+APK só será regenerado quando algo nativo mudar (Java, Manifest, ícones, Capacitor, gradle, plugins).
 
-1. **Login por CPF (Hubsoft)** além de e-mail/senha
-   - Toggle na tela de login (CPF | E-mail)
-   - CPF gera login interno `cpf+<digitos>@lntelecom.local` (mesma regra do APK)
-2. **EPG**
-   - Fetch via `epg-proxy` edge function (mesma fonte do APK)
-   - Cache em `roRegistry` por canal (TTL 1h)
-   - OSD do player mostra: programa atual + próximo + barra de progresso
-   - Botão **▲** na Home abre grid de timeline (categorias × tempo) — versão simplificada (3h visíveis)
-3. **PIN adulto**
-   - Antes de abrir canal com `is_adult=true`, pede PIN (`profiles.adult_pin`)
-   - Diálogo numérico nativo Roku (`PinPad` / `KeyboardDialog` numérico)
-   - Cache de "PIN ok" por 30min na sessão
-4. **Heartbeat / kick global**
-   - Task em background (`roSGNode Task`) chama `session-heartbeat` a cada 60s
-   - Se `force_signout_at > login_at` ou usuário bloqueado → logout imediato + tela "Sessão encerrada"
-5. **Busca de canais**
-   - Botão **search** (controle Roku tem tecla dedicada) → `KeyboardDialog`
-   - Filtra `m.channels` por nome/número em tempo real
-6. **Trial / degustação**
-   - Mostra badge "Degustação até DD/MM" nas categorias `is_trial=true`
-   - Bloqueia automaticamente quando `trial_expires_at` passa (já tratado em `ResolveAllowedCategories`, falta só UI)
-7. **Canais YouTube**
-   - Detecta `stream_format='youtube'` ou URL `youtube.com/watch`
-   - Extrai videoId e usa `roVideoNode` com `streamFormat="hls"` apontando pro endpoint do youtube-dl/proxy existente (ou abre via deep link do app YouTube oficial — fallback)
-8. **Stats overlay** (opcional, baixa prioridade)
-   - Tecla **⏯** no player mostra: bitrate, dropped frames, buffer (`m.video.streamingSegment`, `m.video.measuredBitrate`)
-9. **Splash + ícones reais**
-   - Substituir placeholders em `roku/images/` por arte real LN TV (logo vermelho, fundo escuro)
-   - Gerar via imagegen: `icon_focus_hd.png` 290×218, `splash_hd.jpg` 1280×720, `splash_fhd.jpg` 1920×1080
+---
 
-## Arquitetura nova no Roku
+## Como vai funcionar
 
-```text
-roku/
-  components/
-    HomeScene.{xml,brs}       (+ EPG OSD, busca, badge trial)
-    LoginScene.{xml,brs}      (+ toggle CPF/email)
-    PlayerScene.{xml,brs}     (+ EPG OSD, stats overlay)
-    PinDialog.{xml,brs}       NEW
-    SearchOverlay.{xml,brs}   NEW
-    EpgGrid.{xml,brs}         NEW
-    HeartbeatTask.{xml,brs}   NEW (Task node)
-  source/
-    EpgClient.brs             NEW  (fetch + cache via epg-proxy)
-    Heartbeat.brs             NEW  (chama session-heartbeat)
-    SupabaseAuth.brs          (+ SbLoginCpf, força logout em kick)
-    SupabaseRest.brs          (+ FetchProfile pra adult_pin)
+1. `MainActivity` (Capacitor) deixa de servir `file:///android_asset/public/index.html` e passa a apontar pra `https://tv2.lntelecom.net/` via `server.url` no `capacitor.config.ts`.
+2. O bundle web (`dist/`) ainda é gerado, mas só é usado como **fallback offline** (ou nem isso — podemos remover).
+3. O workflow do GitHub Actions passa a rodar **apenas** quando arquivos que afetam o APK mudam.
+4. Auto-update do APK continua existindo, mas só dispara quando o `versionCode` no `version.json` aumenta — e isso só vai aumentar quando o workflow rodar (mudança nativa).
+
+---
+
+## Mudanças
+
+### 1. `capacitor.config.ts` — apontar shell pro site remoto
+
+Adicionar `server.url` apontando pro domínio de produção. O Capacitor passa a carregar a URL remota em vez do bundle local.
+
+```ts
+server: {
+  url: 'https://tv2.lntelecom.net/',
+  cleartext: false,
+  androidScheme: 'https',
+},
 ```
 
-## Backend
+Trade-off: o app precisa de internet pra abrir (já é o caso hoje pra tudo funcionar — streams, EPG, login). Sem rede, mostra erro do WebView.
 
-Nada novo no Supabase — todas as edge functions e tabelas já existem (`epg-proxy`, `session-heartbeat`, `profiles.adult_pin`, `user_category_access.trial_expires_at`).
+### 2. `.github/workflows/android-apk.yml` — filtrar paths
 
-## Build / Deploy
+Remover `src/**` e `roku/**` (Roku tem o seu próprio ciclo) dos paths que disparam build. Ficar só com o que realmente muda o APK:
 
-Sem mudança no workflow nem no script `sync-lntv-apk.sh` — já estão prontos. Cada push em `main` empacota, anexa no release, e o cron do servidor publica em `https://tv2.lntelecom.net/downloads/lntv-roku.zip`. Usuários com app instalado verão o banner de "nova versão disponível" via `UpdateCheck.brs`.
+```yaml
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'resources/**'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/android-apk.yml'
+  workflow_dispatch:
+```
 
-## Ordem de execução
+Roku continua sendo empacotado dentro deste mesmo workflow hoje. Opções:
+- **(a)** mover Roku pra um workflow separado disparado por `roku/**`
+- **(b)** manter junto e aceitar que quando Roku muda gera APK também
 
-1. EpgClient + OSD do player com programa atual (maior valor pro usuário)
-2. PIN adulto (bloqueio de segurança)
-3. Heartbeat + kick global (paridade de segurança)
-4. Login CPF (cobertura dos clientes Hubsoft)
-5. Busca + badge trial + EPG grid
-6. YouTube + stats overlay
-7. Splash/ícones reais (visual final)
+Recomendo **(a)** — workflow `roku-channel.yml` separado, só com os steps de Roku.
 
-Cada etapa é um commit independente — pode testar no Roku via sideload sem esperar tudo.
+### 3. Plugin Capacitor "live reload" → "remote URL"
 
-## Fora de escopo agora
+Quando `server.url` está setado, o `npx cap sync` já injeta isso no `capacitor.config.json` dentro do `android/app/src/main/assets/`. Não precisa mexer no Java do `MainActivity`.
 
-- Deep linking, trick play, closed captions, política de privacidade, screenshots de marketing, Roku Pay → tudo isso fica pra fase de submissão na loja.
+### 4. Legacy APK
 
-## Pergunta antes de começar
+Já carrega `https://tv2.lntelecom.net/` direto (linha 113 do `LegacyMainActivity.java`). Nada muda — já é shell remoto desde sempre. ✅
 
-Faço **tudo de uma vez** (1 commit grande, ~7 arquivos novos + 4 editados) ou **etapa por etapa** (você sideload e testa cada uma antes da próxima)?
+### 5. Auto-update
+
+`useAppUpdate.ts` continua igual. Como `versionCode` no `version.json` só sobe quando o workflow roda (e o workflow só roda em mudança nativa), o prompt de atualização só aparece pro usuário quando realmente precisa.
+
+---
+
+## Riscos e mitigações
+
+| Risco | Mitigação |
+|---|---|
+| App não abre sem internet | Splash do Capacitor + tela "sem conexão" do WebView. Já é a realidade do legacy hoje. |
+| Mixed content / CORS no WebView remoto | Site já é HTTPS, mesmo domínio. Sem problema. |
+| Capacitor plugins nativos (PlaybackKeepAlive, etc.) | Continuam funcionando — `server.url` só muda **de onde** o HTML vem, não desabilita plugins. |
+| Cache do WebView segurando versão antiga do frontend | `index.html` já tem cache-control adequado no nginx; service worker do PWA cuida do resto. |
+| Cookies/localStorage (sessão Supabase) | Mesma origem (`tv2.lntelecom.net`) — sessão persiste igual. |
+
+---
+
+## Comandos pro servidor (depois de mergear)
+
+Nenhum no servidor de frontend. Só rebuilds locais de quem quiser testar o APK:
+
+```bash
+# Localmente, pra testar o APK shell antes de publicar:
+npm run build
+npx cap sync android
+cd android && ./gradlew assembleRelease
+```
+
+Próximo push em `android/**` ou `capacitor.config.ts` dispara o workflow e gera APK novo automaticamente. Pushes só em `src/**` **não** geram APK — usuário recebe a atualização via web normalmente.
+
+---
+
+## Pergunta antes de implementar
+
+Quer que eu separe o build do Roku num workflow próprio (`roku-channel.yml` disparado por `roku/**`)? Ou mantenho tudo junto no `android-apk.yml`?

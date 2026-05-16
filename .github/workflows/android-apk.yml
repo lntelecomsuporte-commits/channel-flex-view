@@ -4,12 +4,11 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/**'
       - 'android/**'
       - 'resources/**'
-      - 'roku/**'
       - 'capacitor.config.ts'
       - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/android-apk.yml'
   workflow_dispatch:
 
