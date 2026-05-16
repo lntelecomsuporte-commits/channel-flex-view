@@ -72,29 +72,38 @@ const useRecentSessionsByUser = () =>
   useQuery({
     queryKey: ["recent-sessions-by-user"],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("user_sessions")
-        .select("user_id, ip_address, client_ipv4, client_ipv6, user_agent, last_heartbeat_at")
-        .gte("last_heartbeat_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
-        .order("last_heartbeat_at", { ascending: false })
-        .limit(5000);
+      // Busca paginada para mapear o IP/UA mais recente por usuário (PostgREST limita rows por request).
       const map = new Map<string, { client_ipv4: string | null; client_ipv6: string | null; user_agent: string | null; last_heartbeat_at: string }>();
-      const ipSet = new Set<string>();
-      (data ?? []).forEach((s: any) => {
-        const ip = s.client_ipv4 || s.client_ipv6 || s.ip_address;
-        if (ip) ipSet.add(ip);
-        if (!s.user_id) return;
-        const prev = map.get(s.user_id);
-        if (!prev || new Date(s.last_heartbeat_at).getTime() > new Date(prev.last_heartbeat_at).getTime()) {
-          map.set(s.user_id, {
-            client_ipv4: s.client_ipv4,
-            client_ipv6: s.client_ipv6,
-            user_agent: s.user_agent,
-            last_heartbeat_at: s.last_heartbeat_at,
-          });
-        }
-      });
-      return { byUser: map, uniqueIps: ipSet.size };
+      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const pageSize = 1000;
+      for (let page = 0; page < 10; page++) {
+        const { data, error } = await supabase
+          .from("user_sessions")
+          .select("user_id, client_ipv4, client_ipv6, user_agent, last_heartbeat_at")
+          .gte("last_heartbeat_at", since)
+          .order("last_heartbeat_at", { ascending: false })
+          .range(page * pageSize, page * pageSize + pageSize - 1);
+        if (error || !data || data.length === 0) break;
+        data.forEach((s: any) => {
+          if (!s.user_id) return;
+          const prev = map.get(s.user_id);
+          if (!prev || new Date(s.last_heartbeat_at).getTime() > new Date(prev.last_heartbeat_at).getTime()) {
+            map.set(s.user_id, {
+              client_ipv4: s.client_ipv4,
+              client_ipv6: s.client_ipv6,
+              user_agent: s.user_agent,
+              last_heartbeat_at: s.last_heartbeat_at,
+            });
+          }
+        });
+        if (data.length < pageSize) break;
+      }
+
+      // Conta IPs únicos via RPC (não sofre com o limite de linhas do PostgREST).
+      const { data: stats } = await supabase.rpc("get_monitoring_stats_30d");
+      const uniqueIps = Array.isArray(stats) && stats[0] ? Number(stats[0].unique_ips) || 0 : 0;
+
+      return { byUser: map, uniqueIps };
     },
     refetchInterval: 30_000,
   });
