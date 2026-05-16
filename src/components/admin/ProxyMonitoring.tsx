@@ -8,6 +8,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useState } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type ProxyAccess = {
   id: string;
@@ -90,9 +91,9 @@ const useRecentSessionsByUser = () =>
       }
 
       // Busca paginada para mapear o IP/UA mais recente por usuário e contar IPs únicos.
-      // PostgREST limita ~1000 rows por request, então iteramos por páginas.
       const map = new Map<string, { client_ipv4: string | null; client_ipv6: string | null; ip_address: string | null; user_agent: string | null; last_heartbeat_at: string }>();
       const sessionIps = new Set<string>();
+      const ipDetails = new Map<string, { ip: string; sessions: number; users: Set<string>; last_seen: string; user_agent: string | null }>();
       const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
       const pageSize = 1000;
       let totalRows = 0;
@@ -114,7 +115,25 @@ const useRecentSessionsByUser = () =>
         data.forEach((s: any) => {
           const candidates = [s.client_ipv4, s.client_ipv6, s.ip_address].filter(Boolean) as string[];
           candidates.forEach((ip) => {
-            if (isRoutableClientIp(ip)) sessionIps.add(ip);
+            if (!isRoutableClientIp(ip)) return;
+            sessionIps.add(ip);
+            const prev = ipDetails.get(ip);
+            if (prev) {
+              prev.sessions += 1;
+              if (s.user_id) prev.users.add(s.user_id);
+              if (s.last_heartbeat_at > prev.last_seen) {
+                prev.last_seen = s.last_heartbeat_at;
+                if (s.user_agent) prev.user_agent = s.user_agent;
+              }
+            } else {
+              ipDetails.set(ip, {
+                ip,
+                sessions: 1,
+                users: new Set(s.user_id ? [s.user_id] : []),
+                last_seen: s.last_heartbeat_at,
+                user_agent: s.user_agent ?? null,
+              });
+            }
           });
           if (!s.user_id) return;
           const prev = map.get(s.user_id);
@@ -132,7 +151,7 @@ const useRecentSessionsByUser = () =>
       }
       const uniqueIps = Math.max(statsUniqueIps ?? 0, sessionIps.size);
       console.log("[monitoring] sessions scanned:", totalRows, "unique IPs:", uniqueIps, "rpc:", statsUniqueIps, "frontend:", sessionIps.size);
-      return { byUser: map, uniqueIps };
+      return { byUser: map, uniqueIps, ipDetails };
     },
     refetchInterval: 30_000,
   });
@@ -152,12 +171,14 @@ const formatBytes = (bytes: number) => {
 const ProxyMonitoring = () => {
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [detailView, setDetailView] = useState<null | "online" | "proxy" | "ips">(null);
   const { data: logs, isLoading } = useProxyAccess();
   const { data: profiles } = useProfilesMap();
   const { data: sessions } = useActiveSessions();
   const { data: recentSessionsData } = useRecentSessionsByUser();
   const recentSessions = recentSessionsData?.byUser;
   const uniqueClientIps30d = recentSessionsData?.uniqueIps ?? 0;
+  const ipDetails = recentSessionsData?.ipDetails;
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -284,39 +305,45 @@ const ProxyMonitoring = () => {
     <div className="space-y-6">
       {/* Métricas resumidas */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-md bg-primary/10 text-primary">
-              <User className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Online agora</p>
-              <p className="text-2xl font-bold text-foreground">{onlineUsers.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-md bg-primary/10 text-primary">
-              <Activity className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">No proxy agora</p>
-              <p className="text-2xl font-bold text-foreground">{activeList.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-md bg-primary/10 text-primary">
-              <Globe className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">IPs únicos (30d)</p>
-              <p className="text-2xl font-bold text-foreground">{uniqueClientIps30d}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <button type="button" onClick={() => setDetailView("online")} className="text-left">
+          <Card className="hover:bg-secondary/50 transition-colors cursor-pointer">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2 rounded-md bg-primary/10 text-primary">
+                <User className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Online agora</p>
+                <p className="text-2xl font-bold text-foreground">{onlineUsers.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </button>
+        <button type="button" onClick={() => setDetailView("proxy")} className="text-left">
+          <Card className="hover:bg-secondary/50 transition-colors cursor-pointer">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2 rounded-md bg-primary/10 text-primary">
+                <Activity className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">No proxy agora</p>
+                <p className="text-2xl font-bold text-foreground">{activeList.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </button>
+        <button type="button" onClick={() => setDetailView("ips")} className="text-left">
+          <Card className="hover:bg-secondary/50 transition-colors cursor-pointer">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2 rounded-md bg-primary/10 text-primary">
+                <Globe className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">IPs únicos (30d)</p>
+                <p className="text-2xl font-bold text-foreground">{uniqueClientIps30d}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </button>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 rounded-md bg-primary/10 text-primary">
@@ -329,6 +356,79 @@ const ProxyMonitoring = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Dialog de detalhes das métricas */}
+      <Dialog open={!!detailView} onOpenChange={(o) => !o && setDetailView(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {detailView === "online" && `Usuários online agora (${onlineUsers.length})`}
+              {detailView === "proxy" && `Ativos no proxy agora (${activeList.length})`}
+              {detailView === "ips" && `IPs únicos nos últimos 30 dias (${uniqueClientIps30d})`}
+            </DialogTitle>
+          </DialogHeader>
+          {detailView === "online" && (
+            <div className="space-y-2">
+              {onlineUsers.length === 0 && <p className="text-muted-foreground text-sm">Ninguém online.</p>}
+              {onlineUsers.map((s) => (
+                <div key={s.id} className="p-3 rounded-lg bg-secondary text-sm space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-foreground">{getUserLabel(s.user_id)}</span>
+                    {s.is_watching ? (
+                      <Badge className="bg-primary/20 text-primary border border-primary/40">Assistindo</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground">Online</Badge>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground flex flex-wrap gap-3">
+                    <span className="flex items-center gap-1"><Tv2 className="h-3 w-3" /> {s.channel_name ?? "sem canal"}</span>
+                    <span className="flex items-center gap-1 font-mono"><Globe className="h-3 w-3" /> {s.client_ipv4 || s.client_ipv6 || s.ip_address}</span>
+                    <span>visto {formatDistanceToNow(new Date(s.last_seen_at), { addSuffix: true, locale: ptBR })}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {detailView === "proxy" && (
+            <div className="space-y-2">
+              {activeList.length === 0 && <p className="text-muted-foreground text-sm">Ninguém usando o proxy agora.</p>}
+              {activeList.map((l) => (
+                <div key={l.id} className="p-3 rounded-lg bg-secondary text-sm space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-foreground">{getUserLabel(l.user_id)}</span>
+                    <Badge className="bg-primary/20 text-primary border border-primary/40">Ao vivo</Badge>
+                  </div>
+                  <div className="text-xs text-muted-foreground flex flex-wrap gap-3">
+                    <span className="flex items-center gap-1"><Tv2 className="h-3 w-3" /> {l.channel_name}</span>
+                    <span className="flex items-center gap-1 font-mono"><Globe className="h-3 w-3" /> {l.client_ipv4 || l.client_ipv6 || l.ip_address}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {detailView === "ips" && (
+            <div className="space-y-2">
+              {(!ipDetails || ipDetails.size === 0) && <p className="text-muted-foreground text-sm">Nenhum IP registrado.</p>}
+              {ipDetails && Array.from(ipDetails.values())
+                .sort((a, b) => (a.last_seen < b.last_seen ? 1 : -1))
+                .map((info) => (
+                  <div key={info.ip} className="p-3 rounded-lg bg-secondary text-sm space-y-1">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="font-mono font-medium text-foreground">{info.ip}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(info.last_seen), { addSuffix: true, locale: ptBR })}
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground flex flex-wrap gap-3">
+                      <span>{info.sessions} sessões</span>
+                      <span>{info.users.size} usuário(s)</span>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Usuários online */}
       <Card>
