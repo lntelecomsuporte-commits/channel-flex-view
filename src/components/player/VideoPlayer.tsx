@@ -161,6 +161,13 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     if (isAndroidNative) setIsSwitching(true);
   }, [streamUrl, isAndroidNative]);
 
+  // Safety: véu preto não pode ficar travado se 'playing' nunca disparar.
+  useEffect(() => {
+    if (!isSwitching) return;
+    const t = setTimeout(() => setIsSwitching(false), 4000);
+    return () => clearTimeout(t);
+  }, [isSwitching]);
+
   // Se mudar de backup dentro do mesmo canal, cada URL precisa recomeçar limpa.
   useEffect(() => {
     setCorsFallback(false);
