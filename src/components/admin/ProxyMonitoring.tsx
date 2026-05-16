@@ -117,7 +117,9 @@ const ProxyMonitoring = () => {
   const { data: logs, isLoading } = useProxyAccess();
   const { data: profiles } = useProfilesMap();
   const { data: sessions } = useActiveSessions();
-  const { data: recentSessions } = useRecentSessionsByUser();
+  const { data: recentSessionsData } = useRecentSessionsByUser();
+  const recentSessions = recentSessionsData?.byUser;
+  const uniqueClientIps30d = recentSessionsData?.uniqueIps ?? 0;
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
