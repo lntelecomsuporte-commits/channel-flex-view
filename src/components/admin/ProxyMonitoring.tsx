@@ -73,24 +73,28 @@ const useRecentSessionsByUser = () =>
     queryKey: ["recent-sessions-by-user"],
     queryFn: async () => {
       // Busca paginada para mapear o IP/UA mais recente por usuário (PostgREST limita rows por request).
-      const map = new Map<string, { client_ipv4: string | null; client_ipv6: string | null; user_agent: string | null; last_heartbeat_at: string }>();
+      const map = new Map<string, { client_ipv4: string | null; client_ipv6: string | null; ip_address: string | null; user_agent: string | null; last_heartbeat_at: string }>();
+      const sessionIps = new Set<string>();
       const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
       const pageSize = 1000;
       for (let page = 0; page < 10; page++) {
         const { data, error } = await supabase
           .from("user_sessions")
-          .select("user_id, client_ipv4, client_ipv6, user_agent, last_heartbeat_at")
+          .select("user_id, ip_address, client_ipv4, client_ipv6, user_agent, last_heartbeat_at")
           .gte("last_heartbeat_at", since)
           .order("last_heartbeat_at", { ascending: false })
           .range(page * pageSize, page * pageSize + pageSize - 1);
         if (error || !data || data.length === 0) break;
         data.forEach((s: any) => {
+          const realIp = s.client_ipv4 || s.client_ipv6 || s.ip_address;
+          if (realIp && realIp !== "172.18.0.1") sessionIps.add(realIp);
           if (!s.user_id) return;
           const prev = map.get(s.user_id);
           if (!prev || new Date(s.last_heartbeat_at).getTime() > new Date(prev.last_heartbeat_at).getTime()) {
             map.set(s.user_id, {
               client_ipv4: s.client_ipv4,
               client_ipv6: s.client_ipv6,
+              ip_address: s.ip_address,
               user_agent: s.user_agent,
               last_heartbeat_at: s.last_heartbeat_at,
             });
@@ -101,9 +105,9 @@ const useRecentSessionsByUser = () =>
 
       // Conta IPs únicos via RPC (não sofre com o limite de linhas do PostgREST).
       const { data: stats } = await supabase.rpc("get_monitoring_stats_30d");
-      const uniqueIps = Array.isArray(stats) && stats[0] ? Number(stats[0].unique_ips) || 0 : 0;
+      const rpcUniqueIps = Array.isArray(stats) && stats[0] ? Number(stats[0].unique_ips) || 0 : 0;
 
-      return { byUser: map, uniqueIps };
+      return { byUser: map, uniqueIps: Math.max(rpcUniqueIps, sessionIps.size) };
     },
     refetchInterval: 30_000,
   });
@@ -240,7 +244,7 @@ const ProxyMonitoring = () => {
   const realIpForUser = (uid: string | null, fallback: string) => {
     if (!uid) return fallback;
     const s = recentSessions?.get(uid);
-    return s?.client_ipv4 || s?.client_ipv6 || fallback;
+    return s?.client_ipv4 || s?.client_ipv6 || s?.ip_address || fallback;
   };
 
   const getUserLabel = (uid: string | null) => {
@@ -250,7 +254,6 @@ const ProxyMonitoring = () => {
   };
 
   const totalBytes24h = recent.reduce((acc, l) => acc + Number(l.bytes_transferred), 0);
-  const uniqueIps24h = new Set(recent.map((l) => l.ip_address)).size;
 
   return (
     <div className="space-y-6">
