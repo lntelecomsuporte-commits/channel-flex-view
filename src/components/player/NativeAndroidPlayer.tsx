@@ -90,6 +90,9 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
           url = getPlayableStreamUrl(activeStreamUrl);
         }
         if (cancelled) return;
+        const proto = (() => { try { return new URL(url).protocol; } catch { return "?"; } })();
+        console.log(`[NativePlayer] load url=${url} proto=${proto} type=${detectType(url)}`);
+        setLastError(null);
         try {
           await NativePlayer.load({
             url,
@@ -97,8 +100,10 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
             headers: isProxiedStreamUrl(url) ? {} : { "User-Agent": "LNTV/1.0" },
           });
           if (autoPlay) await NativePlayer.play();
-        } catch (e) {
-          console.error("[NativePlayer] load falhou:", e);
+        } catch (e: any) {
+          const msg = e?.message ?? String(e);
+          console.error("[NativePlayer] load falhou:", msg, e);
+          setLastError(`load: ${msg}`);
         }
       })();
       return () => { cancelled = true; };
