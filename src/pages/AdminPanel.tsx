@@ -691,6 +691,10 @@ const AdminPanel = () => {
           <TabsContent value="monitoring">
             <ProxyMonitoring />
           </TabsContent>
+
+          <TabsContent value="firewall">
+            <FirewallManager />
+          </TabsContent>
         </Tabs>
       </div>
     </div>
