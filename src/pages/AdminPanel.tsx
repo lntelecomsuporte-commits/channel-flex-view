@@ -230,16 +230,31 @@ const AdminPanel = () => {
 
   const resetCategoryForm = () => setCategoryForm({ name: "", position: "", includedCategoryIds: [], requiresPin: false });
 
+  const isRequiresPinSchemaCacheError = (error: { code?: string; message?: string } | null | undefined) =>
+    error?.code === "PGRST204" || !!error?.message?.includes("'requires_pin'");
+
   const handleSaveCategory = async () => {
     if (!categoryForm.name) { toast.error("Informe o nome da categoria"); return; }
     setSaving(true);
     let categoryId = editingCategoryId;
+    const baseCategoryPayload = { name: categoryForm.name, position: parseInt(categoryForm.position) || 0 };
+    const fullCategoryPayload = { ...baseCategoryPayload, requires_pin: categoryForm.requiresPin };
 
     if (editingCategoryId) {
-      const { error } = await supabase.from("categories").update({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0, requires_pin: categoryForm.requiresPin } as any).eq("id", editingCategoryId);
+      let { error } = await supabase.from("categories").update(fullCategoryPayload as any).eq("id", editingCategoryId);
+      if (isRequiresPinSchemaCacheError(error)) {
+        ({ error } = await supabase.from("categories").update(baseCategoryPayload as any).eq("id", editingCategoryId));
+        if (!error) toast.warning("Categoria salva, mas o banco ainda precisa atualizar a coluna requires_pin.");
+      }
       if (error) { toast.error("Erro: " + error.message); setSaving(false); return; }
     } else {
-      const { data, error } = await supabase.from("categories").insert({ name: categoryForm.name, position: parseInt(categoryForm.position) || 0, requires_pin: categoryForm.requiresPin } as any).select("id").single();
+      let { data, error } = await supabase.from("categories").insert(fullCategoryPayload as any).select("id").single();
+      if (isRequiresPinSchemaCacheError(error)) {
+        const fallback = await supabase.from("categories").insert(baseCategoryPayload as any).select("id").single();
+        data = fallback.data;
+        error = fallback.error;
+        if (!error) toast.warning("Categoria criada, mas o banco ainda precisa atualizar a coluna requires_pin.");
+      }
       if (error) { toast.error("Erro ao salvar categoria: " + error.message); setSaving(false); return; }
       categoryId = data.id;
     }
@@ -332,7 +347,7 @@ const AdminPanel = () => {
         </div>
 
         <Tabs defaultValue="channels">
-          <TabsList className="mb-6 flex-wrap">
+          <TabsList className="mb-6 !grid !h-auto w-full grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-6">
             <TabsTrigger value="channels"><Tv className="h-4 w-4 mr-1" /> Canais</TabsTrigger>
             <TabsTrigger value="categories"><Layers className="h-4 w-4 mr-1" /> Categorias</TabsTrigger>
             <TabsTrigger value="users"><Users className="h-4 w-4 mr-1" /> Usuários</TabsTrigger>
