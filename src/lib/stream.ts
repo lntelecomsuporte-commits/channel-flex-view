@@ -168,12 +168,12 @@ export const getPlayableStreamUrl = (streamUrl: string): string => {
     const parsedUrl = new URL(streamUrl);
 
     if (Capacitor.isNativePlatform()) {
-      // APK: HTTPS toca DIRETO (menor latência no zap, sem hop pelo edge).
-      // HTTP precisa do proxy porque WebView Android frequentemente bloqueia
-      // cleartext mesmo com allowMixedContent (varia por TV Box/versão).
-      if (parsedUrl.protocol === "http:") {
-        return buildProxyStreamUrl(streamUrl) ?? streamUrl;
-      }
+      // APK com ExoPlayer nativo (NativeAndroidPlayer): toca HTTP e HTTPS
+      // direto, sem proxy. ExoPlayer fala socket direto e herda
+      // android:usesCleartextTraffic="true" do AndroidManifest, então não
+      // sofre o bloqueio de mixed content que o WebView tinha.
+      // Se um canal HTTP específico der problema, o admin pode marcar
+      // `force_proxy_native` no canal pra forçar o hls-proxy.
       return streamUrl;
     }
 
