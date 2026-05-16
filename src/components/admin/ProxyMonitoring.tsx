@@ -74,12 +74,15 @@ const useRecentSessionsByUser = () =>
     queryFn: async () => {
       const { data } = await supabase
         .from("user_sessions")
-        .select("user_id, client_ipv4, client_ipv6, user_agent, last_heartbeat_at")
+        .select("user_id, ip_address, client_ipv4, client_ipv6, user_agent, last_heartbeat_at")
         .gte("last_heartbeat_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
         .order("last_heartbeat_at", { ascending: false })
         .limit(5000);
       const map = new Map<string, { client_ipv4: string | null; client_ipv6: string | null; user_agent: string | null; last_heartbeat_at: string }>();
+      const ipSet = new Set<string>();
       (data ?? []).forEach((s: any) => {
+        const ip = s.client_ipv4 || s.client_ipv6 || s.ip_address;
+        if (ip) ipSet.add(ip);
         if (!s.user_id) return;
         const prev = map.get(s.user_id);
         if (!prev || new Date(s.last_heartbeat_at).getTime() > new Date(prev.last_heartbeat_at).getTime()) {
@@ -91,7 +94,7 @@ const useRecentSessionsByUser = () =>
           });
         }
       });
-      return map;
+      return { byUser: map, uniqueIps: ipSet.size };
     },
     refetchInterval: 30_000,
   });
@@ -114,7 +117,9 @@ const ProxyMonitoring = () => {
   const { data: logs, isLoading } = useProxyAccess();
   const { data: profiles } = useProfilesMap();
   const { data: sessions } = useActiveSessions();
-  const { data: recentSessions } = useRecentSessionsByUser();
+  const { data: recentSessionsData } = useRecentSessionsByUser();
+  const recentSessions = recentSessionsData?.byUser;
+  const uniqueClientIps30d = recentSessionsData?.uniqueIps ?? 0;
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -271,7 +276,7 @@ const ProxyMonitoring = () => {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">IPs únicos (30d)</p>
-              <p className="text-2xl font-bold text-foreground">{uniqueIps24h}</p>
+              <p className="text-2xl font-bold text-foreground">{uniqueClientIps30d}</p>
             </div>
           </CardContent>
         </Card>
