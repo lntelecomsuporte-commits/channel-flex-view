@@ -67,6 +67,12 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
   const [corsFallback, setCorsFallback] = useState(false);
   const [firstFrameReady, setFirstFrameReady] = useState(false);
   
+  // Android WebView mostra um ícone de "player" como poster default da <video>
+  // entre o destroy/attach do MediaSource no zap. Em iOS/Fire TV/web isso não
+  // aparece. Cobrimos com um véu preto APENAS no Android nativo, enquanto
+  // a troca está em andamento (até disparar 'playing' do novo canal).
+  const isAndroidNative = Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
+  const [isSwitching, setIsSwitching] = useState(false);
   const [backupIndex, setBackupIndex] = useState(-1);
   const backups = backupStreamUrls?.filter((u) => !!u && u.trim().length > 0) ?? [];
   const activeStreamUrl = backupIndex < 0 ? streamUrl : (backups[backupIndex] ?? streamUrl);
