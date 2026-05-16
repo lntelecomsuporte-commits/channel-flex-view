@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Trash2, LogOut, Tv, Layers, Users, Link, Activity, Download } from "lucide-react";
+import { Plus, Trash2, LogOut, Tv, Layers, Users, Link, Activity, Download, Shield } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import UserManagement from "@/components/admin/UserManagement";
 import HubsoftIntegration from "@/components/admin/HubsoftIntegration";
