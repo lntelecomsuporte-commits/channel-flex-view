@@ -153,6 +153,14 @@ public class NativePlayerPlugin extends Plugin {
         // index 0 = abaixo do WebView (que precisa ficar transparente)
         decor.addView(playerView, 0, lp);
 
+        // SurfaceView precisa estar em modo "media overlay" pra renderizar
+        // ACIMA do background da janela mas ABAIXO do WebView (que fica
+        // transparente). Sem isso, em muitos devices Android só vem áudio.
+        View videoSurface = playerView.getVideoSurfaceView();
+        if (videoSurface instanceof SurfaceView) {
+            ((SurfaceView) videoSurface).setZOrderMediaOverlay(true);
+        }
+
         player.addListener(new Player.Listener() {
             @Override
             public void onPlaybackStateChanged(int state) {
