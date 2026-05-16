@@ -276,7 +276,7 @@ const ProxyMonitoring = () => {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">IPs únicos (30d)</p>
-              <p className="text-2xl font-bold text-foreground">{uniqueIps24h}</p>
+              <p className="text-2xl font-bold text-foreground">{uniqueClientIps30d}</p>
             </div>
           </CardContent>
         </Card>
