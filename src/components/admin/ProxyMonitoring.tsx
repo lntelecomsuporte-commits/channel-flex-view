@@ -171,12 +171,14 @@ const formatBytes = (bytes: number) => {
 const ProxyMonitoring = () => {
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [detailView, setDetailView] = useState<null | "online" | "proxy" | "ips">(null);
   const { data: logs, isLoading } = useProxyAccess();
   const { data: profiles } = useProfilesMap();
   const { data: sessions } = useActiveSessions();
   const { data: recentSessionsData } = useRecentSessionsByUser();
   const recentSessions = recentSessionsData?.byUser;
   const uniqueClientIps30d = recentSessionsData?.uniqueIps ?? 0;
+  const ipDetails = recentSessionsData?.ipDetails;
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
