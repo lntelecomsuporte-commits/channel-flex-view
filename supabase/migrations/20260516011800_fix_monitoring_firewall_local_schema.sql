@@ -29,23 +29,28 @@ LANGUAGE sql
 STABLE SECURITY DEFINER
 SET search_path = public
 AS $$
+  WITH recent_sessions AS (
+    SELECT user_id, client_ipv4, client_ipv6, ip_address
+    FROM public.user_sessions
+    WHERE last_heartbeat_at >= now() - interval '30 days'
+      AND public.has_role(auth.uid(), 'admin'::app_role)
+  ), routable_ips AS (
+    SELECT NULLIF(client_ipv4, '') AS ip FROM recent_sessions
+    UNION ALL SELECT NULLIF(client_ipv6, '') FROM recent_sessions
+    UNION ALL SELECT NULLIF(ip_address, '') FROM recent_sessions
+  )
   SELECT
-    COUNT(DISTINCT COALESCE(
-      NULLIF(client_ipv4, ''),
-      NULLIF(client_ipv6, ''),
-      NULLIF(CASE
-        WHEN ip_address IN ('127.0.0.1', '::1') THEN NULL
-        WHEN ip_address LIKE '10.%' THEN NULL
-        WHEN ip_address LIKE '192.168.%' THEN NULL
-        WHEN ip_address ~ '^172\\.(1[6-9]|2[0-9]|3[0-1])\\.' THEN NULL
-        ELSE ip_address
-      END, '')
-    ))::int AS unique_ips,
-    COUNT(DISTINCT user_id)::int AS unique_users,
-    COUNT(*)::int AS total_sessions
-  FROM public.user_sessions
-  WHERE last_heartbeat_at >= now() - interval '30 days'
-    AND public.has_role(auth.uid(), 'admin'::app_role);
+    COUNT(DISTINCT ip) FILTER (
+      WHERE ip IS NOT NULL
+        AND ip NOT IN ('127.0.0.1', '::1')
+        AND ip NOT LIKE '10.%'
+        AND ip NOT LIKE '192.168.%'
+        AND ip !~ '^172\\.(1[6-9]|2[0-9]|3[0-1])\\.'
+        AND lower(ip) NOT LIKE 'fe80:%'
+    )::int AS unique_ips,
+    (SELECT COUNT(DISTINCT user_id)::int FROM recent_sessions) AS unique_users,
+    (SELECT COUNT(*)::int FROM recent_sessions) AS total_sessions
+  FROM routable_ips;
 $$;
 
 REVOKE ALL ON FUNCTION public.get_monitoring_stats_30d() FROM public;
