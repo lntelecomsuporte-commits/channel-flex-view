@@ -162,16 +162,6 @@ jobs:
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon
 
-      - name: Package Roku channel
-        run: |
-          mkdir -p out
-          # Bake build_version do manifest com o run_number, pra app saber sua versão
-          sed -i "s/^build_version=.*/build_version=${VERSION_CODE}/" roku/manifest
-          sed -i "s/^minor_version=.*/minor_version=${{ github.run_number }}/" roku/manifest
-          grep -E "^(major|minor|build)_version" roku/manifest
-          (cd roku && zip -r "../out/lntv-roku.zip" manifest source components images)
-          ls -lh out/lntv-roku.zip
-
       - name: Rename APK + generate version.json
         run: |
           mkdir -p out
@@ -184,11 +174,7 @@ jobs:
             "versionName": "${VERSION_NAME}",
             "url": "https://tv2.lntelecom.net/downloads/lntv-latest.apk",
             "legacyUrl": "https://tv2.lntelecom.net/downloads/lntv-legacy.apk",
-            "notes": "Build #${{ github.run_number }} — ${{ github.event.head_commit.message }}",
-            "rokuVersionCode": ${VERSION_CODE},
-            "rokuVersionName": "${VERSION_NAME}",
-            "rokuUrl": "https://tv2.lntelecom.net/downloads/lntv-roku.zip",
-            "rokuNotes": "Build #${{ github.run_number }}"
+            "notes": "Build #${{ github.run_number }} — ${{ github.event.head_commit.message }}"
           }
           EOF
           cat out/version.json
@@ -251,13 +237,6 @@ jobs:
             out/version.json
           retention-days: 30
 
-      - name: Upload Roku artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: lntv-roku
-          path: out/lntv-roku.zip
-          retention-days: 30
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -271,16 +250,14 @@ jobs:
             - **lntv-latest.apk** — Android 6.0+ (minSdk 23) — recomendado, com auto-update
             - **lntv-legacy.apk** — Android 5.0+ (minSdk 21) — TV boxes/dispositivos antigos
 
-            Roku:
-            - **lntv-roku.zip** — Sideload via http://<ip-do-roku>/ → Upload
-
             versionCode: ${{ env.VERSION_CODE }}
             versionName: ${{ env.VERSION_NAME }}
           files: |
             out/lntv-latest.apk
             out/lntv-legacy.apk
-            out/lntv-roku.zip
             out/version.json
           make_latest: "true"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
