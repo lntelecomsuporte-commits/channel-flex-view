@@ -56,11 +56,14 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
       handles.push(
         NativePlayer.addListener("playing", () => {
           setFirstFrameReady(true);
+          setLastError(null);
         }),
       );
       handles.push(
         NativePlayer.addListener("error", (data) => {
-          console.warn("[NativePlayer] erro:", data);
+          const msg = `code=${data?.code ?? "?"} ${data?.message ?? ""}`;
+          console.warn("[NativePlayer] erro:", msg, data);
+          setLastError(msg);
           // Failover pro próximo backup
           setBackupIndex((idx) => {
             const next = idx + 1;
