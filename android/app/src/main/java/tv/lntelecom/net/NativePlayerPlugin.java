@@ -1,6 +1,8 @@
 package tv.lntelecom.net;
 
 import android.graphics.Color;
+import android.view.SurfaceView;
+import android.view.View;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
 
@@ -150,6 +152,14 @@ public class NativePlayerPlugin extends Plugin {
                 FrameLayout.LayoutParams.MATCH_PARENT);
         // index 0 = abaixo do WebView (que precisa ficar transparente)
         decor.addView(playerView, 0, lp);
+
+        // SurfaceView precisa estar em modo "media overlay" pra renderizar
+        // ACIMA do background da janela mas ABAIXO do WebView (que fica
+        // transparente). Sem isso, em muitos devices Android só vem áudio.
+        View videoSurface = playerView.getVideoSurfaceView();
+        if (videoSurface instanceof SurfaceView) {
+            ((SurfaceView) videoSurface).setZOrderMediaOverlay(true);
+        }
 
         player.addListener(new Player.Listener() {
             @Override

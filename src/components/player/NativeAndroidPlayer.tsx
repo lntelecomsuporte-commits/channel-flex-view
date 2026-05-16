@@ -100,9 +100,11 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
       return () => { cancelled = true; };
     }, [activeStreamUrl, useProxyToken, forceProxyNative, channelId, autoPlay]);
 
-    // Unmount: derruba player + restaura WebView preto.
+    // Unmount: derruba player + restaura WebView preto + remove flag transparente.
     useEffect(() => {
+      document.documentElement.classList.add("native-player-active");
       return () => {
+        document.documentElement.classList.remove("native-player-active");
         NativePlayer.destroy().catch(() => {});
       };
     }, []);
