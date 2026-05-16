@@ -158,7 +158,8 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     setBackupIndex(-1);
     setCorsFallback(false);
     setResolvedContentType("");
-  }, [streamUrl]);
+    if (isAndroidNative) setIsSwitching(true);
+  }, [streamUrl, isAndroidNative]);
 
   // Se mudar de backup dentro do mesmo canal, cada URL precisa recomeçar limpa.
   useEffect(() => {
