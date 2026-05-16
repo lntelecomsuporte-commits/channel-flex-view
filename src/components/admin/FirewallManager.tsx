@@ -25,6 +25,7 @@ type Rule = {
   applied_at: string | null;
   created_at: string;
   source: string | null;
+  last_error: string | null;
 };
 
 const FirewallManager = () => {
