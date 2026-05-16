@@ -23,6 +23,15 @@ type ProxyAccess = {
   last_seen_at: string;
 };
 
+const isRoutableClientIp = (ip: string | null | undefined) => {
+  const value = (ip ?? "").trim();
+  if (!value || value === "127.0.0.1" || value === "::1") return false;
+  if (value.startsWith("10.") || value.startsWith("192.168.")) return false;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(value)) return false;
+  if (value.toLowerCase().startsWith("fe80:")) return false;
+  return true;
+};
+
 const useProxyAccess = () =>
   useQuery({
     queryKey: ["proxy-access-log"],
@@ -72,6 +81,14 @@ const useRecentSessionsByUser = () =>
   useQuery({
     queryKey: ["recent-sessions-by-user"],
     queryFn: async () => {
+      let statsUniqueIps: number | null = null;
+      const { data: stats, error: statsError } = await supabase.rpc("get_monitoring_stats_30d" as any);
+      if (!statsError && Array.isArray(stats) && stats[0]?.unique_ips != null) {
+        statsUniqueIps = Number(stats[0].unique_ips) || 0;
+      } else if (statsError) {
+        console.warn("[monitoring] get_monitoring_stats_30d unavailable:", statsError.message);
+      }
+
       // Busca paginada para mapear o IP/UA mais recente por usuário e contar IPs únicos.
       // PostgREST limita ~1000 rows por request, então iteramos por páginas.
       const map = new Map<string, { client_ipv4: string | null; client_ipv6: string | null; ip_address: string | null; user_agent: string | null; last_heartbeat_at: string }>();
@@ -95,11 +112,9 @@ const useRecentSessionsByUser = () =>
         if (!data || data.length === 0) break;
         totalRows += data.length;
         data.forEach((s: any) => {
-          // Considera qualquer um dos campos de IP, sem descartar o do nginx interno
-          // (no self-hosted, ip_address é o do cliente real quando vem do realtime).
           const candidates = [s.client_ipv4, s.client_ipv6, s.ip_address].filter(Boolean) as string[];
           candidates.forEach((ip) => {
-            if (ip && ip !== "172.18.0.1" && ip !== "127.0.0.1") sessionIps.add(ip);
+            if (isRoutableClientIp(ip)) sessionIps.add(ip);
           });
           if (!s.user_id) return;
           const prev = map.get(s.user_id);
@@ -115,8 +130,9 @@ const useRecentSessionsByUser = () =>
         });
         if (data.length < pageSize) break;
       }
-      console.log("[monitoring] sessions scanned:", totalRows, "unique IPs:", sessionIps.size);
-      return { byUser: map, uniqueIps: sessionIps.size };
+      const uniqueIps = Math.max(statsUniqueIps ?? 0, sessionIps.size);
+      console.log("[monitoring] sessions scanned:", totalRows, "unique IPs:", uniqueIps, "rpc:", statsUniqueIps, "frontend:", sessionIps.size);
+      return { byUser: map, uniqueIps };
     },
     refetchInterval: 30_000,
   });
