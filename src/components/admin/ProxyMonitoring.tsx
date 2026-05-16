@@ -305,39 +305,45 @@ const ProxyMonitoring = () => {
     <div className="space-y-6">
       {/* Métricas resumidas */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-md bg-primary/10 text-primary">
-              <User className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Online agora</p>
-              <p className="text-2xl font-bold text-foreground">{onlineUsers.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-md bg-primary/10 text-primary">
-              <Activity className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">No proxy agora</p>
-              <p className="text-2xl font-bold text-foreground">{activeList.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-md bg-primary/10 text-primary">
-              <Globe className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">IPs únicos (30d)</p>
-              <p className="text-2xl font-bold text-foreground">{uniqueClientIps30d}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <button type="button" onClick={() => setDetailView("online")} className="text-left">
+          <Card className="hover:bg-secondary/50 transition-colors cursor-pointer">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2 rounded-md bg-primary/10 text-primary">
+                <User className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Online agora</p>
+                <p className="text-2xl font-bold text-foreground">{onlineUsers.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </button>
+        <button type="button" onClick={() => setDetailView("proxy")} className="text-left">
+          <Card className="hover:bg-secondary/50 transition-colors cursor-pointer">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2 rounded-md bg-primary/10 text-primary">
+                <Activity className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">No proxy agora</p>
+                <p className="text-2xl font-bold text-foreground">{activeList.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </button>
+        <button type="button" onClick={() => setDetailView("ips")} className="text-left">
+          <Card className="hover:bg-secondary/50 transition-colors cursor-pointer">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2 rounded-md bg-primary/10 text-primary">
+                <Globe className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">IPs únicos (30d)</p>
+                <p className="text-2xl font-bold text-foreground">{uniqueClientIps30d}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </button>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 rounded-md bg-primary/10 text-primary">
@@ -350,6 +356,79 @@ const ProxyMonitoring = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Dialog de detalhes das métricas */}
+      <Dialog open={!!detailView} onOpenChange={(o) => !o && setDetailView(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {detailView === "online" && `Usuários online agora (${onlineUsers.length})`}
+              {detailView === "proxy" && `Ativos no proxy agora (${activeList.length})`}
+              {detailView === "ips" && `IPs únicos nos últimos 30 dias (${uniqueClientIps30d})`}
+            </DialogTitle>
+          </DialogHeader>
+          {detailView === "online" && (
+            <div className="space-y-2">
+              {onlineUsers.length === 0 && <p className="text-muted-foreground text-sm">Ninguém online.</p>}
+              {onlineUsers.map((s) => (
+                <div key={s.id} className="p-3 rounded-lg bg-secondary text-sm space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-foreground">{getUserLabel(s.user_id)}</span>
+                    {s.is_watching ? (
+                      <Badge className="bg-primary/20 text-primary border border-primary/40">Assistindo</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground">Online</Badge>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground flex flex-wrap gap-3">
+                    <span className="flex items-center gap-1"><Tv2 className="h-3 w-3" /> {s.channel_name ?? "sem canal"}</span>
+                    <span className="flex items-center gap-1 font-mono"><Globe className="h-3 w-3" /> {s.client_ipv4 || s.client_ipv6 || s.ip_address}</span>
+                    <span>visto {formatDistanceToNow(new Date(s.last_seen_at), { addSuffix: true, locale: ptBR })}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {detailView === "proxy" && (
+            <div className="space-y-2">
+              {activeList.length === 0 && <p className="text-muted-foreground text-sm">Ninguém usando o proxy agora.</p>}
+              {activeList.map((l) => (
+                <div key={l.id} className="p-3 rounded-lg bg-secondary text-sm space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-foreground">{getUserLabel(l.user_id)}</span>
+                    <Badge className="bg-primary/20 text-primary border border-primary/40">Ao vivo</Badge>
+                  </div>
+                  <div className="text-xs text-muted-foreground flex flex-wrap gap-3">
+                    <span className="flex items-center gap-1"><Tv2 className="h-3 w-3" /> {l.channel_name}</span>
+                    <span className="flex items-center gap-1 font-mono"><Globe className="h-3 w-3" /> {l.client_ipv4 || l.client_ipv6 || l.ip_address}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {detailView === "ips" && (
+            <div className="space-y-2">
+              {(!ipDetails || ipDetails.size === 0) && <p className="text-muted-foreground text-sm">Nenhum IP registrado.</p>}
+              {ipDetails && Array.from(ipDetails.values())
+                .sort((a, b) => (a.last_seen < b.last_seen ? 1 : -1))
+                .map((info) => (
+                  <div key={info.ip} className="p-3 rounded-lg bg-secondary text-sm space-y-1">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="font-mono font-medium text-foreground">{info.ip}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(info.last_seen), { addSuffix: true, locale: ptBR })}
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground flex flex-wrap gap-3">
+                      <span>{info.sessions} sessões</span>
+                      <span>{info.users.size} usuário(s)</span>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Usuários online */}
       <Card>
