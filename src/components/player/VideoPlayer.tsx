@@ -6,6 +6,7 @@ import { Capacitor } from "@capacitor/core";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 import { getDeviceProfile } from "@/lib/deviceProfile";
 import YouTubePlayer from "./YouTubePlayer";
+import NativeAndroidPlayer from "./NativeAndroidPlayer";
 
 /** Detecta o engine a usar com base na URL (extensão). */
 const detectEngine = (url: string, sourceUrl = url, forcedContentType = ""): "hls" | "mpegts" | "native" => {
@@ -48,7 +49,16 @@ export interface VideoPlayerHandle {
   getHls: () => Hls | null;
 }
 
+// Detecta APK Android (não vale pra iOS nem Web) — nesses casos roteia pro
+// player nativo ExoPlayer/Media3 via plugin Capacitor, que elimina o ícone/
+// flash do WebView entre zaps de canal.
+const isAndroidNativePlatform = () =>
+  Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
+
 const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>((props, ref) => {
+  if (isAndroidNativePlatform()) {
+    return <NativeAndroidPlayer ref={ref} {...props} />;
+  }
   return <HlsVideoPlayer ref={ref} {...props} />;
 });
 
