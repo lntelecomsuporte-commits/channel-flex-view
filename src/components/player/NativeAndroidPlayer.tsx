@@ -37,6 +37,7 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
     const backups = backupStreamUrls?.filter((u) => !!u && u.trim().length > 0) ?? [];
     const activeStreamUrl = backupIndex < 0 ? streamUrl : (backups[backupIndex] ?? streamUrl);
     const [firstFrameReady, setFirstFrameReady] = useState(false);
+    const [lastError, setLastError] = useState<string | null>(null);
 
     // Native player não expõe o <video> — handle retorna null.
     useImperativeHandle(ref, () => ({
