@@ -91,9 +91,9 @@ const useRecentSessionsByUser = () =>
       }
 
       // Busca paginada para mapear o IP/UA mais recente por usuário e contar IPs únicos.
-      // PostgREST limita ~1000 rows por request, então iteramos por páginas.
       const map = new Map<string, { client_ipv4: string | null; client_ipv6: string | null; ip_address: string | null; user_agent: string | null; last_heartbeat_at: string }>();
       const sessionIps = new Set<string>();
+      const ipDetails = new Map<string, { ip: string; sessions: number; users: Set<string>; last_seen: string; user_agent: string | null }>();
       const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
       const pageSize = 1000;
       let totalRows = 0;
@@ -115,7 +115,25 @@ const useRecentSessionsByUser = () =>
         data.forEach((s: any) => {
           const candidates = [s.client_ipv4, s.client_ipv6, s.ip_address].filter(Boolean) as string[];
           candidates.forEach((ip) => {
-            if (isRoutableClientIp(ip)) sessionIps.add(ip);
+            if (!isRoutableClientIp(ip)) return;
+            sessionIps.add(ip);
+            const prev = ipDetails.get(ip);
+            if (prev) {
+              prev.sessions += 1;
+              if (s.user_id) prev.users.add(s.user_id);
+              if (s.last_heartbeat_at > prev.last_seen) {
+                prev.last_seen = s.last_heartbeat_at;
+                if (s.user_agent) prev.user_agent = s.user_agent;
+              }
+            } else {
+              ipDetails.set(ip, {
+                ip,
+                sessions: 1,
+                users: new Set(s.user_id ? [s.user_id] : []),
+                last_seen: s.last_heartbeat_at,
+                user_agent: s.user_agent ?? null,
+              });
+            }
           });
           if (!s.user_id) return;
           const prev = map.get(s.user_id);
@@ -133,7 +151,7 @@ const useRecentSessionsByUser = () =>
       }
       const uniqueIps = Math.max(statsUniqueIps ?? 0, sessionIps.size);
       console.log("[monitoring] sessions scanned:", totalRows, "unique IPs:", uniqueIps, "rpc:", statsUniqueIps, "frontend:", sessionIps.size);
-      return { byUser: map, uniqueIps };
+      return { byUser: map, uniqueIps, ipDetails };
     },
     refetchInterval: 30_000,
   });
