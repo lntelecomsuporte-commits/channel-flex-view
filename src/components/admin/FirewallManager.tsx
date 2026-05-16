@@ -14,8 +14,10 @@ import { ptBR } from "date-fns/locale";
 type Rule = {
   id: string;
   action: "deny" | "allow";
-  target: string | null;
-  port: string | null;
+  target: string | null;       // src ip/cidr
+  src_port: string | null;
+  dest_target: string | null;  // dest ip/cidr
+  port: string | null;         // dest port
   proto: string | null;
   direction: string | null;
   note: string | null;
@@ -28,8 +30,11 @@ type Rule = {
 const FirewallManager = () => {
   const qc = useQueryClient();
   const [action, setAction] = useState<"deny" | "allow">("deny");
-  const [target, setTarget] = useState("");
-  const [port, setPort] = useState("");
+  const [direction, setDirection] = useState<"in" | "out">("in");
+  const [srcIp, setSrcIp] = useState("");
+  const [srcPort, setSrcPort] = useState("");
+  const [destIp, setDestIp] = useState("");
+  const [destPort, setDestPort] = useState("");
   const [proto, setProto] = useState<"" | "tcp" | "udp">("");
   const [note, setNote] = useState("");
 
@@ -49,15 +54,17 @@ const FirewallManager = () => {
 
   const addMutation = useMutation({
     mutationFn: async () => {
-      const t = target.trim();
-      const p = port.trim();
-      if (!t && !p) throw new Error("Informe IP/CIDR ou porta");
+      if (!srcIp.trim() && !srcPort.trim() && !destIp.trim() && !destPort.trim()) {
+        throw new Error("Informe pelo menos um campo (IP ou porta)");
+      }
       const { error } = await supabase.from("firewall_rules" as any).insert({
         action,
-        target: t || null,
-        port: p || null,
+        direction,
+        target: srcIp.trim() || null,
+        src_port: srcPort.trim() || null,
+        dest_target: destIp.trim() || null,
+        port: destPort.trim() || null,
         proto: proto || null,
-        direction: "in",
         note: note.trim() || null,
         is_active: true,
         source: "panel",
@@ -66,7 +73,7 @@ const FirewallManager = () => {
     },
     onSuccess: () => {
       toast.success("Regra adicionada — aplicada no servidor em até 1min");
-      setTarget(""); setPort(""); setProto(""); setNote("");
+      setSrcIp(""); setSrcPort(""); setDestIp(""); setDestPort(""); setProto(""); setNote("");
       qc.invalidateQueries({ queryKey: ["firewall-rules"] });
     },
     onError: (e: any) => toast.error(e.message || "Erro ao adicionar"),
@@ -106,12 +113,12 @@ const FirewallManager = () => {
           <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200 flex gap-2">
             <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
             <div>
-              Regras ficam no banco. <code className="text-amber-100">sync-firewall.sh</code> (cron a cada 1 min)
-              espelha pro UFW. Tudo que você adicionar/remover aqui reflete no servidor automaticamente.
+              Regras ficam no banco. <code className="text-amber-100">sync-firewall.sh</code> (cron 1 min)
+              espelha pro UFW. Campos vazios viram <code>any</code>.
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-[120px_1fr_120px_100px_1fr_auto] gap-3 items-end">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">Ação</label>
               <Select value={action} onValueChange={(v) => setAction(v as any)}>
@@ -122,14 +129,15 @@ const FirewallManager = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="col-span-2 md:col-span-1">
-              <label className="text-xs text-muted-foreground">IP / CIDR (origem)</label>
-              <Input placeholder="187.49.143.68 ou 24.152.0.0/16 (vazio = any)"
-                value={target} onChange={(e) => setTarget(e.target.value)} />
-            </div>
             <div>
-              <label className="text-xs text-muted-foreground">Porta</label>
-              <Input placeholder="ex.: 22" value={port} onChange={(e) => setPort(e.target.value)} />
+              <label className="text-xs text-muted-foreground">Direção</label>
+              <Select value={direction} onValueChange={(v) => setDirection(v as any)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="in">Entrada (in)</SelectItem>
+                  <SelectItem value="out">Saída (out)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Protocolo</label>
@@ -142,14 +150,32 @@ const FirewallManager = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="col-span-2 md:col-span-1">
+            <div>
               <label className="text-xs text-muted-foreground">Nota</label>
               <Input placeholder="Motivo (opcional)" value={note} onChange={(e) => setNote(e.target.value)} />
             </div>
-            <Button onClick={() => addMutation.mutate()} disabled={addMutation.isPending}>
-              Adicionar
-            </Button>
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="rounded-md border border-border p-3 space-y-2">
+              <div className="text-xs font-semibold text-muted-foreground uppercase">Origem (from)</div>
+              <div className="grid grid-cols-[1fr_120px] gap-2">
+                <Input placeholder="IP / CIDR (ex: 187.49.0.0/16)" value={srcIp} onChange={(e) => setSrcIp(e.target.value)} />
+                <Input placeholder="porta" value={srcPort} onChange={(e) => setSrcPort(e.target.value)} />
+              </div>
+            </div>
+            <div className="rounded-md border border-border p-3 space-y-2">
+              <div className="text-xs font-semibold text-muted-foreground uppercase">Destino (to)</div>
+              <div className="grid grid-cols-[1fr_120px] gap-2">
+                <Input placeholder="IP / CIDR (vazio = any)" value={destIp} onChange={(e) => setDestIp(e.target.value)} />
+                <Input placeholder="porta (ex: 443)" value={destPort} onChange={(e) => setDestPort(e.target.value)} />
+              </div>
+            </div>
+          </div>
+
+          <Button onClick={() => addMutation.mutate()} disabled={addMutation.isPending} className="w-full md:w-auto">
+            Adicionar regra
+          </Button>
         </CardContent>
       </Card>
 
@@ -191,18 +217,20 @@ const FirewallManager = () => {
 };
 
 const describeRule = (r: Rule) => {
-  const parts: string[] = [];
-  if (r.port) parts.push(`porta ${r.port}${r.proto ? "/" + r.proto : ""}`);
-  if (r.target) parts.push(`de ${r.target}`);
-  else if (r.port) parts.push("de qualquer origem");
-  return parts.join(" ") || r.target || "—";
+  const from = r.target || "any";
+  const fromP = r.src_port ? `:${r.src_port}` : "";
+  const to = r.dest_target || "any";
+  const toP = r.port ? `:${r.port}` : "";
+  const proto = r.proto ? ` ${r.proto}` : "";
+  const dir = r.direction === "out" ? "→ saída" : "← entrada";
+  return `${dir}${proto}  ${from}${fromP}  →  ${to}${toP}`;
 };
 
 const RuleRow = ({ r, onToggle, onDelete }: { r: Rule; onToggle: (v: boolean) => void; onDelete: () => void }) => (
   <div className="flex items-center justify-between p-2 rounded bg-secondary/50 gap-2">
     <div className="min-w-0 flex-1">
       <div className="flex items-center gap-2 flex-wrap">
-        <code className="font-mono text-sm text-foreground">{describeRule(r)}</code>
+        <code className="font-mono text-xs text-foreground">{describeRule(r)}</code>
         {r.is_active ? (
           <Badge variant="default" className="text-[10px]">ativo</Badge>
         ) : (
