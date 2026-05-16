@@ -256,6 +256,7 @@ const AdminPanel = () => {
         if (!error) toast.warning("Categoria criada, mas o banco ainda precisa atualizar a coluna requires_pin.");
       }
       if (error) { toast.error("Erro ao salvar categoria: " + error.message); setSaving(false); return; }
+      if (!data?.id) { toast.error("Erro ao salvar categoria: ID não retornado pelo banco"); setSaving(false); return; }
       categoryId = data.id;
     }
 
