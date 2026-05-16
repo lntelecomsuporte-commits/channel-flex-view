@@ -244,7 +244,7 @@ const ProxyMonitoring = () => {
   const realIpForUser = (uid: string | null, fallback: string) => {
     if (!uid) return fallback;
     const s = recentSessions?.get(uid);
-    return s?.client_ipv4 || s?.client_ipv6 || fallback;
+    return s?.client_ipv4 || s?.client_ipv6 || s?.ip_address || fallback;
   };
 
   const getUserLabel = (uid: string | null) => {
@@ -254,7 +254,6 @@ const ProxyMonitoring = () => {
   };
 
   const totalBytes24h = recent.reduce((acc, l) => acc + Number(l.bytes_transferred), 0);
-  const uniqueIps24h = new Set(recent.map((l) => l.ip_address)).size;
 
   return (
     <div className="space-y-6">
