@@ -37,6 +37,7 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
     const backups = backupStreamUrls?.filter((u) => !!u && u.trim().length > 0) ?? [];
     const activeStreamUrl = backupIndex < 0 ? streamUrl : (backups[backupIndex] ?? streamUrl);
     const [firstFrameReady, setFirstFrameReady] = useState(false);
+    const [lastError, setLastError] = useState<string | null>(null);
 
     // Native player não expõe o <video> — handle retorna null.
     useImperativeHandle(ref, () => ({
@@ -55,11 +56,14 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
       handles.push(
         NativePlayer.addListener("playing", () => {
           setFirstFrameReady(true);
+          setLastError(null);
         }),
       );
       handles.push(
         NativePlayer.addListener("error", (data) => {
-          console.warn("[NativePlayer] erro:", data);
+          const msg = `code=${data?.code ?? "?"} ${data?.message ?? ""}`;
+          console.warn("[NativePlayer] erro:", msg, data);
+          setLastError(msg);
           // Failover pro próximo backup
           setBackupIndex((idx) => {
             const next = idx + 1;
@@ -86,6 +90,9 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
           url = getPlayableStreamUrl(activeStreamUrl);
         }
         if (cancelled) return;
+        const proto = (() => { try { return new URL(url).protocol; } catch { return "?"; } })();
+        console.log(`[NativePlayer] load url=${url} proto=${proto} type=${detectType(url)}`);
+        setLastError(null);
         try {
           await NativePlayer.load({
             url,
@@ -93,8 +100,10 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
             headers: isProxiedStreamUrl(url) ? {} : { "User-Agent": "LNTV/1.0" },
           });
           if (autoPlay) await NativePlayer.play();
-        } catch (e) {
-          console.error("[NativePlayer] load falhou:", e);
+        } catch (e: any) {
+          const msg = e?.message ?? String(e);
+          console.error("[NativePlayer] load falhou:", msg, e);
+          setLastError(`load: ${msg}`);
         }
       })();
       return () => { cancelled = true; };
@@ -115,6 +124,13 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
       <>
         <div className="absolute inset-0 w-full h-full pointer-events-none" />
         {!firstFrameReady && <DelayedSpinner key={activeStreamUrl} />}
+        {lastError && (
+          <div className="absolute top-4 left-4 right-4 z-50 pointer-events-none">
+            <div className="inline-block bg-red-600/90 text-white text-xs px-3 py-2 rounded font-mono break-all">
+              ExoPlayer: {lastError}
+            </div>
+          </div>
+        )}
       </>
     );
   },
