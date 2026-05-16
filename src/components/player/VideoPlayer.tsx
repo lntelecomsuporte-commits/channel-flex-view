@@ -629,6 +629,12 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         x-webkit-airplay="allow"
         webkit-playsinline="true"
       />
+      {isAndroidNative && isSwitching && (
+        <div
+          className="absolute inset-0 bg-black pointer-events-none z-[4]"
+          aria-hidden="true"
+        />
+      )}
       {isLoadingNewChannel && <DelayedSpinner key={activeStreamUrl} />}
     </>
   );
