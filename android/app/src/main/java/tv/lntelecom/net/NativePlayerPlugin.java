@@ -1,6 +1,8 @@
 package tv.lntelecom.net;
 
 import android.graphics.Color;
+import android.view.SurfaceView;
+import android.view.View;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
 
