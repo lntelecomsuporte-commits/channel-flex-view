@@ -73,6 +73,7 @@ fi
 # ------- 2. APPLY: aplica/remove regras marcadas no ufw -------
 active_ids="$("${PSQL[@]}" -c "SELECT id FROM public.firewall_rules WHERE is_active=true;" || true)"
 
+# 2a. Remove do ufw regras gerenciadas (lntv-fw <id>) cujo id não está mais ativo
 mapfile -t ufw_lines < <(ufw status numbered | grep "lntv-fw" || true)
 for ((i=${#ufw_lines[@]}-1; i>=0; i--)); do
   line="${ufw_lines[$i]}"
@@ -83,8 +84,17 @@ for ((i=${#ufw_lines[@]}-1; i>=0; i--)); do
   fi
 done
 
-# Campos: id|action|target(src_ip)|src_port|dest_target(dest_ip)|port(dest_port)|proto|direction
-rows="$("${PSQL[@]}" -c "SELECT id||'|'||action||'|'||COALESCE(target,'')||'|'||COALESCE(src_port,'')||'|'||COALESCE(dest_target,'')||'|'||COALESCE(port,'')||'|'||COALESCE(proto,'')||'|'||direction FROM public.firewall_rules WHERE is_active=true;" || true)"
+# 2b. Aplica regras NOVAS do painel (source != 'imported').
+# Regras 'imported' já existem no ufw, não devem ser re-inseridas.
+# Se o admin pausar/excluir uma imported, ela some do banco/inativa mas permanece no ufw
+# (intencional: não tocamos em regras pré-existentes automaticamente).
+rows="$("${PSQL[@]}" -c "
+  SELECT id||'|'||action||'|'||COALESCE(target,'')||'|'||COALESCE(src_port,'')
+       ||'|'||COALESCE(dest_target,'')||'|'||COALESCE(port,'')
+       ||'|'||COALESCE(proto,'')||'|'||direction
+  FROM public.firewall_rules
+  WHERE is_active=true AND COALESCE(source,'panel') <> 'imported';
+" || true)"
 
 applied=0
 ufw_status="$(ufw status numbered | sed -E 's/\x1b\[[0-9;]*m//g')"
@@ -94,11 +104,15 @@ while IFS='|' read -r id act src_ip src_port dest_ip dest_port proto dir; do
     continue
   fi
 
+  # UFW exige proto quando há porta. Default = tcp se admin esqueceu.
+  if [ -z "$proto" ] && { [ -n "$src_port" ] || [ -n "$dest_port" ]; }; then
+    proto="tcp"
+  fi
+
   cmd="ufw insert 1 $act"
   [ -n "$dir" ] && cmd="$cmd ${dir}"
   [ -n "$proto" ] && cmd="$cmd proto $proto"
 
-  # FROM
   if [ -n "$src_ip" ]; then
     cmd="$cmd from $src_ip"
   else
@@ -106,7 +120,6 @@ while IFS='|' read -r id act src_ip src_port dest_ip dest_port proto dir; do
   fi
   [ -n "$src_port" ] && cmd="$cmd port $src_port"
 
-  # TO
   if [ -n "$dest_ip" ]; then
     cmd="$cmd to $dest_ip"
   else
@@ -117,10 +130,13 @@ while IFS='|' read -r id act src_ip src_port dest_ip dest_port proto dir; do
   cmd="$cmd comment 'lntv-fw $id'"
 
   if eval "$cmd" >/dev/null 2>&1; then
-    "${PSQL[@]}" -c "UPDATE public.firewall_rules SET applied_at=now() WHERE id='$id';" >/dev/null || true
+    "${PSQL[@]}" -c "UPDATE public.firewall_rules SET applied_at=now(), last_error=NULL WHERE id='$id';" >/dev/null || true
     applied=$((applied + 1))
   else
-    echo "$LOG_PREFIX FALHOU: $cmd"
+    err_msg="$(eval "$cmd" 2>&1 || true)"
+    err_esc="$(echo "$err_msg" | head -c 300 | sed "s/'/''/g")"
+    "${PSQL[@]}" -c "UPDATE public.firewall_rules SET last_error='$err_esc' WHERE id='$id';" >/dev/null || true
+    echo "$LOG_PREFIX FALHOU: $cmd  =>  $err_msg"
   fi
 done <<< "$rows"
 
