@@ -25,6 +25,7 @@ type Rule = {
   applied_at: string | null;
   created_at: string;
   source: string | null;
+  last_error: string | null;
 };
 
 const FirewallManager = () => {
@@ -57,6 +58,11 @@ const FirewallManager = () => {
       if (!srcIp.trim() && !srcPort.trim() && !destIp.trim() && !destPort.trim()) {
         throw new Error("Informe pelo menos um campo (IP ou porta)");
       }
+      // UFW exige protocolo quando há porta. Default tcp.
+      let finalProto: string | null = proto || null;
+      if (!finalProto && (srcPort.trim() || destPort.trim())) {
+        finalProto = "tcp";
+      }
       const { error } = await supabase.from("firewall_rules" as any).insert({
         action,
         direction,
@@ -64,7 +70,7 @@ const FirewallManager = () => {
         src_port: srcPort.trim() || null,
         dest_target: destIp.trim() || null,
         port: destPort.trim() || null,
-        proto: proto || null,
+        proto: finalProto,
         note: note.trim() || null,
         is_active: true,
         source: "panel",
@@ -244,6 +250,14 @@ const RuleRow = ({ r, onToggle, onDelete }: { r: Rule; onToggle: (v: boolean) =>
         )}
       </div>
       {r.note && <p className="text-xs text-muted-foreground truncate">{r.note}</p>}
+      {r.last_error && (
+        <p className="text-xs text-destructive mt-1 break-words">
+          <span className="font-semibold">UFW recusou:</span> {r.last_error}
+        </p>
+      )}
+      {!r.applied_at && r.is_active && !r.last_error && r.source !== "imported" && (
+        <p className="text-[10px] text-muted-foreground">aguardando sync (até 1min)</p>
+      )}
     </div>
     <div className="flex gap-1 shrink-0">
       <Button size="sm" variant="ghost" onClick={() => onToggle(!r.is_active)}>
