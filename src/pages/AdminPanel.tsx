@@ -14,11 +14,12 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Trash2, LogOut, Tv, Layers, Users, Link, Activity, Download } from "lucide-react";
+import { Plus, Trash2, LogOut, Tv, Layers, Users, Link, Activity, Download, Shield } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import UserManagement from "@/components/admin/UserManagement";
 import HubsoftIntegration from "@/components/admin/HubsoftIntegration";
 import ProxyMonitoring from "@/components/admin/ProxyMonitoring";
+import FirewallManager from "@/components/admin/FirewallManager";
 import EpgChannelPicker from "@/components/admin/EpgChannelPicker";
 import EpgUrlPresetSelector from "@/components/admin/EpgUrlPresetSelector";
 import { getLocalFunctionUrl, LOCAL_SUPABASE_PUBLISHABLE_KEY } from "@/lib/localBackend";
@@ -337,6 +338,7 @@ const AdminPanel = () => {
             <TabsTrigger value="users"><Users className="h-4 w-4 mr-1" /> Usuários</TabsTrigger>
             <TabsTrigger value="hubsoft"><Link className="h-4 w-4 mr-1" /> Hubsoft</TabsTrigger>
             <TabsTrigger value="monitoring"><Activity className="h-4 w-4 mr-1" /> Monitoramento</TabsTrigger>
+            <TabsTrigger value="firewall"><Shield className="h-4 w-4 mr-1" /> Firewall</TabsTrigger>
           </TabsList>
 
           <TabsContent value="channels">
@@ -688,6 +690,10 @@ const AdminPanel = () => {
 
           <TabsContent value="monitoring">
             <ProxyMonitoring />
+          </TabsContent>
+
+          <TabsContent value="firewall">
+            <FirewallManager />
           </TabsContent>
         </Tabs>
       </div>

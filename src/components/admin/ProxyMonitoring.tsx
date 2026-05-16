@@ -72,22 +72,35 @@ const useRecentSessionsByUser = () =>
   useQuery({
     queryKey: ["recent-sessions-by-user"],
     queryFn: async () => {
-      // Busca paginada para mapear o IP/UA mais recente por usuário (PostgREST limita rows por request).
+      // Busca paginada para mapear o IP/UA mais recente por usuário e contar IPs únicos.
+      // PostgREST limita ~1000 rows por request, então iteramos por páginas.
       const map = new Map<string, { client_ipv4: string | null; client_ipv6: string | null; ip_address: string | null; user_agent: string | null; last_heartbeat_at: string }>();
       const sessionIps = new Set<string>();
       const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
       const pageSize = 1000;
-      for (let page = 0; page < 10; page++) {
+      let totalRows = 0;
+      for (let page = 0; page < 20; page++) {
+        const from = page * pageSize;
+        const to = from + pageSize - 1;
         const { data, error } = await supabase
           .from("user_sessions")
           .select("user_id, ip_address, client_ipv4, client_ipv6, user_agent, last_heartbeat_at")
           .gte("last_heartbeat_at", since)
           .order("last_heartbeat_at", { ascending: false })
-          .range(page * pageSize, page * pageSize + pageSize - 1);
-        if (error || !data || data.length === 0) break;
+          .range(from, to);
+        if (error) {
+          console.error("[monitoring] page", page, "error:", error);
+          break;
+        }
+        if (!data || data.length === 0) break;
+        totalRows += data.length;
         data.forEach((s: any) => {
-          const realIp = s.client_ipv4 || s.client_ipv6 || s.ip_address;
-          if (realIp && realIp !== "172.18.0.1") sessionIps.add(realIp);
+          // Considera qualquer um dos campos de IP, sem descartar o do nginx interno
+          // (no self-hosted, ip_address é o do cliente real quando vem do realtime).
+          const candidates = [s.client_ipv4, s.client_ipv6, s.ip_address].filter(Boolean) as string[];
+          candidates.forEach((ip) => {
+            if (ip && ip !== "172.18.0.1" && ip !== "127.0.0.1") sessionIps.add(ip);
+          });
           if (!s.user_id) return;
           const prev = map.get(s.user_id);
           if (!prev || new Date(s.last_heartbeat_at).getTime() > new Date(prev.last_heartbeat_at).getTime()) {
@@ -102,12 +115,8 @@ const useRecentSessionsByUser = () =>
         });
         if (data.length < pageSize) break;
       }
-
-      // Conta IPs únicos via RPC (não sofre com o limite de linhas do PostgREST).
-      const { data: stats } = await supabase.rpc("get_monitoring_stats_30d");
-      const rpcUniqueIps = Array.isArray(stats) && stats[0] ? Number(stats[0].unique_ips) || 0 : 0;
-
-      return { byUser: map, uniqueIps: Math.max(rpcUniqueIps, sessionIps.size) };
+      console.log("[monitoring] sessions scanned:", totalRows, "unique IPs:", sessionIps.size);
+      return { byUser: map, uniqueIps: sessionIps.size };
     },
     refetchInterval: 30_000,
   });
