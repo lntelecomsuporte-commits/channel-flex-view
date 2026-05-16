@@ -590,6 +590,14 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_monitoring_stats_30d: {
+        Args: never
+        Returns: {
+          total_sessions: number
+          unique_ips: number
+          unique_users: number
+        }[]
+      }
       get_user_online_status: {
         Args: { _user_id: string }
         Returns: {
