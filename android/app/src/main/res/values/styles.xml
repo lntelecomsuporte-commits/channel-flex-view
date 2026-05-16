@@ -17,7 +17,10 @@
 
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
+        <item name="android:background">@android:color/black</item>
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="windowSplashScreenBackground">@android:color/black</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 
     <style name="AppTheme.LegacyLaunch" parent="android:style/Theme.Material.NoActionBar">
