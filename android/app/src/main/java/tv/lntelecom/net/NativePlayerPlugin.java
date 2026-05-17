@@ -76,11 +76,30 @@ public class NativePlayerPlugin extends Plugin {
                 if (!headers.isEmpty()) httpFactory.setDefaultRequestProperties(headers);
 
                 MediaItem item = MediaItem.fromUri(url);
+                // Política de retry agressiva: tenta praticamente "infinito" em
+                // erros de rede (queda de internet/DNS/timeout) com backoff até
+                // 8s. Sem isso, o ExoPlayer desiste em ~3 tentativas e para preto.
+                LoadErrorHandlingPolicy retryPolicy = new DefaultLoadErrorHandlingPolicy() {
+                    @Override
+                    public int getMinimumLoadableRetryCount(int dataType) {
+                        return Integer.MAX_VALUE;
+                    }
+                    @Override
+                    public long getRetryDelayMsFor(LoadErrorInfo info) {
+                        // backoff: 1s, 2s, 4s, 8s (cap)
+                        long delay = 1000L * (1L << Math.min(info.errorCount - 1, 3));
+                        return Math.min(delay, 8000L);
+                    }
+                };
                 MediaSource source;
                 if ("hls".equalsIgnoreCase(type)) {
-                    source = new HlsMediaSource.Factory(httpFactory).createMediaSource(item);
+                    source = new HlsMediaSource.Factory(httpFactory)
+                            .setLoadErrorHandlingPolicy(retryPolicy)
+                            .createMediaSource(item);
                 } else {
-                    source = new ProgressiveMediaSource.Factory(httpFactory).createMediaSource(item);
+                    source = new ProgressiveMediaSource.Factory(httpFactory)
+                            .setLoadErrorHandlingPolicy(retryPolicy)
+                            .createMediaSource(item);
                 }
 
                 player.setMediaSource(source);
