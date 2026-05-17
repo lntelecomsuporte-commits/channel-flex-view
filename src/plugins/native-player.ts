@@ -25,7 +25,7 @@ export interface NativePlayerPlugin {
   destroy(): Promise<void>;
   addListener(
     eventName: NativePlayerEvent,
-    listener: (data: { state?: number; code?: number; message?: string }) => void,
+    listener: (data: { state?: number; code?: number; codeName?: string; message?: string; cause?: string }) => void,
   ): Promise<PluginListenerHandle>;
 }
 

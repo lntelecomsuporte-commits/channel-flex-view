@@ -15,6 +15,8 @@ import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.hls.HlsMediaSource;
 import androidx.media3.exoplayer.source.MediaSource;
 import androidx.media3.exoplayer.source.ProgressiveMediaSource;
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy;
+import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy;
 import androidx.media3.ui.AspectRatioFrameLayout;
 import androidx.media3.ui.PlayerView;
 
@@ -74,11 +76,30 @@ public class NativePlayerPlugin extends Plugin {
                 if (!headers.isEmpty()) httpFactory.setDefaultRequestProperties(headers);
 
                 MediaItem item = MediaItem.fromUri(url);
+                // Política de retry agressiva: tenta praticamente "infinito" em
+                // erros de rede (queda de internet/DNS/timeout) com backoff até
+                // 8s. Sem isso, o ExoPlayer desiste em ~3 tentativas e para preto.
+                LoadErrorHandlingPolicy retryPolicy = new DefaultLoadErrorHandlingPolicy() {
+                    @Override
+                    public int getMinimumLoadableRetryCount(int dataType) {
+                        return Integer.MAX_VALUE;
+                    }
+                    @Override
+                    public long getRetryDelayMsFor(LoadErrorHandlingPolicy.LoadErrorInfo info) {
+                        // backoff: 1s, 2s, 4s, 8s (cap)
+                        long delay = 1000L * (1L << Math.min(info.errorCount - 1, 3));
+                        return Math.min(delay, 8000L);
+                    }
+                };
                 MediaSource source;
                 if ("hls".equalsIgnoreCase(type)) {
-                    source = new HlsMediaSource.Factory(httpFactory).createMediaSource(item);
+                    source = new HlsMediaSource.Factory(httpFactory)
+                            .setLoadErrorHandlingPolicy(retryPolicy)
+                            .createMediaSource(item);
                 } else {
-                    source = new ProgressiveMediaSource.Factory(httpFactory).createMediaSource(item);
+                    source = new ProgressiveMediaSource.Factory(httpFactory)
+                            .setLoadErrorHandlingPolicy(retryPolicy)
+                            .createMediaSource(item);
                 }
 
                 player.setMediaSource(source);
@@ -179,7 +200,12 @@ public class NativePlayerPlugin extends Plugin {
             public void onPlayerError(PlaybackException error) {
                 JSObject data = new JSObject();
                 data.put("code", error.errorCode);
+                data.put("codeName", error.getErrorCodeName());
                 data.put("message", error.getMessage());
+                Throwable cause = error.getCause();
+                if (cause != null) {
+                    data.put("cause", cause.getClass().getSimpleName() + ": " + cause.getMessage());
+                }
                 notifyListeners("error", data);
             }
         });
