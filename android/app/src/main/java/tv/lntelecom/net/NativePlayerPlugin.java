@@ -85,7 +85,7 @@ public class NativePlayerPlugin extends Plugin {
                         return Integer.MAX_VALUE;
                     }
                     @Override
-                    public long getRetryDelayMsFor(LoadErrorInfo info) {
+                    public long getRetryDelayMsFor(LoadErrorHandlingPolicy.LoadErrorInfo info) {
                         // backoff: 1s, 2s, 4s, 8s (cap)
                         long delay = 1000L * (1L << Math.min(info.errorCount - 1, 3));
                         return Math.min(delay, 8000L);
