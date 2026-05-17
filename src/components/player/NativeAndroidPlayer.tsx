@@ -38,6 +38,7 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
     const activeStreamUrl = backupIndex < 0 ? streamUrl : (backups[backupIndex] ?? streamUrl);
     const [firstFrameReady, setFirstFrameReady] = useState(false);
     const [lastError, setLastError] = useState<string | null>(null);
+    const [reloadTick, setReloadTick] = useState(0);
 
     // Native player não expõe o <video> — handle retorna null.
     useImperativeHandle(ref, () => ({
@@ -61,15 +62,22 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
       );
       handles.push(
         NativePlayer.addListener("error", (data) => {
-          const msg = `code=${data?.code ?? "?"} ${data?.message ?? ""}`;
+          const msg = `code=${data?.code ?? "?"} ${data?.codeName ?? ""} ${data?.message ?? ""}${data?.cause ? " | " + data.cause : ""}`;
           console.warn("[NativePlayer] erro:", msg, data);
           setLastError(msg);
-          // Failover pro próximo backup
+          // 1) Tenta backup se houver
+          let usedBackup = false;
           setBackupIndex((idx) => {
             const next = idx + 1;
             if (next >= backups.length) return idx;
+            usedBackup = true;
             return next;
           });
+          // 2) Sem backup → watchdog: tenta recarregar a mesma URL em 5s
+          //    (cobre queda de internet onde o ExoPlayer eventualmente desiste).
+          if (!usedBackup) {
+            setTimeout(() => setReloadTick((t) => t + 1), 5000);
+          }
         }),
       );
       return () => {
