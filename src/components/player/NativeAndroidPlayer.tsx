@@ -115,7 +115,7 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
         }
       })();
       return () => { cancelled = true; };
-    }, [activeStreamUrl, useProxyToken, forceProxyNative, channelId, autoPlay]);
+    }, [activeStreamUrl, useProxyToken, forceProxyNative, channelId, autoPlay, reloadTick]);
 
     // Unmount: derruba player + restaura WebView preto + remove flag transparente.
     useEffect(() => {
