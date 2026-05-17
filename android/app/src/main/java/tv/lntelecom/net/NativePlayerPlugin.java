@@ -200,7 +200,12 @@ public class NativePlayerPlugin extends Plugin {
             public void onPlayerError(PlaybackException error) {
                 JSObject data = new JSObject();
                 data.put("code", error.errorCode);
+                data.put("codeName", error.getErrorCodeName());
                 data.put("message", error.getMessage());
+                Throwable cause = error.getCause();
+                if (cause != null) {
+                    data.put("cause", cause.getClass().getSimpleName() + ": " + cause.getMessage());
+                }
                 notifyListeners("error", data);
             }
         });
