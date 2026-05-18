@@ -102,5 +102,26 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         ShowOsd()
         return true
     end if
+    if key = "up" or key = "right" or key = "channelup" or key = "fastforward"
+        SwitchChannel(1)
+        return true
+    end if
+    if key = "down" or key = "left" or key = "channeldown" or key = "rewind"
+        SwitchChannel(-1)
+        return true
+    end if
     return false
 end function
+
+sub SwitchChannel(delta as Integer)
+    list = m.top.channelList
+    if list = invalid or list.count() <= 1 then return
+    idx = m.top.channelIndex + delta
+    if idx < 0 then idx = list.count() - 1
+    if idx >= list.count() then idx = 0
+    m.top.channelIndex = idx
+    ch = list[idx]
+    if ch = invalid then return
+    m.video.control = "stop"
+    m.top.channelData = ch
+end sub
