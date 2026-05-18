@@ -23,12 +23,11 @@ sub init()
     m.chList.observeField("itemFocused", "OnChFocused")
     m.hbTimer.observeField("fire", "OnHeartbeat")
     LoadAll()
-    CheckUpdate()
     StartSession()
 end sub
 
-sub CheckUpdate()
-    info = CheckForRokuUpdate()
+sub CheckUpdate(info as Object)
+    if info = invalid then return
     if info.hasUpdate = true
         banner = m.top.findNode("updateBanner")
         banner.text = "⚠ Nova versão do app disponível (v" + info.remote.toStr() + ") — peça pro provedor atualizar"
@@ -78,12 +77,27 @@ sub OnHeartbeatDone(evt as Object)
 end sub
 
 sub LoadAll()
-    cats = FetchCategories()
-    chs = FetchChannels()
-    incs = FetchCategoryIncludes()
-    access = FetchUserAccess()
-    favs = FetchFavorites()
-    prof = FetchProfile()
+    m.status.text = "Carregando canais..."
+    task = createObject("roSGNode", "HomeLoadTask")
+    task.observeField("result", "OnHomeLoaded")
+    m.loadTask = task
+    task.control = "RUN"
+end sub
+
+sub OnHomeLoaded(evt as Object)
+    data = evt.getData()
+    if data = invalid
+        m.status.text = "Erro ao carregar dados"
+        return
+    end if
+    cats = data.cats
+    chs = data.chs
+    incs = data.incs
+    access = data.access
+    favs = data.favs
+    prof = data.prof
+    epg = data.epg
+    CheckUpdate(data.update)
 
     if not cats.ok or not chs.ok
         m.status.text = "Erro ao carregar dados (status " + cats.status.toStr() + "/" + chs.status.toStr() + ")"
@@ -113,6 +127,13 @@ sub LoadAll()
         for each f in favs.body
             m.favIndex[f.channel_id] = f.id
         end for
+    end if
+
+    if epg <> invalid and epg.ok and epg.body <> invalid
+        bundle = epg.body.byChannel
+        if bundle = invalid then bundle = epg.body
+        m.global.epgBundle = bundle
+        m.global.epgFetchedAt = CreateObject("roDateTime").AsSeconds()
     end if
 
     BuildCategoryList()

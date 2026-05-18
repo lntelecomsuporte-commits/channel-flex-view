@@ -6,6 +6,8 @@ sub init()
     m.openPasswordAfterClose = false
     m.loginAfterClose = false
     m.loginBusy = false
+    m.kbDialog = invalid
+    m.loginTask = invalid
     m.emailValue = m.top.findNode("emailValue")
     m.passValue = m.top.findNode("passValue")
     m.emailBox = m.top.findNode("emailBox")
@@ -37,7 +39,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press then return false
 
     if key = "OK"
-        if m.activeField = "password" and m.email <> "" and m.password <> ""
+        if m.email <> "" and m.password <> ""
             DoLogin()
         else
             ShowKeyboard()
@@ -45,7 +47,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return true
     end if
     if key = "select"
-        if m.activeField = "password" and m.email <> "" and m.password <> ""
+        if m.email <> "" and m.password <> ""
             DoLogin()
             return true
         end if
@@ -72,6 +74,7 @@ end function
 
 sub ShowKeyboard()
     if m.kbDialog <> invalid then return
+    if m.loginBusy then return
     dlg = createObject("roSGNode", "StandardKeyboardDialog")
     m.keyboardField = m.activeField
     m.openPasswordAfterClose = false
@@ -83,7 +86,6 @@ sub ShowKeyboard()
         dlg.title = "Digite sua senha"
         dlg.text = m.password
     end if
-    if m.keyboardField = "email" then dlg.keyboardDomain = "email" else dlg.keyboardDomain = "password"
     dlg.buttons = ["OK", "Cancelar"]
     dlg.observeField("buttonSelected", "OnKbButton")
     dlg.observeField("wasClosed", "OnKbClosed")
@@ -102,7 +104,8 @@ sub OnKbButton(evt as Object)
         if m.keyboardField = "email"
             m.activeField = "password"
             UpdateActive()
-            m.openPasswordAfterClose = m.email <> ""
+            m.openPasswordAfterClose = false
+            if m.email <> "" then m.status.text = "Agora pressione OK na senha"
         else
             m.loginAfterClose = m.email <> "" and m.password <> ""
         end if
@@ -134,10 +137,26 @@ sub DoLogin()
     m.loginBusy = true
     m.status.text = "Entrando..."
     print "[LOGIN] attempting email="; m.email; " passLen="; Len(m.password)
-    res = SbLogin(m.email, m.password)
+    task = createObject("roSGNode", "LoginTask")
+    task.email = m.email
+    task.password = m.password
+    task.observeField("result", "OnLoginResult")
+    m.loginTask = task
+    task.control = "RUN"
+end sub
+
+sub OnLoginResult(evt as Object)
+    res = evt.getData()
+    if res = invalid
+        m.status.text = "Falha no login"
+        m.loginBusy = false
+        m.loginTask = invalid
+        return
+    end if
     if res.ok
         m.status.text = ""
         m.loginBusy = false
+        m.loginTask = invalid
         print "[LOGIN] success"
         m.top.loginOk = true
     else
@@ -145,6 +164,7 @@ sub DoLogin()
         if res.status <> invalid then err = err + " [HTTP " + res.status.toStr() + "]"
         m.status.text = err
         m.loginBusy = false
+        m.loginTask = invalid
         print "[LOGIN] fail: status="; res.status; " body="; res.raw
     end if
 end sub
