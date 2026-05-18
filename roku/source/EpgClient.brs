@@ -8,16 +8,7 @@ function EpgFetch() as Object
         ageSec = CreateObject("roDateTime").AsSeconds() - m.global.epgFetchedAt
         if ageSec < 3600 then return m.global.epgBundle
     end if
-
-    cfg = LNTV_Config()
-    res = HttpJson(cfg.baseUrl + "/epg/lntv.json", "GET", invalid, invalid)
-    if not res.ok or res.body = invalid then return invalid
-
-    bundle = res.body.byChannel
-    if bundle = invalid then bundle = res.body  ' fallback se vier sem wrapper
-    m.global.epgBundle = bundle
-    m.global.epgFetchedAt = CreateObject("roDateTime").AsSeconds()
-    return bundle
+    return invalid
 end function
 
 ' Devolve {current, next} para um epg_channel_id. Programs já vêm ordenados.
