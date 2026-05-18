@@ -96,6 +96,7 @@ sub OnHomeLoaded(evt as Object)
     access = data.access
     favs = data.favs
     prof = data.prof
+    epg = data.epg
     CheckUpdate(data.update)
 
     if not cats.ok or not chs.ok
@@ -126,6 +127,13 @@ sub OnHomeLoaded(evt as Object)
         for each f in favs.body
             m.favIndex[f.channel_id] = f.id
         end for
+    end if
+
+    if epg <> invalid and epg.ok and epg.body <> invalid
+        bundle = epg.body.byChannel
+        if bundle = invalid then bundle = epg.body
+        m.global.epgBundle = bundle
+        m.global.epgFetchedAt = CreateObject("roDateTime").AsSeconds()
     end if
 
     BuildCategoryList()
