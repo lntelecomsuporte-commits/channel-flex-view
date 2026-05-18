@@ -1,27 +1,13 @@
 sub init()
     m.email = ""
     m.password = ""
-    m.mode = "email"   ' or "cpf"
     m.activeField = "email"
     m.emailValue = m.top.findNode("emailValue")
     m.passValue = m.top.findNode("passValue")
     m.emailBox = m.top.findNode("emailBox")
     m.passBox = m.top.findNode("passBox")
-    m.emailLabel = m.top.findNode("emailLabel")
-    m.modeLabel = m.top.findNode("modeLabel")
     m.status = m.top.findNode("status")
-    UpdateMode()
     UpdateActive()
-end sub
-
-sub UpdateMode()
-    if m.mode = "cpf"
-        m.modeLabel.text = "Login por: CPF  (◀▶ trocar)"
-        m.emailLabel.text = "CPF (só números):"
-    else
-        m.modeLabel.text = "Login por: E-MAIL  (◀▶ trocar)"
-        m.emailLabel.text = "E-mail:"
-    end if
 end sub
 
 sub UpdateActive()
@@ -55,13 +41,6 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         UpdateActive()
         return true
     end if
-    if key = "left" or key = "right"
-        if m.mode = "email" then m.mode = "cpf" else m.mode = "email"
-        m.email = ""
-        UpdateValues()
-        UpdateMode()
-        return true
-    end if
     if key = "rewind"
         if m.activeField = "email" then m.email = "" else m.password = ""
         UpdateValues()
@@ -73,6 +52,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     end if
     return false
 end function
+
 
 sub ShowKeyboard()
     dlg = createObject("roSGNode", "StandardKeyboardDialog")
@@ -126,15 +106,14 @@ sub DoLogin()
         return
     end if
     m.status.text = "Entrando..."
-    if m.mode = "cpf"
-        res = SbLoginCpf(m.email, m.password)
-    else
-        res = SbLogin(m.email, m.password)
-    end if
+    res = SbLogin(m.email, m.password)
     if res.ok
         m.status.text = ""
         m.top.loginOk = true
     else
-        m.status.text = res.error
+        err = res.error
+        if res.status <> invalid then err = err + " [HTTP " + res.status.toStr() + "]"
+        m.status.text = err
+        print "[LOGIN] fail: status="; res.status; " body="; res.raw
     end if
 end sub

@@ -11,10 +11,7 @@
     <Label id="subtitle" text="Acesse com sua conta" font="font:MediumSystemFont"
            color="0x9ca3afff" translation="[700, 280]" width="520" horizAlign="center" />
 
-    <!-- Toggle CPF / E-mail -->
-    <Rectangle id="modeBox" width="560" height="50" color="0x111827ff" translation="[680, 350]" />
-    <Label id="modeLabel" text="Login por: E-MAIL  (◀▶ trocar)" font="font:MediumBoldSystemFont"
-           color="0xfbbf24ff" translation="[680, 360]" width="560" horizAlign="center" />
+    <!-- (toggle CPF removido — login só por e-mail) -->
 
     <Label id="emailLabel" text="E-mail:" font="font:MediumBoldSystemFont"
            color="0xffffffff" translation="[680, 430]" />
