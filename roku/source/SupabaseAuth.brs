@@ -15,7 +15,7 @@ function SbLogin(email as String, password as String) as Object
     msg = "Falha no login"
     if res.body <> invalid and res.body.error_description <> invalid then msg = res.body.error_description
     if res.body <> invalid and res.body.msg <> invalid then msg = res.body.msg
-    return { ok: false, error: msg }
+    return { ok: false, error: msg, status: res.status, raw: res.raw }
 end function
 
 function SbRefresh() as Boolean
