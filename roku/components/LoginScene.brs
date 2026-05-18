@@ -106,15 +106,14 @@ sub DoLogin()
         return
     end if
     m.status.text = "Entrando..."
-    if m.mode = "cpf"
-        res = SbLoginCpf(m.email, m.password)
-    else
-        res = SbLogin(m.email, m.password)
-    end if
+    res = SbLogin(m.email, m.password)
     if res.ok
         m.status.text = ""
         m.top.loginOk = true
     else
-        m.status.text = res.error
+        err = res.error
+        if res.status <> invalid then err = err + " [HTTP " + res.status.toStr() + "]"
+        m.status.text = err
+        print "[LOGIN] fail: status="; res.status; " body="; res.raw
     end if
 end sub
