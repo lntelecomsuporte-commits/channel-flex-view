@@ -93,12 +93,26 @@ end sub
 sub OnKbButton(evt as Object)
     idx = evt.getData()
     dlg = m.kbDialog
+    confirmed = false
     if idx = 0 and dlg <> invalid
         txt = dlg.text
         if m.activeField = "email" then m.email = txt else m.password = txt
         UpdateValues()
+        confirmed = true
     end if
     if dlg <> invalid then dlg.close = true
+
+    if confirmed
+        if m.activeField = "email"
+            ' Avança automaticamente pro campo senha e abre o teclado de novo
+            m.activeField = "password"
+            UpdateActive()
+            if m.email <> "" then ShowKeyboard()
+        else
+            ' Senha confirmada → tenta logar direto
+            if m.email <> "" and m.password <> "" then DoLogin()
+        end if
+    end if
 end sub
 
 sub OnKbClosed(evt as Object)
