@@ -342,8 +342,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return true
     end if
     if key = "back"
-        m.top.logoutRequested = true
-        return true
+        ' Deixa o sistema fechar o app — NÃO faz logout aqui.
+        return false
     end if
     return false
 end function
