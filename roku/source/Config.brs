@@ -2,7 +2,7 @@
 function LNTV_Config() as Object
     return {
         baseUrl: "https://tv2.lntelecom.net"
-        anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94dW5remx0bWxhZmF0emZpaWtqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNDcwNDIsImV4cCI6MjA5MDkyMzA0Mn0.9OhGbfjGuoXQaars3TIZ7QyVBnWrWrgkHP3ktWHfMkY"
+        anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc3MDA0OTQwLCJleHAiOjIwOTIzNjQ5NDB9.9BCUjjQPaZLLhZnJnpor4cfq7kO6IbjFpt78hPBGyow"
         registrySection: "LNTV"
     }
 end function
