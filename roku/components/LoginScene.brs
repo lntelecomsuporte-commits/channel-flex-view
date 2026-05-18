@@ -75,16 +75,17 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
 end function
 
 sub ShowKeyboard()
-    dlg = createObject("roSGNode", "KeyboardDialog")
+    dlg = createObject("roSGNode", "StandardKeyboardDialog")
     if m.activeField = "email"
         if m.mode = "cpf" then dlg.title = "Digite seu CPF" else dlg.title = "Digite seu e-mail"
+        dlg.text = m.email
     else
         dlg.title = "Digite sua senha"
+        dlg.text = m.password
     end if
-    if m.activeField = "password" then dlg.textEditBox.secureMode = true
-    if m.activeField = "email" then dlg.textEditBox.text = m.email else dlg.textEditBox.text = m.password
     dlg.buttons = ["OK", "Cancelar"]
     dlg.observeField("buttonSelected", "OnKbButton")
+    dlg.observeField("wasClosed", "OnKbClosed")
     m.kbDialog = dlg
     m.top.getScene().dialog = dlg
 end sub
@@ -93,12 +94,16 @@ sub OnKbButton(evt as Object)
     idx = evt.getData()
     dlg = m.kbDialog
     if idx = 0 and dlg <> invalid
-        txt = dlg.textEditBox.text
+        txt = dlg.text
         if m.activeField = "email" then m.email = txt else m.password = txt
         UpdateValues()
     end if
     if dlg <> invalid then dlg.close = true
+end sub
+
+sub OnKbClosed(evt as Object)
     m.kbDialog = invalid
+    m.top.setFocus(true)
 end sub
 
 sub DoLogin()
