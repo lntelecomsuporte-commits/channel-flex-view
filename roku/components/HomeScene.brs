@@ -301,14 +301,31 @@ sub OnPinResult(evt as Object)
 end sub
 
 sub PlayChannel(ch as Object)
+    idx = 0
+    for i = 0 to m.currentChannels.count() - 1
+        if m.currentChannels[i].id = ch.id
+            idx = i
+            exit for
+        end if
+    end for
     p = createObject("roSGNode", "PlayerScene")
+    p.channelList = m.currentChannels
+    p.channelIndex = idx
     p.channelData = ch
     m.top.appendChild(p)
     p.observeField("playerClosed", "OnPlayerClosed")
+    p.observeField("channelData", "OnPlayerChannelChanged")
     p.setFocus(true)
     m.player = p
     m.currentPlayingCh = ch
-    OnHeartbeat(invalid)  ' notifica imediatamente que está assistindo
+    OnHeartbeat(invalid)
+end sub
+
+sub OnPlayerChannelChanged(evt as Object)
+    ch = evt.getData()
+    if ch = invalid then return
+    m.currentPlayingCh = ch
+    OnHeartbeat(invalid)
 end sub
 
 sub OnPlayerClosed(evt as Object)
