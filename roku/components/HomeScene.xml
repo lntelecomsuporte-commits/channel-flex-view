@@ -5,6 +5,13 @@
     <field id="forceSignout" type="boolean" alwaysNotify="true" />
   </interface>
   <script type="text/brightscript" uri="pkg:/components/HomeScene.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Config.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/source/SupabaseAuth.brs" />
+  <script type="text/brightscript" uri="pkg:/source/SupabaseRest.brs" />
+  <script type="text/brightscript" uri="pkg:/source/EpgClient.brs" />
+  <script type="text/brightscript" uri="pkg:/source/UpdateCheck.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Heartbeat.brs" />
   <children>
     <Rectangle width="1920" height="1080" color="0x0a0a0aff" />
 
