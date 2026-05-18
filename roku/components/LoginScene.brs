@@ -83,6 +83,7 @@ sub ShowKeyboard()
         dlg.title = "Digite sua senha"
         dlg.text = m.password
     end if
+    if m.keyboardField = "email" then dlg.keyboardDomain = "email" else dlg.keyboardDomain = "password"
     dlg.buttons = ["OK", "Cancelar"]
     dlg.observeField("buttonSelected", "OnKbButton")
     dlg.observeField("wasClosed", "OnKbClosed")
@@ -93,6 +94,7 @@ end sub
 sub OnKbButton(evt as Object)
     idx = evt.getData()
     dlg = m.kbDialog
+    print "[LOGIN] keyboard button idx="; idx; " field="; m.keyboardField
     if idx = 0 and dlg <> invalid
         txt = dlg.text
         if m.keyboardField = "email" then m.email = txt else m.password = txt
@@ -109,6 +111,7 @@ sub OnKbButton(evt as Object)
 end sub
 
 sub OnKbClosed(evt as Object)
+    print "[LOGIN] keyboard closed field="; m.keyboardField; " emailLen="; Len(m.email); " passLen="; Len(m.password)
     m.kbDialog = invalid
     m.top.setFocus(true)
     if m.openPasswordAfterClose
@@ -130,10 +133,12 @@ sub DoLogin()
     end if
     m.loginBusy = true
     m.status.text = "Entrando..."
+    print "[LOGIN] attempting email="; m.email; " passLen="; Len(m.password)
     res = SbLogin(m.email, m.password)
     if res.ok
         m.status.text = ""
         m.loginBusy = false
+        print "[LOGIN] success"
         m.top.loginOk = true
     else
         err = res.error
