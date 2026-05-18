@@ -2,6 +2,10 @@ sub init()
     m.email = ""
     m.password = ""
     m.activeField = "email"
+    m.keyboardField = ""
+    m.openPasswordAfterClose = false
+    m.loginAfterClose = false
+    m.loginBusy = false
     m.emailValue = m.top.findNode("emailValue")
     m.passValue = m.top.findNode("passValue")
     m.emailBox = m.top.findNode("emailBox")
@@ -33,6 +37,18 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press then return false
 
     if key = "OK"
+        if m.activeField = "password" and m.email <> "" and m.password <> ""
+            DoLogin()
+        else
+            ShowKeyboard()
+        end if
+        return true
+    end if
+    if key = "select"
+        if m.activeField = "password" and m.email <> "" and m.password <> ""
+            DoLogin()
+            return true
+        end if
         ShowKeyboard()
         return true
     end if
@@ -55,7 +71,11 @@ end function
 
 
 sub ShowKeyboard()
+    if m.kbDialog <> invalid then return
     dlg = createObject("roSGNode", "StandardKeyboardDialog")
+    m.keyboardField = m.activeField
+    m.openPasswordAfterClose = false
+    m.loginAfterClose = false
     if m.activeField = "email"
         if m.mode = "cpf" then dlg.title = "Digite seu CPF" else dlg.title = "Digite seu e-mail"
         dlg.text = m.email
@@ -63,6 +83,7 @@ sub ShowKeyboard()
         dlg.title = "Digite sua senha"
         dlg.text = m.password
     end if
+    if m.keyboardField = "email" then dlg.keyboardDomain = "email" else dlg.keyboardDomain = "password"
     dlg.buttons = ["OK", "Cancelar"]
     dlg.observeField("buttonSelected", "OnKbButton")
     dlg.observeField("wasClosed", "OnKbClosed")
@@ -73,47 +94,57 @@ end sub
 sub OnKbButton(evt as Object)
     idx = evt.getData()
     dlg = m.kbDialog
-    confirmed = false
+    print "[LOGIN] keyboard button idx="; idx; " field="; m.keyboardField
     if idx = 0 and dlg <> invalid
         txt = dlg.text
-        if m.activeField = "email" then m.email = txt else m.password = txt
+        if m.keyboardField = "email" then m.email = txt else m.password = txt
         UpdateValues()
-        confirmed = true
-    end if
-    if dlg <> invalid then dlg.close = true
-
-    if confirmed
-        if m.activeField = "email"
-            ' Avança automaticamente pro campo senha e abre o teclado de novo
+        if m.keyboardField = "email"
             m.activeField = "password"
             UpdateActive()
-            if m.email <> "" then ShowKeyboard()
+            m.openPasswordAfterClose = m.email <> ""
         else
-            ' Senha confirmada → tenta logar direto
-            if m.email <> "" and m.password <> "" then DoLogin()
+            m.loginAfterClose = m.email <> "" and m.password <> ""
         end if
     end if
+    if dlg <> invalid then dlg.close = true
 end sub
 
 sub OnKbClosed(evt as Object)
+    print "[LOGIN] keyboard closed field="; m.keyboardField; " emailLen="; Len(m.email); " passLen="; Len(m.password)
     m.kbDialog = invalid
     m.top.setFocus(true)
+    if m.openPasswordAfterClose
+        m.openPasswordAfterClose = false
+        ShowKeyboard()
+        return
+    end if
+    if m.loginAfterClose
+        m.loginAfterClose = false
+        DoLogin()
+    end if
 end sub
 
 sub DoLogin()
+    if m.loginBusy then return
     if m.email = "" or m.password = ""
         m.status.text = "Preencha os dois campos"
         return
     end if
+    m.loginBusy = true
     m.status.text = "Entrando..."
+    print "[LOGIN] attempting email="; m.email; " passLen="; Len(m.password)
     res = SbLogin(m.email, m.password)
     if res.ok
         m.status.text = ""
+        m.loginBusy = false
+        print "[LOGIN] success"
         m.top.loginOk = true
     else
         err = res.error
         if res.status <> invalid then err = err + " [HTTP " + res.status.toStr() + "]"
         m.status.text = err
+        m.loginBusy = false
         print "[LOGIN] fail: status="; res.status; " body="; res.raw
     end if
 end sub
