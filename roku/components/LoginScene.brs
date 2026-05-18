@@ -104,7 +104,8 @@ sub OnKbButton(evt as Object)
         if m.keyboardField = "email"
             m.activeField = "password"
             UpdateActive()
-            m.openPasswordAfterClose = m.email <> ""
+            m.openPasswordAfterClose = false
+            if m.email <> "" then m.status.text = "Agora pressione OK na senha"
         else
             m.loginAfterClose = m.email <> "" and m.password <> ""
         end if
