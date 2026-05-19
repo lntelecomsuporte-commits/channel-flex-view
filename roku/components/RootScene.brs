@@ -25,7 +25,13 @@ sub ShowHome()
     m.top.appendChild(m.home)
     m.home.observeField("logoutRequested", "OnLogout")
     m.home.observeField("forceSignout", "OnForceSignout")
+    m.home.observeField("exitRequested", "OnExit")
     m.home.setFocus(true)
+end sub
+
+sub OnExit(evt as Object)
+    ' Sai do channel — sistema fecha a tela.
+    end
 end sub
 
 sub OnLoginOk(evt as Object)
