@@ -240,7 +240,14 @@ sub ShowChannelOverlay()
         n = root.createChild("ContentNode")
         prefix = ""
         if ch.channel_number <> invalid then prefix = ch.channel_number.toStr() + "  "
-        n.title = prefix + ch.name
+        epgTxt = ""
+        if ch.epg_channel_id <> invalid and ch.epg_channel_id <> ""
+            info = EpgCurrentAndNext(ch.epg_channel_id)
+            if info.current <> invalid
+                epgTxt = "   ▶ " + FormatHHMM(info.current.start_date) + " " + info.current.title
+            end if
+        end if
+        n.title = prefix + ch.name + epgTxt
     end for
     m.chOverlay.content = root
     m.chOverlay.jumpToItem = m.top.channelIndex
@@ -440,8 +447,24 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return true
     end if
 
-    ' lista overlay roteia próprias teclas (LabelList trata up/down/OK)
+    ' lista overlay: interceptar left/right para paginar; resto trata a LabelList
     if m.focusZone = "list"
+        if press and (key = "left" or key = "right")
+            list = m.top.channelList
+            if list = invalid or list.count() = 0 then return true
+            pageSize = 14
+            cur = m.chOverlay.itemFocused
+            if cur < 0 then cur = 0
+            if key = "right"
+                newIdx = cur + pageSize
+                if newIdx >= list.count() then newIdx = list.count() - 1
+            else
+                newIdx = cur - pageSize
+                if newIdx < 0 then newIdx = 0
+            end if
+            m.chOverlay.jumpToItem = newIdx
+            return true
+        end if
         return false
     end if
 
