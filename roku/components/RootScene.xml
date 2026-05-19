@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <component name="RootScene" extends="Scene">
+  <interface>
+    <field id="memoryWarning" type="dynamic" alwaysNotify="true" />
+  </interface>
   <script type="text/brightscript" uri="pkg:/components/RootScene.brs" />
   <script type="text/brightscript" uri="pkg:/source/Config.brs" />
   <script type="text/brightscript" uri="pkg:/source/Utils.brs" />
