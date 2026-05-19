@@ -74,6 +74,9 @@ sub OnChannelData()
     m.video.content = content
     m.video.control = "play"
     m.previewIdx = -1
+    ' esconde barra de favoritos quando troca de canal (zap puro não mostra favs)
+    HideFavBar()
+    if m.focusZone = "favorites" then m.focusZone = "main"
     ShowOsd(ch)
 end sub
 
