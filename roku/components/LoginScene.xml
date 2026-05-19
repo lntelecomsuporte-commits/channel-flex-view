@@ -10,10 +10,10 @@
   <script type="text/brightscript" uri="pkg:/source/Utils.brs" />
   <children>
     <Rectangle width="1920" height="1080" color="0x0a0a0aff" />
-    <Label id="title" text="LN TV" font="font:LargeBoldSystemFont" color="0xdc2626ff"
-           translation="[860, 200]" width="200" horizAlign="center" />
+    <Poster id="logo" uri="pkg:/images/logo.png" width="400" height="160"
+            translation="[760, 130]" loadDisplayMode="scaleToFit" />
     <Label id="subtitle" text="Acesse com sua conta" font="font:MediumSystemFont"
-           color="0x9ca3afff" translation="[700, 280]" width="520" horizAlign="center" />
+           color="0x9ca3afff" translation="[700, 320]" width="520" horizAlign="center" />
 
     <!-- (toggle CPF removido — login só por e-mail) -->
 
