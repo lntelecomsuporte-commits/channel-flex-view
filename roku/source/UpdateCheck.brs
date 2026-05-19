@@ -11,7 +11,9 @@ function CheckForRokuUpdate() as Object
     if currentCode = 0 then return { hasUpdate: false }
 
     cfg = LNTV_Config()
-    res = HttpJson(cfg.baseUrl + "/version.json", "GET", invalid, invalid)
+    ' usa roku-version.json (gerado pelo workflow roku-channel.yml).
+    ' NÃO usar /version.json — esse é do Android (versionCode != rokuVersionCode).
+    res = HttpJson(cfg.baseUrl + "/roku-version.json", "GET", invalid, invalid)
     if not res.ok or res.body = invalid then return { hasUpdate: false, current: currentCode }
 
     remote = res.body.rokuVersionCode
