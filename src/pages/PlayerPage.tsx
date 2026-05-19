@@ -747,6 +747,7 @@ const PlayerPage = () => {
       // o próximo OK abre a lista de canais.
       if (showOSD && favFocusIndex === null) {
         lastEnterRef.current = { id: "", time: 0 };
+        osdOpenedByOkRef.current = false;
         setShowChannelList(true);
         return;
       }
@@ -755,11 +756,12 @@ const PlayerPage = () => {
       const last = lastEnterRef.current;
       if (id && last.id === id && now - last.time < 400) {
         lastEnterRef.current = { id: "", time: 0 };
+        osdOpenedByOkRef.current = false;
         setShowChannelList(true);
         return;
       }
       lastEnterRef.current = { id, time: now };
-      showOSDTemporarily(true);
+      showOSDTemporarily(false, true);
     };
 
     window.addEventListener("keydown", handleKeyDown, true);
