@@ -136,6 +136,7 @@ sub HideOsdAll()
     m.osdHint.visible = false
     HideFavBar()
     m.osdVisible = false
+    m.osdFromOk = false
     m.previewIdx = -1
     m.focusZone = "main"
 end sub
