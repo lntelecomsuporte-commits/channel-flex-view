@@ -298,6 +298,9 @@ end sub
 sub ShowChannelOverlay()
     list = m.top.channelList
     if list = invalid or list.count() = 0 then return
+    ' limpa qualquer preview pendente — evita que release de up/down
+    ' dispare PlayPreviewed depois que a lista fechar
+    m.previewIdx = -1
     favIdx = {}
     if m.top.favorites <> invalid
         for each f in m.top.favorites
