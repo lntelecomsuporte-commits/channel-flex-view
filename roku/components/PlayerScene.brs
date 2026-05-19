@@ -22,6 +22,7 @@ sub init()
 
     ' state
     m.osdVisible = false
+    m.osdFromOk = false         ' true se OSD foi aberto por OK (libera favoritos no ▲)
     m.focusZone = "main"        ' main | favorites | list
     m.favFocusIdx = 0
     m.previewIdx = -1            ' índice em preview (left/right) ou -1 se não há preview
@@ -135,6 +136,7 @@ sub HideOsdAll()
     m.osdHint.visible = false
     HideFavBar()
     m.osdVisible = false
+    m.osdFromOk = false
     m.previewIdx = -1
     m.focusZone = "main"
 end sub
@@ -432,6 +434,7 @@ sub HandleSingleTap()
         ch = m.top.channelData
         ShowOsd(ch)
         ShowFavBar()
+        m.osdFromOk = true
     else
         ' OSD já visível e sem preview/favorito focado: esconde
         HideOsdAll()
@@ -525,7 +528,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             return true
         end if
         ' só abre favoritos se OSD visível, sem preview ativo e não estiver zapando
-        if m.osdVisible and m.previewIdx < 0 and m.favoritesResolved <> invalid and m.favoritesResolved.count() > 0
+        if m.osdVisible and m.osdFromOk and m.previewIdx < 0 and m.favoritesResolved <> invalid and m.favoritesResolved.count() > 0
             ShowFavBar()
             m.focusZone = "favorites"
             m.favFocusIdx = 0
@@ -581,6 +584,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         else
             ShowOsd(ch)
             ShowFavBar()
+            m.osdFromOk = true
         end if
         return true
     end if
