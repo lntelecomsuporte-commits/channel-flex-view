@@ -436,8 +436,9 @@ sub HandleSingleTap()
         ShowFavBar()
         m.osdFromOk = true
     else
-        ' OSD já visível e sem preview/favorito focado: esconde
-        HideOsdAll()
+        ' OSD já visível e sem preview/favorito focado:
+        ' próximo OK abre a lista de canais (igual ao Android).
+        ShowChannelOverlay()
     end if
 end sub
 
