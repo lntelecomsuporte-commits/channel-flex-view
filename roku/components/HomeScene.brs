@@ -132,8 +132,10 @@ sub OnHomeLoaded(evt as Object)
     if epg <> invalid and epg.ok and epg.body <> invalid
         bundle = epg.body.byChannel
         if bundle = invalid then bundle = epg.body
+        nowSec = CreateObject("roDateTime").AsSeconds()
+        m.global.addFields({ epgBundle: bundle, epgFetchedAt: nowSec })
         m.global.epgBundle = bundle
-        m.global.epgFetchedAt = CreateObject("roDateTime").AsSeconds()
+        m.global.epgFetchedAt = nowSec
     end if
 
     BuildCategoryList()
