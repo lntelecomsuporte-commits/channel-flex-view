@@ -296,7 +296,6 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
   const enterPressStartRef = useRef<number | null>(null);
   const enterFavoriteFiredRef = useRef(false);
   const enterFavoriteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const selectHandledByKeyDownRef = useRef(false);
   // Throttle de 16ms (~60fps) para repetição de teclas de navegação
   const lastNavTickRef = useRef(0);
   const NAV_THROTTLE_MS = 16;
@@ -470,7 +469,6 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
               const shouldFavorite = focusedId ? !isFavorite(focusedId) : false;
               enterFavoriteTimerRef.current = setTimeout(() => {
                 enterFavoriteFiredRef.current = true;
-                selectHandledByKeyDownRef.current = true;
                 enterFavoriteTimerRef.current = null;
                 if (focusedId) setFavorite(focusedId, shouldFavorite);
               }, LONG_PRESS_MS);
@@ -516,7 +514,6 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
       const fired = enterFavoriteFiredRef.current;
       enterPressStartRef.current = null;
       enterFavoriteFiredRef.current = false;
-      selectHandledByKeyDownRef.current = false;
 
       if (fired) return;
       if (startedAt === null) return;
