@@ -311,14 +311,32 @@ sub PlayChannel(ch as Object)
     p = createObject("roSGNode", "PlayerScene")
     p.channelList = m.currentChannels
     p.channelIndex = idx
+    p.favorites = m.favorites
     p.channelData = ch
     m.top.appendChild(p)
     p.observeField("playerClosed", "OnPlayerClosed")
     p.observeField("channelData", "OnPlayerChannelChanged")
+    p.observeField("favoritesChanged", "OnPlayerFavoritesChanged")
     p.setFocus(true)
     m.player = p
     m.currentPlayingCh = ch
     OnHeartbeat(invalid)
+end sub
+
+sub OnPlayerFavoritesChanged(evt as Object)
+    info = evt.getData()
+    if info = invalid then return
+    if info.action = "added" and info.fav <> invalid
+        m.favorites.push(info.fav)
+        m.favIndex[info.fav.channel_id] = info.fav.id
+    else if info.action = "removed"
+        newFavs = []
+        for each f in m.favorites
+            if f.channel_id <> info.channelId then newFavs.push(f)
+        end for
+        m.favorites = newFavs
+        m.favIndex.Delete(info.channelId)
+    end if
 end sub
 
 sub OnPlayerChannelChanged(evt as Object)
