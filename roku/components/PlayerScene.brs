@@ -471,6 +471,14 @@ sub HandleOkAction()
         return
     end if
     if m.osdVisible
+        ' 1ª OK sobre OSD (auto): adiciona barra de favoritos
+        if not m.osdFromOk
+            ShowFavBar()
+            m.osdFromOk = true
+            RestartOsdTimer()
+            return
+        end if
+        ' 2ª OK (já com favoritos): abre lista completa
         ShowChannelOverlay()
         return
     end if
