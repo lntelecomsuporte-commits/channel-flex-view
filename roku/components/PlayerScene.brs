@@ -1,3 +1,16 @@
+' PlayerScene.brs — espelha o Android.
+'
+' Atalhos:
+'   ▲/▼          : zap (sem barra de favoritos)
+'   ◀/▶          : pré-visualiza canal anterior/próximo (não troca o stream)
+'   OK (1x)      : se nada na tela → abre OSD + barra de favoritos
+'                  se OSD aberto → abre lista de canais
+'                  se em preview → confirma o canal previewado
+'                  se foco em favoritos → toca o canal favorito focado
+'   OK (segurar) : favorita/desfavorita o canal em foco
+'   Voltar       : fecha overlay/lista/OSD; se nada aberto, fecha o app
+'   channel ▲/▼  : zap direto (botões dedicados do controle)
+
 sub init()
     m.video = m.top.findNode("video")
     m.osdBg = m.top.findNode("osdBg")
@@ -17,26 +30,26 @@ sub init()
     m.errLabel = m.top.findNode("errLabel")
     m.osdTimer = m.top.findNode("osdTimer")
     m.longPressTimer = m.top.findNode("longPressTimer")
-    m.tapTimer = m.top.findNode("tapTimer")
     m.toastTimer = m.top.findNode("toastTimer")
 
-    ' state
     m.osdVisible = false
-    m.osdFromOk = false         ' true se OSD foi aberto por OK (libera favoritos no ▲)
-    m.focusZone = "main"        ' main | favorites | list
+    m.osdFromOk = false
+    m.focusZone = "main"       ' main | favorites | list
     m.favFocusIdx = 0
-    m.previewIdx = -1            ' índice em preview (left/right) ou -1 se não há preview
+    m.previewIdx = -1
     m.okHeld = false
     m.longPressFired = false
     m.favoritesResolved = []
     m.favIcons = []
+    m.lastIndex = m.top.channelIndex
 
     m.top.observeField("channelData", "OnChannelData")
     m.top.observeField("favorites", "OnFavoritesField")
+    m.top.observeField("unlockedIds", "OnUnlockedChanged")
+    m.top.observeField("revertRestricted", "OnRevertRestricted")
     m.video.observeField("state", "OnState")
     m.osdTimer.observeField("fire", "HideOsdAll")
     m.longPressTimer.observeField("fire", "OnLongPress")
-    m.tapTimer.observeField("fire", "OnTapTimeout")
     m.toastTimer.observeField("fire", "HideToast")
     m.chOverlay.observeField("itemSelected", "OnOverlaySelected")
 end sub
@@ -46,6 +59,16 @@ end sub
 sub OnChannelData()
     ch = m.top.channelData
     if ch = invalid then return
+
+    ' bloqueio de canais restritos
+    if IsRestricted(ch) and not IsUnlocked(ch.id)
+        ' avisa o HomeScene pra abrir o PIN
+        m.video.control = "stop"
+        m.video.content = invalid
+        m.top.unlockRequest = { channelId: ch.id }
+        return
+    end if
+
     fmt = "hls"
     if ch.stream_format = "mp4" then fmt = "mp4"
     if ch.stream_format = "youtube"
@@ -67,18 +90,50 @@ sub OnChannelData()
     if urls.count() > 1 then content.streamUrls = urls
     content.title = ch.name
 
-    ' Garante que qualquer playback anterior seja totalmente parado antes de
-    ' iniciar o novo — evita "only one playing instance supported" quando o
-    ' usuário troca de canal rapidamente ou abre a lista durante um zap.
     m.video.control = "stop"
     m.video.content = invalid
     m.video.content = content
     m.video.control = "play"
     m.previewIdx = -1
-    ' esconde barra de favoritos quando troca de canal (zap puro não mostra favs)
     HideFavBar()
     if m.focusZone = "favorites" then m.focusZone = "main"
+    m.lastIndex = m.top.channelIndex
     ShowOsd(ch)
+end sub
+
+function IsRestricted(ch as Object) as Boolean
+    if ch = invalid then return false
+    if ch.is_adult = true then return true
+    pinCats = m.top.pinCategoryIds
+    if pinCats <> invalid and ch.category_id <> invalid and pinCats[ch.category_id] = true
+        return true
+    end if
+    return false
+end function
+
+function IsUnlocked(id as String) as Boolean
+    unl = m.top.unlockedIds
+    if unl = invalid then return false
+    return unl[id] = true
+end function
+
+sub OnUnlockedChanged()
+    ' Se acabou de liberar o canal atual, reinicia o stream.
+    ch = m.top.channelData
+    if ch = invalid then return
+    if IsRestricted(ch) and IsUnlocked(ch.id) and m.video.content = invalid
+        OnChannelData()
+    end if
+end sub
+
+sub OnRevertRestricted()
+    ' Volta pro último canal sem restrição.
+    list = m.top.channelList
+    if list = invalid then return
+    idx = m.lastIndex
+    if idx < 0 or idx >= list.count() then idx = 0
+    m.top.channelIndex = idx
+    m.top.channelData = list[idx]
 end sub
 
 sub OnState(evt as Object)
@@ -146,7 +201,7 @@ sub RestartOsdTimer()
     m.osdTimer.control = "start"
 end sub
 
-' ==================== FAVORITOS BAR ====================
+' ==================== FAVORITOS ====================
 
 sub OnFavoritesField()
     BuildFavoritesResolved()
@@ -179,16 +234,14 @@ sub ShowFavBar()
     if m.favoritesResolved = invalid or m.favoritesResolved.count() = 0
         BuildFavoritesResolved()
     end if
-    ' limpa filhos antigos
     while m.favBar.getChildCount() > 0
         m.favBar.removeChildIndex(0)
     end while
     m.favIcons = []
     x = 0
     cellW = 200
-    cellH = 200
-    maxCells = 9
     n = m.favoritesResolved.count()
+    maxCells = 9
     if n > maxCells then n = maxCells
     for i = 0 to n - 1
         ch = m.favoritesResolved[i]
@@ -245,11 +298,18 @@ end sub
 sub ShowChannelOverlay()
     list = m.top.channelList
     if list = invalid or list.count() = 0 then return
+    favIdx = {}
+    if m.top.favorites <> invalid
+        for each f in m.top.favorites
+            if f.channel_id <> invalid then favIdx[f.channel_id] = true
+        end for
+    end if
     root = createObject("roSGNode", "ContentNode")
     for each ch in list
         n = root.createChild("ContentNode")
         prefix = ""
-        if ch.channel_number <> invalid then prefix = ch.channel_number.toStr() + "  "
+        if favIdx[ch.id] = true then prefix = "★ "
+        if ch.channel_number <> invalid then prefix = prefix + ch.channel_number.toStr() + "  "
         epgTxt = ""
         if ch.epg_channel_id <> invalid and ch.epg_channel_id <> ""
             info = EpgCurrentAndNext(ch.epg_channel_id)
@@ -285,7 +345,6 @@ sub OnOverlaySelected(evt as Object)
     if ch = invalid then return
     HideChannelOverlay()
     m.top.channelIndex = idx
-    m.video.control = "stop"
     m.top.channelData = ch
 end sub
 
@@ -298,10 +357,7 @@ sub SwitchChannel(delta as Integer)
     if idx < 0 then idx = list.count() - 1
     if idx >= list.count() then idx = 0
     m.top.channelIndex = idx
-    ch = list[idx]
-    if ch = invalid then return
-    m.video.control = "stop"
-    m.top.channelData = ch
+    m.top.channelData = list[idx]
 end sub
 
 sub PreviewChannel(delta as Integer)
@@ -325,7 +381,6 @@ sub PlayPreviewed()
     ch = list[m.previewIdx]
     m.top.channelIndex = m.previewIdx
     m.previewIdx = -1
-    m.video.control = "stop"
     m.top.channelData = ch
 end sub
 
@@ -333,7 +388,6 @@ sub PlayFavoriteFocused()
     if m.favoritesResolved = invalid or m.favFocusIdx < 0 then return
     if m.favFocusIdx >= m.favoritesResolved.count() then return
     ch = m.favoritesResolved[m.favFocusIdx]
-    ' procura índice na lista atual; se não estiver, ainda assim toca
     list = m.top.channelList
     newIdx = m.top.channelIndex
     if list <> invalid
@@ -346,7 +400,6 @@ sub PlayFavoriteFocused()
     end if
     m.top.channelIndex = newIdx
     HideOsdAll()
-    m.video.control = "stop"
     m.top.channelData = ch
 end sub
 
@@ -413,15 +466,9 @@ sub OnLongPress()
     end if
 end sub
 
-' ==================== TAP HANDLING ====================
+' ==================== OK ACTION (no release) ====================
 
-sub OnTapTimeout()
-    ' single tap confirmado
-    m.tapTimerRunning = false
-    HandleSingleTap()
-end sub
-
-sub HandleSingleTap()
+sub HandleOkAction()
     if m.focusZone = "favorites"
         PlayFavoriteFocused()
         return
@@ -430,16 +477,14 @@ sub HandleSingleTap()
         PlayPreviewed()
         return
     end if
-    if not m.osdVisible
-        ch = m.top.channelData
-        ShowOsd(ch)
-        ShowFavBar()
-        m.osdFromOk = true
-    else
-        ' OSD já visível e sem preview/favorito focado:
-        ' próximo OK abre a lista de canais (igual ao Android).
+    if m.osdVisible
         ShowChannelOverlay()
+        return
     end if
+    ch = m.top.channelData
+    ShowOsd(ch)
+    ShowFavBar()
+    m.osdFromOk = true
 end sub
 
 ' ==================== KEYS ====================
@@ -451,6 +496,12 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             HideChannelOverlay()
             return true
         end if
+        if m.focusZone = "favorites"
+            m.focusZone = "main"
+            HideFavBar()
+            RestartOsdTimer()
+            return true
+        end if
         if m.osdVisible
             HideOsdAll()
             return true
@@ -460,7 +511,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return true
     end if
 
-    ' lista overlay: interceptar left/right para paginar; resto trata a LabelList
+    ' overlay de lista: left/right paginam; resto entrega pra LabelList
     if m.focusZone = "list"
         if press and (key = "left" or key = "right")
             list = m.top.channelList
@@ -487,15 +538,6 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             m.longPressFired = false
             m.longPressTimer.control = "stop"
             m.longPressTimer.control = "start"
-            ' detecta double-tap: se tapTimer está rodando, é o 2º toque
-            if m.tapTimerRunning = true
-                m.tapTimer.control = "stop"
-                m.tapTimerRunning = false
-                m.longPressTimer.control = "stop"
-                m.okHeld = false
-                ShowChannelOverlay()
-                return true
-            end if
             return true
         else
             m.okHeld = false
@@ -504,16 +546,12 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
                 m.longPressFired = false
                 return true
             end if
-            ' agenda single-tap; se vier outro OK antes, vira double
-            m.tapTimer.control = "stop"
-            m.tapTimer.control = "start"
-            m.tapTimerRunning = true
+            HandleOkAction()
             return true
         end if
     end if
 
-    ' RELEASE: se up/down soltou após preview, toca o canal previewado.
-    ' Left/right release não toca — usuário confirma com OK.
+    ' RELEASE: ▲/▼ soltos depois de preview → toca o canal previewado
     if not press
         if (key = "up" or key = "down") and m.previewIdx >= 0 and m.focusZone <> "favorites"
             PlayPreviewed()
@@ -524,11 +562,10 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
 
     if key = "up"
         if m.focusZone = "favorites"
-            ' já está nos favoritos: ignora (navegação é left/right)
             RestartOsdTimer()
             return true
         end if
-        ' só abre favoritos se OSD visível, sem preview ativo e não estiver zapando
+        ' ▲ só abre favoritos se OSD foi aberto via OK e há favoritos
         if m.osdVisible and m.osdFromOk and m.previewIdx < 0 and m.favoritesResolved <> invalid and m.favoritesResolved.count() > 0
             ShowFavBar()
             m.focusZone = "favorites"
@@ -537,6 +574,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             RestartOsdTimer()
             return true
         end if
+        ' zap direto pra cima (single tap não faz preview)
+        ' ▲: preview pra cima (release toca o canal)
         PreviewChannel(1)
         return true
     end if
@@ -548,6 +587,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             RestartOsdTimer()
             return true
         end if
+        ' ▼: preview pra baixo (release toca o canal)
         PreviewChannel(-1)
         return true
     end if

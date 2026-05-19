@@ -3,6 +3,7 @@
   <interface>
     <field id="logoutRequested" type="boolean" alwaysNotify="true" />
     <field id="forceSignout" type="boolean" alwaysNotify="true" />
+    <field id="exitRequested" type="boolean" alwaysNotify="true" />
   </interface>
   <script type="text/brightscript" uri="pkg:/components/HomeScene.brs" />
   <script type="text/brightscript" uri="pkg:/source/Config.brs" />
@@ -15,50 +16,16 @@
   <children>
     <Rectangle width="1920" height="1080" color="0x0a0a0aff" />
 
-    <Label id="brand" text="LN TV" font="font:LargeBoldSystemFont"
-           color="0xdc2626ff" translation="[60, 40]" />
-    <Label id="status" text="Carregando..." font="font:MediumSystemFont"
-           color="0x9ca3afff" translation="[60, 120]" />
-    <Label id="searchHint" text="🔍 Pressione SEARCH p/ buscar canal"
-           font="font:SmallSystemFont" color="0x9ca3afff"
-           translation="[1500, 50]" width="380" horizAlign="right" />
-
-    <LabelList id="catList"
-               translation="[60, 200]"
-               itemSize="[360, 64]"
-               numRows="11"
-               focusBitmapBlendColor="0xdc2626ff"
-               color="0xffffffff"
-               focusedColor="0xffffffff" />
-
-    <LabelList id="chList"
-               translation="[460, 200]"
-               itemSize="[700, 64]"
-               numRows="11"
-               focusBitmapBlendColor="0xdc2626ff"
-               color="0xffffffff"
-               focusedColor="0xffffffff" />
-
-    <!-- Painel EPG do canal focado -->
-    <Rectangle width="700" height="100" translation="[1180, 200]" color="0x111827ff" />
-    <Label id="epgNow" text="" font="font:MediumBoldSystemFont"
-           color="0xffffffff" translation="[1200, 215]" width="660" />
-    <Label id="epgNext" text="" font="font:SmallSystemFont"
-           color="0x9ca3afff" translation="[1200, 255]" width="660" />
-
-    <!-- Badge trial -->
-    <Label id="trialBadge" text="" font="font:SmallSystemFont"
-           color="0xfbbf24ff" translation="[1180, 320]" width="700" visible="false" />
+    <Poster id="splashLogo" uri="pkg:/images/logo.png"
+            width="400" height="160" translation="[760, 380]"
+            loadDisplayMode="scaleToFit" />
+    <Label id="status" text="Carregando canais..."
+           font="font:MediumSystemFont" color="0x9ca3afff"
+           translation="[660, 580]" width="600" horizAlign="center" />
 
     <Label id="updateBanner" text="" font="font:MediumBoldSystemFont"
-           color="0xfbbf24ff" translation="[60, 970]" visible="false" />
+           color="0xfbbf24ff" translation="[60, 1020]" visible="false" />
 
-    <Label id="hint"
-           text="OK assistir  •  ★ (info) favoritar  •  ◀ ▶ trocar coluna  •  Voltar sair"
-           font="font:SmallSystemFont" color="0x6b7280ff"
-           translation="[60, 1020]" />
-
-    <!-- Timer pra heartbeat (60s) -->
     <Timer id="hbTimer" repeat="true" duration="60" />
   </children>
 </component>
