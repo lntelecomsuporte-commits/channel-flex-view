@@ -66,6 +66,11 @@ sub OnChannelData()
     if urls.count() > 1 then content.streamUrls = urls
     content.title = ch.name
 
+    ' Garante que qualquer playback anterior seja totalmente parado antes de
+    ' iniciar o novo — evita "only one playing instance supported" quando o
+    ' usuário troca de canal rapidamente ou abre a lista durante um zap.
+    m.video.control = "stop"
+    m.video.content = invalid
     m.video.content = content
     m.video.control = "play"
     m.previewIdx = -1
