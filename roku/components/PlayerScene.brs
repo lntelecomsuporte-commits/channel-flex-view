@@ -587,7 +587,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             RestartOsdTimer()
             return true
         end if
-        SwitchChannel(-1)
+        ' ▼: preview pra baixo (release toca o canal)
+        PreviewChannel(-1)
         return true
     end if
 
