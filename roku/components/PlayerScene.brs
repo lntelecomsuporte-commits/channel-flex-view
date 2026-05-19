@@ -545,7 +545,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return true
     end if
 
-    ' overlay de lista: left/right paginam; resto entrega pra LabelList
+    ' overlay de lista: left/right paginam; up/down/OK vão pra LabelList;
+    ' qualquer outra tecla é absorvida pra não vazar pro handler global
     if m.focusZone = "list"
         if press and (key = "left" or key = "right")
             list = m.top.channelList
@@ -563,7 +564,13 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             m.chOverlay.jumpToItem = newIdx
             return true
         end if
-        return false
+        ' release de left/right e qualquer outra tecla que não seja
+        ' up/down/OK precisa ser absorvida (return true) pra não cair
+        ' nos handlers de preview/zap/info abaixo
+        if key = "up" or key = "down" or key = "OK"
+            return false
+        end if
+        return true
     end if
 
     if key = "OK"
