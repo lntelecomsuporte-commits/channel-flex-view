@@ -36,6 +36,8 @@ sub init()
     m.osdTimer = m.top.findNode("osdTimer")
     m.longPressTimer = m.top.findNode("longPressTimer")
     m.toastTimer = m.top.findNode("toastTimer")
+    m.logoPreload = m.top.findNode("logoPreload")
+    m.preloadedLogos = {}
 
     m.osdVisible = false
     m.osdFromOk = false
