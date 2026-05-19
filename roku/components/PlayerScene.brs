@@ -298,6 +298,9 @@ end sub
 sub ShowChannelOverlay()
     list = m.top.channelList
     if list = invalid or list.count() = 0 then return
+    ' limpa qualquer preview pendente — evita que release de up/down
+    ' dispare PlayPreviewed depois que a lista fechar
+    m.previewIdx = -1
     favIdx = {}
     if m.top.favorites <> invalid
         for each f in m.top.favorites
@@ -418,6 +421,10 @@ sub OnLongPress()
     m.longPressFired = true
     ch = m.top.channelData
     if ch = invalid then return
+    if m.favTaskRunning = true
+        ShowToast("Aguarde...")
+        return
+    end if
     favs = m.top.favorites
     if favs = invalid then favs = []
     existingId = invalid
@@ -427,12 +434,39 @@ sub OnLongPress()
             exit for
         end if
     end for
+    task = createObject("roSGNode", "FavoriteTask")
+    m.favTaskRunning = true
+    m.favTaskChannel = ch
     if existingId <> invalid
-        res = RemoveFavorite(existingId)
-        if res.ok
+        m.favTaskMode = "remove"
+        m.favTaskExistingId = existingId
+        task.favoriteId = existingId
+        task.action = "remove"
+        ShowToast("Removendo favorito...")
+    else
+        m.favTaskMode = "add"
+        m.favTaskExistingId = ""
+        task.channelId = ch.id
+        task.action = "add"
+        ShowToast("Favoritando...")
+    end if
+    task.observeField("result", "OnFavoriteTaskDone")
+    m.favTask = task
+    task.control = "RUN"
+end sub
+
+sub OnFavoriteTaskDone(evt as Object)
+    res = evt.getData()
+    m.favTaskRunning = false
+    ch = m.favTaskChannel
+    if ch = invalid then return
+    favs = m.top.favorites
+    if favs = invalid then favs = []
+    if m.favTaskMode = "remove"
+        if res <> invalid and res.ok
             newList = []
             for each f in favs
-                if f.id <> existingId then newList.push(f)
+                if f.id <> m.favTaskExistingId then newList.push(f)
             end for
             m.top.favorites = newList
             BuildFavoritesResolved()
@@ -442,8 +476,7 @@ sub OnLongPress()
             ShowToast("Erro ao remover favorito")
         end if
     else
-        res = AddFavorite(ch.id)
-        if res.ok and res.body <> invalid and res.body.count() > 0
+        if res <> invalid and res.ok and res.body <> invalid and res.body.count() > 0
             newList = []
             for each f in favs
                 newList.push(f)
@@ -512,7 +545,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return true
     end if
 
-    ' overlay de lista: left/right paginam; resto entrega pra LabelList
+    ' overlay de lista: left/right paginam; up/down/OK vão pra LabelList;
+    ' qualquer outra tecla é absorvida pra não vazar pro handler global
     if m.focusZone = "list"
         if press and (key = "left" or key = "right")
             list = m.top.channelList
@@ -530,7 +564,13 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             m.chOverlay.jumpToItem = newIdx
             return true
         end if
-        return false
+        ' release de left/right e qualquer outra tecla que não seja
+        ' up/down/OK precisa ser absorvida (return true) pra não cair
+        ' nos handlers de preview/zap/info abaixo
+        if key = "up" or key = "down" or key = "OK"
+            return false
+        end if
+        return true
     end if
 
     if key = "OK"
