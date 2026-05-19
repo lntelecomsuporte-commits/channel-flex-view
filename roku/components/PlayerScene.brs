@@ -51,6 +51,7 @@ sub init()
     m.lastIndex = m.top.channelIndex
 
     m.top.observeField("channelData", "OnChannelData")
+    m.top.observeField("channelList", "OnChannelListChanged")
     m.top.observeField("favorites", "OnFavoritesField")
     m.top.observeField("unlockedIds", "OnUnlockedChanged")
     m.top.observeField("revertRestricted", "OnRevertRestricted")
