@@ -4,11 +4,22 @@
 
 function EpgFetch() as Object
     if m.global = invalid then return invalid
+    nowSec = CreateObject("roDateTime").AsSeconds()
     if m.global.epgBundle <> invalid and m.global.epgFetchedAt <> invalid
-        ageSec = CreateObject("roDateTime").AsSeconds() - m.global.epgFetchedAt
+        ageSec = nowSec - m.global.epgFetchedAt
         if ageSec < 3600 then return m.global.epgBundle
     end if
-    return invalid
+    ' Fallback: baixa direto se ainda não foi carregado por HomeScene.
+    cfg = LNTV_Config()
+    if cfg = invalid or cfg.baseUrl = invalid then return invalid
+    resp = HttpJson(cfg.baseUrl + "/epg/lntv.json", "GET", invalid, invalid)
+    if resp = invalid or not resp.ok or resp.body = invalid then return invalid
+    bundle = resp.body.byChannel
+    if bundle = invalid then bundle = resp.body
+    m.global.addFields({ epgBundle: bundle, epgFetchedAt: nowSec })
+    m.global.epgBundle = bundle
+    m.global.epgFetchedAt = nowSec
+    return bundle
 end function
 
 ' Devolve {current, next} para um epg_channel_id. Programs já vêm ordenados.
