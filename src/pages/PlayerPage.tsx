@@ -744,12 +744,17 @@ const PlayerPage = () => {
         confirmPreview();
         return;
       }
-      // Se OSD está aberto e o usuário NÃO está navegando favoritos,
-      // o próximo OK abre a lista de canais.
+      // Lista só abre no OK seguinte a um OSD aberto pelo próprio OK.
+      // Se o OSD veio de zap (↑/↓), o OK apenas "assume" esse OSD como 1º OK.
       if (showOSD && favFocusIndex === null) {
-        lastEnterRef.current = { id: "", time: 0 };
-        osdOpenedByOkRef.current = false;
-        setShowChannelList(true);
+        if (osdOpenedByOkRef.current) {
+          lastEnterRef.current = { id: "", time: 0 };
+          osdOpenedByOkRef.current = false;
+          setShowChannelList(true);
+        } else {
+          lastEnterRef.current = { id: focusedChannel?.id ?? "", time: Date.now() };
+          showOSDTemporarily(false, true);
+        }
         return;
       }
       const id = focusedChannel?.id ?? "";
