@@ -1,12 +1,26 @@
 sub init()
     m.top.backgroundURI = ""
     m.top.backgroundColor = "0x0a0a0aff"
+    InitMemoryMonitoring()
     m.top.setFocus(true)
     if SbAccessToken() <> ""
         ShowHome()
     else
         ShowLogin()
     end if
+end sub
+
+sub InitMemoryMonitoring()
+    di = CreateObject("roDeviceInfo")
+    di.EnableLowGeneralMemoryEvent(true)
+    di.EnableMemoryWarningEvent(true)
+    print "[LNTV] Root MemoryLimitPercent="; di.GetMemoryLimitPercent()
+    print "[LNTV] Root ChannelMemoryLimit="; di.GetChannelMemoryLimit()
+    print "[LNTV] Root ChannelAvailableMemory="; di.GetChannelAvailableMemory()
+end sub
+
+sub OnMemoryWarning(evt as Object)
+    print "[LNTV] Root memory warning="; evt.GetData()
 end sub
 
 sub ShowLogin()
