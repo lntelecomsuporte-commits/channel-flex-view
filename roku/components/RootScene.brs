@@ -1,22 +1,30 @@
 sub init()
     m.top.backgroundURI = ""
     m.top.backgroundColor = "0x0a0a0aff"
-    InitMemoryMonitoring()
     m.top.setFocus(true)
     if SbAccessToken() <> ""
         ShowHome()
     else
         ShowLogin()
     end if
+    ' Memory monitoring é OS 10+. Roda DEPOIS de mostrar login pra não
+    ' bloquear a UI em firmwares antigos onde essas APIs não existem.
+    InitMemoryMonitoring()
 end sub
 
 sub InitMemoryMonitoring()
-    di = CreateObject("roDeviceInfo")
-    di.EnableLowGeneralMemoryEvent(true)
-    di.EnableMemoryWarningEvent(true)
-    print "[LNTV] Root MemoryLimitPercent="; di.GetMemoryLimitPercent()
-    print "[LNTV] Root ChannelMemoryLimit="; di.GetChannelMemoryLimit()
-    print "[LNTV] Root ChannelAvailableMemory="; di.GetChannelAvailableMemory()
+    try
+        di = CreateObject("roDeviceInfo")
+        if GetInterface(di, "ifDeviceInfo") <> invalid
+            di.EnableLowGeneralMemoryEvent(true)
+            di.EnableMemoryWarningEvent(true)
+            print "[LNTV] Root MemoryLimitPercent="; di.GetMemoryLimitPercent()
+            print "[LNTV] Root ChannelMemoryLimit="; di.GetChannelMemoryLimit()
+            print "[LNTV] Root ChannelAvailableMemory="; di.GetChannelAvailableMemory()
+        end if
+    catch e
+        print "[LNTV] InitMemoryMonitoring skipped (unsupported OS): "; e.message
+    end try
 end sub
 
 sub OnMemoryWarning(evt as Object)
