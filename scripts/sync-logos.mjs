@@ -114,11 +114,31 @@ function sqlEscape(s) {
   return `'${String(s).replace(/'/g, "''")}'`;
 }
 
+// Normaliza URL: aceita data:, http(s):// e domínios "soltos" (ex: site.com/foo.png).
+// Se não tem protocolo nem parece um host válido, retorna null.
+function normalizeSourceUrl(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  if (/^(https?:|data:)/i.test(s)) return s;
+  // bare host (ex: baitaconteudo.com/wp-content/...) → prepend https://
+  if (/^[a-z0-9-]+(\.[a-z0-9-]+)+(\/|$)/i.test(s)) return `https://${s}`;
+  return null; // ex: "121.png" — não dá pra adivinhar
+}
+
 async function downloadAndResize(url) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { signal: ctrl.signal });
+    // Headers de browser-real para reduzir 403 (alguns CDNs bloqueiam UA padrão do Node).
+    const headers = {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+      "Accept": "image/avif,image/webp,image/png,image/*,*/*;q=0.8",
+      "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+      "Referer": (() => { try { return new URL(url).origin + "/"; } catch { return ""; } })(),
+    };
+    const res = await fetch(url, { signal: ctrl.signal, headers, redirect: "follow" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const buf = Buffer.from(await res.arrayBuffer());
     return await sharp(buf)
@@ -128,6 +148,11 @@ async function downloadAndResize(url) {
   } finally {
     clearTimeout(t);
   }
+}
+
+function setLogoUrlRaw(channel_number, newUrl) {
+  const sql = `UPDATE public.channels SET logo_url = ${sqlEscape(newUrl)} WHERE channel_number = ${channel_number}`;
+  psql(sql);
 }
 
 async function fileExists(p) { try { await stat(p); return true; } catch { return false; } }
