@@ -56,5 +56,7 @@ end function
 
 function GetRokuModel() as String
     di = CreateObject("roDeviceInfo")
-    return di.GetModel() + "/" + di.GetVersion()
+    os = di.GetOsVersion()
+    osStr = os.major + "." + os.minor + "." + os.revision + "." + os.build
+    return di.GetModel() + "/" + osStr
 end function
