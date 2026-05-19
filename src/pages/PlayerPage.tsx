@@ -530,7 +530,6 @@ const PlayerPage = () => {
         setShowChannelList(true);
         return;
       }
-      if (showChannelList) return;
       // Busca aberta consome todos os eventos (componente trata internamente).
       if (searchActive) return;
       if (showStats && (e.key === "Escape" || e.key === "Backspace")) {
@@ -585,6 +584,7 @@ const PlayerPage = () => {
             if (isSelectKey(e)) {
               e.preventDefault();
               enterHandledRef.current = true;
+              osdOpenedByOkRef.current = false;
               if (favChannels.length > 0 && favFocusIndex < favChannels.length) {
                 const target = favChannels[favFocusIndex];
                 const idx = channels?.findIndex((c) => c.id === target.id) ?? -1;
@@ -598,6 +598,8 @@ const PlayerPage = () => {
             }
         }
       }
+
+      if (showChannelList) return;
 
       if (/^[0-9]$/.test(e.key)) {
         e.preventDefault();
