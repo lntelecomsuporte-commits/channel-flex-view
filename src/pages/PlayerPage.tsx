@@ -625,15 +625,15 @@ const PlayerPage = () => {
         case "ArrowUp":
           e.preventDefault();
           comboRef.current = [];
-          if (showOSD && showFavoritesBar) {
+          if (showOSD && osdOpenedByOkRef.current && !showPreview) {
             if (favChannels.length > 0) {
               const activeIdx = favChannels.findIndex((c) => c.id === currentChannel?.id);
               setFavFocusIndex(activeIdx >= 0 ? activeIdx : 0);
-              showOSDTemporarily(true);
+              showOSDTemporarily(true, true);
             } else {
               // Sem favoritos — ↑ abre direto a busca
               setSearchActive(true);
-              showOSDTemporarily(true);
+              showOSDTemporarily(true, true);
             }
             return;
           }
@@ -646,6 +646,12 @@ const PlayerPage = () => {
         case "ArrowDown":
           e.preventDefault();
           comboRef.current = [];
+          if (showOSD && osdOpenedByOkRef.current && showFavoritesBar) {
+            setFavFocusIndex(null);
+            setShowFavoritesBar(false);
+            showOSDTemporarily(false, true);
+            return;
+          }
           if (e.repeat) {
             showNextPreview("prev");
           } else {
