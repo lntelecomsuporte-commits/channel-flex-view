@@ -300,15 +300,15 @@ sub OnPlayerChannelChanged(evt as Object)
 end sub
 
 sub OnPlayerClosed(evt as Object)
-    ' Voltar do player → fecha app (sem voltar pra coluna de categorias).
+    ' Voltar do player → fecha app preservando a sessão.
     if m.player <> invalid
         m.top.removeChild(m.player)
         m.player = invalid
     end if
     m.currentPlayingCh = invalid
     OnHeartbeat(invalid)
-    ' Deixa o sistema fechar o app
-    m.top.logoutRequested = false
+    ' IMPORTANTE: NÃO mexer em logoutRequested aqui — o campo tem alwaysNotify
+    ' e dispararia OnLogout no RootScene, limpando o token e forçando relogin.
     m.top.exitRequested = true
 end sub
 
