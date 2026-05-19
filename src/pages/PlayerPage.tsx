@@ -179,6 +179,7 @@ const PlayerPage = () => {
   const enterLongPressFiredRef = useRef(false);
   const enterLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enterPressLockedRef = useRef(false);
+  const osdOpenedByOkRef = useRef(false);
 
   const [showStats, setShowStats] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -305,11 +306,14 @@ const PlayerPage = () => {
   }, [focusedEpg, focusedChannel]);
 
   const showOSDTemporarily = useCallback(
-    (withFavorites = false) => {
+    (withFavorites = false, fromOk = false) => {
+      osdOpenedByOkRef.current = fromOk;
       setShowOSD(true);
       if (withFavorites) setShowFavoritesBar(true);
+      else setShowFavoritesBar(false);
       if (osdTimeout) clearTimeout(osdTimeout);
       const t = setTimeout(() => {
+        osdOpenedByOkRef.current = false;
         setShowOSD(false);
         setShowFavoritesBar(false);
       }, 4000);
@@ -321,6 +325,9 @@ const PlayerPage = () => {
   const changeChannel = useCallback(
     (direction: "up" | "down") => {
       if (!channels?.length) return;
+      osdOpenedByOkRef.current = false;
+      setShowFavoritesBar(false);
+      setFavFocusIndex(null);
       setShowPreview(false);
       setPreviewIndex(null);
       if (previewTimeout) clearTimeout(previewTimeout);
@@ -339,6 +346,9 @@ const PlayerPage = () => {
   const showNextPreview = useCallback(
     (direction: "next" | "prev") => {
       if (!channels?.length) return;
+      osdOpenedByOkRef.current = false;
+      setShowFavoritesBar(false);
+      setFavFocusIndex(null);
       const baseIdx = previewIndex !== null ? previewIndex : currentIndex;
       const nextIdx =
         direction === "next"
@@ -440,6 +450,7 @@ const PlayerPage = () => {
       return true;
     }
     if (showOSD || showFavoritesBar) {
+      osdOpenedByOkRef.current = false;
       setShowOSD(false);
       setShowFavoritesBar(false);
       if (osdTimeout) clearTimeout(osdTimeout);
@@ -520,7 +531,6 @@ const PlayerPage = () => {
         setShowChannelList(true);
         return;
       }
-      if (showChannelList) return;
       // Busca aberta consome todos os eventos (componente trata internamente).
       if (searchActive) return;
       if (showStats && (e.key === "Escape" || e.key === "Backspace")) {
@@ -548,7 +558,7 @@ const PlayerPage = () => {
               if (i === null || favChannels.length === 0) return i;
               return i > 0 ? i - 1 : favChannels.length - 1;
             });
-            showOSDTemporarily(true);
+            showOSDTemporarily(true, true);
             return;
           case "ArrowRight":
             e.preventDefault();
@@ -556,7 +566,7 @@ const PlayerPage = () => {
               if (i === null || favChannels.length === 0) return i;
               return i < favChannels.length - 1 ? i + 1 : 0;
             });
-            showOSDTemporarily(true);
+            showOSDTemporarily(true, true);
             return;
           case "ArrowDown":
           case "Escape":
@@ -569,12 +579,13 @@ const PlayerPage = () => {
             // Sai dos favoritos e abre a busca acima.
             setFavFocusIndex(null);
             setSearchActive(true);
-            showOSDTemporarily(true);
+            showOSDTemporarily(true, true);
             return;
           default:
             if (isSelectKey(e)) {
               e.preventDefault();
               enterHandledRef.current = true;
+              osdOpenedByOkRef.current = false;
               if (favChannels.length > 0 && favFocusIndex < favChannels.length) {
                 const target = favChannels[favFocusIndex];
                 const idx = channels?.findIndex((c) => c.id === target.id) ?? -1;
@@ -588,6 +599,8 @@ const PlayerPage = () => {
             }
         }
       }
+
+      if (showChannelList) return;
 
       if (/^[0-9]$/.test(e.key)) {
         e.preventDefault();
@@ -613,15 +626,15 @@ const PlayerPage = () => {
         case "ArrowUp":
           e.preventDefault();
           comboRef.current = [];
-          if (showOSD && showFavoritesBar) {
+          if (showOSD && osdOpenedByOkRef.current && !showPreview) {
             if (favChannels.length > 0) {
               const activeIdx = favChannels.findIndex((c) => c.id === currentChannel?.id);
               setFavFocusIndex(activeIdx >= 0 ? activeIdx : 0);
-              showOSDTemporarily(true);
+              showOSDTemporarily(true, true);
             } else {
               // Sem favoritos — ↑ abre direto a busca
               setSearchActive(true);
-              showOSDTemporarily(true);
+              showOSDTemporarily(true, true);
             }
             return;
           }
@@ -634,6 +647,12 @@ const PlayerPage = () => {
         case "ArrowDown":
           e.preventDefault();
           comboRef.current = [];
+          if (showOSD && osdOpenedByOkRef.current && showFavoritesBar) {
+            setFavFocusIndex(null);
+            setShowFavoritesBar(false);
+            showOSDTemporarily(false, true);
+            return;
+          }
           if (e.repeat) {
             showNextPreview("prev");
           } else {
@@ -725,11 +744,17 @@ const PlayerPage = () => {
         confirmPreview();
         return;
       }
-      // Se OSD está aberto e o usuário NÃO está navegando favoritos,
-      // o próximo OK abre a lista de canais.
+      // Lista só abre no OK seguinte a um OSD aberto pelo próprio OK.
+      // Se o OSD veio de zap (↑/↓), o OK apenas "assume" esse OSD como 1º OK.
       if (showOSD && favFocusIndex === null) {
-        lastEnterRef.current = { id: "", time: 0 };
-        setShowChannelList(true);
+        if (osdOpenedByOkRef.current) {
+          lastEnterRef.current = { id: "", time: 0 };
+          osdOpenedByOkRef.current = false;
+          setShowChannelList(true);
+        } else {
+          lastEnterRef.current = { id: focusedChannel?.id ?? "", time: Date.now() };
+          showOSDTemporarily(false, true);
+        }
         return;
       }
       const id = focusedChannel?.id ?? "";
@@ -737,11 +762,12 @@ const PlayerPage = () => {
       const last = lastEnterRef.current;
       if (id && last.id === id && now - last.time < 400) {
         lastEnterRef.current = { id: "", time: 0 };
+        osdOpenedByOkRef.current = false;
         setShowChannelList(true);
         return;
       }
       lastEnterRef.current = { id, time: now };
-      showOSDTemporarily(true);
+      showOSDTemporarily(false, true);
     };
 
     window.addEventListener("keydown", handleKeyDown, true);
@@ -757,7 +783,10 @@ const PlayerPage = () => {
   }, [showFavoritesBar, showOSD]);
 
   useEffect(() => {
-    const t = setTimeout(() => setShowOSD(false), 3000);
+    const t = setTimeout(() => {
+      osdOpenedByOkRef.current = false;
+      setShowOSD(false);
+    }, 3000);
     return () => clearTimeout(t);
   }, []);
 
@@ -818,50 +847,46 @@ const PlayerPage = () => {
             </div>
           )}
           {/* Pre-aquece o próximo canal (UP) e o anterior (DOWN) — corta o zap */}
-          <ChannelPrefetch
-            nextStreamUrl={
-              channels && channels.length > 1
-                ? channels[(currentIndex + 1) % channels.length]?.stream_url ?? null
-                : null
-            }
-            channelId={
-              channels && channels.length > 1
-                ? channels[(currentIndex + 1) % channels.length]?.id ?? null
-                : null
-            }
-            useProxyToken={
-              channels && channels.length > 1
-                ? ((channels[(currentIndex + 1) % channels.length] as any)?.use_proxy_token ?? false)
-                : false
-            }
-            forceProxyNative={
-              channels && channels.length > 1
-                ? ((channels[(currentIndex + 1) % channels.length] as any)?.force_proxy_native ?? false)
-                : false
-            }
-          />
-          <ChannelPrefetch
-            nextStreamUrl={
-              channels && channels.length > 1
-                ? channels[(currentIndex - 1 + channels.length) % channels.length]?.stream_url ?? null
-                : null
-            }
-            channelId={
-              channels && channels.length > 1
-                ? channels[(currentIndex - 1 + channels.length) % channels.length]?.id ?? null
-                : null
-            }
-            useProxyToken={
-              channels && channels.length > 1
-                ? ((channels[(currentIndex - 1 + channels.length) % channels.length] as any)?.use_proxy_token ?? false)
-                : false
-            }
-            forceProxyNative={
-              channels && channels.length > 1
-                ? ((channels[(currentIndex - 1 + channels.length) % channels.length] as any)?.force_proxy_native ?? false)
-                : false
-            }
-          />
+          {!IS_NATIVE_APK && (
+            <>
+              <ChannelPrefetch
+                nextStreamUrl={
+                  channels && channels.length > 1
+                    ? channels[(currentIndex + 1) % channels.length]?.stream_url ?? null
+                    : null
+                }
+                channelId={
+                  channels && channels.length > 1
+                    ? channels[(currentIndex + 1) % channels.length]?.id ?? null
+                    : null
+                }
+                useProxyToken={
+                  channels && channels.length > 1
+                    ? ((channels[(currentIndex + 1) % channels.length] as any)?.use_proxy_token ?? false)
+                    : false
+                }
+                forceProxyNative={false}
+              />
+              <ChannelPrefetch
+                nextStreamUrl={
+                  channels && channels.length > 1
+                    ? channels[(currentIndex - 1 + channels.length) % channels.length]?.stream_url ?? null
+                    : null
+                }
+                channelId={
+                  channels && channels.length > 1
+                    ? channels[(currentIndex - 1 + channels.length) % channels.length]?.id ?? null
+                    : null
+                }
+                useProxyToken={
+                  channels && channels.length > 1
+                    ? ((channels[(currentIndex - 1 + channels.length) % channels.length] as any)?.use_proxy_token ?? false)
+                    : false
+                }
+                forceProxyNative={false}
+              />
+            </>
+          )}
           {showStats && (
             <StatsOverlay
               videoEl={playerRef.current?.getVideoElement() ?? null}
