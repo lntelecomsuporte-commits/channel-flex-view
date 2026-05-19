@@ -631,23 +631,44 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return true
     end if
 
-    ' overlay de lista: left/right paginam; up/down/OK vão pra LabelList;
-    ' qualquer outra tecla é absorvida pra não vazar pro handler global
+    ' overlay de lista: left/right paginam com wrap-around;
+    ' up/down/OK vão pra LabelList; qualquer outra tecla é absorvida
+    ' pra não vazar pro handler global (preview/zap/info)
     if m.focusZone = "list"
+        ' garante que o foco está no LabelList (pode ter saído por algum motivo)
+        if not m.chOverlay.hasFocus()
+            m.chOverlay.setFocus(true)
+        end if
         if press and (key = "left" or key = "right")
             list = m.top.channelList
             if list = invalid or list.count() = 0 then return true
+            total = list.count()
             pageSize = 14
             cur = m.chOverlay.itemFocused
             if cur < 0 then cur = 0
             if key = "right"
                 newIdx = cur + pageSize
-                if newIdx >= list.count() then newIdx = list.count() - 1
+                if newIdx >= total
+                    ' já no fim: volta pro começo (wrap)
+                    if cur >= total - 1
+                        newIdx = 0
+                    else
+                        newIdx = total - 1
+                    end if
+                end if
             else
                 newIdx = cur - pageSize
-                if newIdx < 0 then newIdx = 0
+                if newIdx < 0
+                    ' já no começo: vai pro fim (wrap)
+                    if cur <= 0
+                        newIdx = total - 1
+                    else
+                        newIdx = 0
+                    end if
+                end if
             end if
             m.chOverlay.jumpToItem = newIdx
+            UpdateListPreview(newIdx)
             return true
         end if
         ' release de left/right e qualquer outra tecla que não seja
