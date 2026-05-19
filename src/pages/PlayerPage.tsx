@@ -842,50 +842,46 @@ const PlayerPage = () => {
             </div>
           )}
           {/* Pre-aquece o próximo canal (UP) e o anterior (DOWN) — corta o zap */}
-          <ChannelPrefetch
-            nextStreamUrl={
-              channels && channels.length > 1
-                ? channels[(currentIndex + 1) % channels.length]?.stream_url ?? null
-                : null
-            }
-            channelId={
-              channels && channels.length > 1
-                ? channels[(currentIndex + 1) % channels.length]?.id ?? null
-                : null
-            }
-            useProxyToken={
-              channels && channels.length > 1
-                ? ((channels[(currentIndex + 1) % channels.length] as any)?.use_proxy_token ?? false)
-                : false
-            }
-            forceProxyNative={
-              channels && channels.length > 1
-                ? ((channels[(currentIndex + 1) % channels.length] as any)?.force_proxy_native ?? false)
-                : false
-            }
-          />
-          <ChannelPrefetch
-            nextStreamUrl={
-              channels && channels.length > 1
-                ? channels[(currentIndex - 1 + channels.length) % channels.length]?.stream_url ?? null
-                : null
-            }
-            channelId={
-              channels && channels.length > 1
-                ? channels[(currentIndex - 1 + channels.length) % channels.length]?.id ?? null
-                : null
-            }
-            useProxyToken={
-              channels && channels.length > 1
-                ? ((channels[(currentIndex - 1 + channels.length) % channels.length] as any)?.use_proxy_token ?? false)
-                : false
-            }
-            forceProxyNative={
-              channels && channels.length > 1
-                ? ((channels[(currentIndex - 1 + channels.length) % channels.length] as any)?.force_proxy_native ?? false)
-                : false
-            }
-          />
+          {!IS_NATIVE_APK && (
+            <>
+              <ChannelPrefetch
+                nextStreamUrl={
+                  channels && channels.length > 1
+                    ? channels[(currentIndex + 1) % channels.length]?.stream_url ?? null
+                    : null
+                }
+                channelId={
+                  channels && channels.length > 1
+                    ? channels[(currentIndex + 1) % channels.length]?.id ?? null
+                    : null
+                }
+                useProxyToken={
+                  channels && channels.length > 1
+                    ? ((channels[(currentIndex + 1) % channels.length] as any)?.use_proxy_token ?? false)
+                    : false
+                }
+                forceProxyNative={false}
+              />
+              <ChannelPrefetch
+                nextStreamUrl={
+                  channels && channels.length > 1
+                    ? channels[(currentIndex - 1 + channels.length) % channels.length]?.stream_url ?? null
+                    : null
+                }
+                channelId={
+                  channels && channels.length > 1
+                    ? channels[(currentIndex - 1 + channels.length) % channels.length]?.id ?? null
+                    : null
+                }
+                useProxyToken={
+                  channels && channels.length > 1
+                    ? ((channels[(currentIndex - 1 + channels.length) % channels.length] as any)?.use_proxy_token ?? false)
+                    : false
+                }
+                forceProxyNative={false}
+              />
+            </>
+          )}
           {showStats && (
             <StatsOverlay
               videoEl={playerRef.current?.getVideoElement() ?? null}
