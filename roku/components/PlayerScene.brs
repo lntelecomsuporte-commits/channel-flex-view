@@ -508,31 +508,43 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         end if
     end if
 
-    if not press then return false
+    ' RELEASE: se up/down soltou após preview, toca o canal previewado.
+    ' Left/right release não toca — usuário confirma com OK.
+    if not press
+        if (key = "up" or key = "down") and m.previewIdx >= 0 and m.focusZone <> "favorites"
+            PlayPreviewed()
+            return true
+        end if
+        return false
+    end if
 
     if key = "up"
-        if m.osdVisible and m.favoritesResolved <> invalid and m.favoritesResolved.count() > 0
-            if m.focusZone <> "favorites"
-                ShowFavBar()
-                m.focusZone = "favorites"
-                m.favFocusIdx = 0
-                HighlightFavFocus()
-                RestartOsdTimer()
-                return true
-            end if
+        if m.focusZone = "favorites"
+            ' já está nos favoritos: ignora (navegação é left/right)
+            RestartOsdTimer()
+            return true
         end if
-        SwitchChannel(1)
+        ' só abre favoritos se OSD visível, sem preview ativo e não estiver zapando
+        if m.osdVisible and m.previewIdx < 0 and m.favoritesResolved <> invalid and m.favoritesResolved.count() > 0
+            ShowFavBar()
+            m.focusZone = "favorites"
+            m.favFocusIdx = 0
+            HighlightFavFocus()
+            RestartOsdTimer()
+            return true
+        end if
+        PreviewChannel(1)
         return true
     end if
 
     if key = "down"
         if m.focusZone = "favorites"
             m.focusZone = "main"
-            HighlightFavFocus()
+            HideFavBar()
             RestartOsdTimer()
             return true
         end if
-        SwitchChannel(-1)
+        PreviewChannel(-1)
         return true
     end if
 
