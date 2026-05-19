@@ -450,6 +450,7 @@ const PlayerPage = () => {
       return true;
     }
     if (showOSD || showFavoritesBar) {
+      osdOpenedByOkRef.current = false;
       setShowOSD(false);
       setShowFavoritesBar(false);
       if (osdTimeout) clearTimeout(osdTimeout);
@@ -777,7 +778,10 @@ const PlayerPage = () => {
   }, [showFavoritesBar, showOSD]);
 
   useEffect(() => {
-    const t = setTimeout(() => setShowOSD(false), 3000);
+    const t = setTimeout(() => {
+      osdOpenedByOkRef.current = false;
+      setShowOSD(false);
+    }, 3000);
     return () => clearTimeout(t);
   }, []);
 
