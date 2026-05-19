@@ -295,7 +295,6 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
 
   const enterPressStartRef = useRef<number | null>(null);
   const enterFavoriteFiredRef = useRef(false);
-  const enterFavoriteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Throttle de 16ms (~60fps) para repetição de teclas de navegação
   const lastNavTickRef = useRef(0);
   const NAV_THROTTLE_MS = 16;
@@ -461,17 +460,22 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
             e.stopPropagation();
             if (isUpdatingFavorite) return;
 
+            // Long-press: tecla repetindo por tempo suficiente → favorita
+            if (e.repeat) {
+              if (enterFavoriteFiredRef.current) return;
+              const startedAt = enterPressStartRef.current;
+              if (startedAt && performance.now() - startedAt >= LONG_PRESS_MS) {
+                enterFavoriteFiredRef.current = true;
+                const ch = filteredChannels[focusedIndex];
+                const focusedId = ch?.id ?? "";
+                if (focusedId) setFavorite(focusedId, !isFavorite(focusedId));
+              }
+              return;
+            }
+
             if (enterPressStartRef.current === null) {
               enterPressStartRef.current = performance.now();
               enterFavoriteFiredRef.current = false;
-              const ch = filteredChannels[focusedIndex];
-              const focusedId = ch?.id ?? "";
-              const shouldFavorite = focusedId ? !isFavorite(focusedId) : false;
-              enterFavoriteTimerRef.current = setTimeout(() => {
-                enterFavoriteFiredRef.current = true;
-                enterFavoriteTimerRef.current = null;
-                if (focusedId) setFavorite(focusedId, shouldFavorite);
-              }, LONG_PRESS_MS);
             }
           }
       }
@@ -506,10 +510,6 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
       if (!isSelectKey(e)) return;
       e.preventDefault();
       e.stopPropagation();
-      if (enterFavoriteTimerRef.current) {
-        clearTimeout(enterFavoriteTimerRef.current);
-        enterFavoriteTimerRef.current = null;
-      }
       const startedAt = enterPressStartRef.current;
       const fired = enterFavoriteFiredRef.current;
       enterPressStartRef.current = null;
@@ -533,10 +533,6 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("keyup", handleKeyUp, true);
     return () => {
-      if (enterFavoriteTimerRef.current) {
-        clearTimeout(enterFavoriteTimerRef.current);
-        enterFavoriteTimerRef.current = null;
-      }
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
     };
