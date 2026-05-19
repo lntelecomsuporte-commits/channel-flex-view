@@ -2,11 +2,9 @@ sub init()
     m.top.backgroundURI = ""
     m.top.backgroundColor = "0x0a0a0aff"
     m.top.setFocus(true)
-    if SbAccessToken() <> ""
-        ShowHome()
-    else
-        ShowLogin()
-    end if
+    ' No Roku o registry pode sobreviver a reinstalações/sideloads.
+    ' Para não prender o app na logo/Home com token antigo, sempre abre no login.
+    ShowLogin()
 end sub
 
 sub OnMemoryWarning(evt as Object)
