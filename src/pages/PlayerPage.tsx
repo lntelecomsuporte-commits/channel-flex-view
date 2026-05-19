@@ -658,8 +658,11 @@ const PlayerPage = () => {
               setShowStats((s) => !s);
               return;
             }
-            // Fire TV dispara múltiplos keydown - ignorar repetidos
-            if (e.repeat || enterPressLockedRef.current || isUpdatingFavorite) return;
+            // Fire TV / Android TV: vários remotes mandam keydown com
+            // e.repeat=true logo no primeiro disparo. NÃO podemos descartar
+            // por isso, senão o long-press nunca arma. Usamos a presença do
+            // timer como flag de "já estamos contando esse press".
+            if (enterPressLockedRef.current || isUpdatingFavorite) return;
             if (!enterLongPressTimerRef.current) {
               enterLongPressFiredRef.current = false;
               const focusedId = focusedChannel?.id ?? "";
