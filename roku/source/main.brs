@@ -6,6 +6,7 @@ sub Main(args as Dynamic)
 
     ' ── Monitoramento de memória (exigido pela certificação Roku RSG 1.3) ──
     di = CreateObject("roDeviceInfo")
+    di.SetMessagePort(m.port)
     di.EnableLowGeneralMemoryEvent(true)
     di.EnableMemoryWarningEvent(true)
 
