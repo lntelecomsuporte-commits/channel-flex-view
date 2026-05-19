@@ -33,13 +33,13 @@
 
     <Rectangle id="loginBtn" width="260" height="70" color="0xdc2626ff"
                translation="[830, 710]" />
-    <Label id="loginBtnLabel" text="ENTRAR (▶ play)" font="font:MediumBoldSystemFont"
+    <Label id="loginBtnLabel" text="ENTRAR" font="font:MediumBoldSystemFont"
            color="0xffffffff" translation="[830, 728]" width="260" horizAlign="center" />
 
     <Label id="status" text="" font="font:SmallSystemFont"
            color="0xfca5a5ff" translation="[680, 810]" width="560" horizAlign="center" />
 
-    <Label id="hint" text="OK abrir teclado — após digitar a senha e OK, faz login automático"
+    <Label id="hint" text="Pressione OK para abrir o teclado"
            font="font:SmallSystemFont" color="0x6b7280ff"
            translation="[680, 900]" width="560" horizAlign="center" />
   </children>
