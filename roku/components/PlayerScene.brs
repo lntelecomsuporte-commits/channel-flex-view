@@ -415,6 +415,7 @@ end sub
 
 sub OnTapTimeout()
     ' single tap confirmado
+    m.tapTimerRunning = false
     HandleSingleTap()
 end sub
 
