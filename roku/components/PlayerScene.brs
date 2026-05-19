@@ -434,6 +434,7 @@ sub HandleSingleTap()
         ch = m.top.channelData
         ShowOsd(ch)
         ShowFavBar()
+        m.osdFromOk = true
     else
         ' OSD já visível e sem preview/favorito focado: esconde
         HideOsdAll()
