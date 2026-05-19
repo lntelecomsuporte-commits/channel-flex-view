@@ -114,11 +114,31 @@ function sqlEscape(s) {
   return `'${String(s).replace(/'/g, "''")}'`;
 }
 
+// Normaliza URL: aceita data:, http(s):// e domínios "soltos" (ex: site.com/foo.png).
+// Se não tem protocolo nem parece um host válido, retorna null.
+function normalizeSourceUrl(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  if (/^(https?:|data:)/i.test(s)) return s;
+  // bare host (ex: baitaconteudo.com/wp-content/...) → prepend https://
+  if (/^[a-z0-9-]+(\.[a-z0-9-]+)+(\/|$)/i.test(s)) return `https://${s}`;
+  return null; // ex: "121.png" — não dá pra adivinhar
+}
+
 async function downloadAndResize(url) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { signal: ctrl.signal });
+    // Headers de browser-real para reduzir 403 (alguns CDNs bloqueiam UA padrão do Node).
+    const headers = {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+      "Accept": "image/avif,image/webp,image/png,image/*,*/*;q=0.8",
+      "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+      "Referer": (() => { try { return new URL(url).origin + "/"; } catch { return ""; } })(),
+    };
+    const res = await fetch(url, { signal: ctrl.signal, headers, redirect: "follow" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const buf = Buffer.from(await res.arrayBuffer());
     return await sharp(buf)
@@ -128,6 +148,11 @@ async function downloadAndResize(url) {
   } finally {
     clearTimeout(t);
   }
+}
+
+function setLogoUrlRaw(channel_number, newUrl) {
+  const sql = `UPDATE public.channels SET logo_url = ${sqlEscape(newUrl)} WHERE channel_number = ${channel_number}`;
+  psql(sql);
 }
 
 async function fileExists(p) { try { await stat(p); return true; } catch { return false; } }
@@ -192,15 +217,16 @@ async function main() {
 
   log(`   Canais ativos: ${channels.length}`);
 
-  const summary = { synced: 0, unchanged: 0, skipped: 0, versionBumped: 0, error: 0 };
+  const summary = { synced: 0, unchanged: 0, skipped: 0, versionBumped: 0, fallback: 0, error: 0 };
 
   for (const ch of channels) {
     const { channel_number, name, logo_url, logo_source_url, updated_at_epoch } = ch;
 
     // Fonte de download: prioriza logo_source_url; se não tiver, usa logo_url se for externa.
-    const sourceUrl =
-      logo_source_url ||
-      (logo_url && !isLocalLogo(logo_url) ? logo_url : null);
+    // Normaliza pra prepender https:// em URLs sem protocolo.
+    const sourceUrl = normalizeSourceUrl(
+      logo_source_url || (logo_url && !isLocalLogo(logo_url) ? logo_url : null)
+    );
 
     if (!logo_url && !sourceUrl) {
       log(`⏭  #${channel_number} ${name} — sem logo`); summary.skipped++; continue;
@@ -214,8 +240,7 @@ async function main() {
     if (!FORCE && isLocalLogo(logo_url) && (await fileExists(localPath))) {
       if (logo_url === versionedUrl) { summary.unchanged++; continue; }
       try {
-        const sql = `UPDATE public.channels SET logo_url = ${sqlEscape(versionedUrl)} WHERE channel_number = ${channel_number}`;
-        psql(sql);
+        setLogoUrlRaw(channel_number, versionedUrl);
         summary.versionBumped++;
         log(`🔄 #${channel_number} ${name} — version bump`);
       } catch (e) {
@@ -225,7 +250,7 @@ async function main() {
       continue;
     }
 
-    // Caso 2: logo_url é local mas arquivo sumiu E não tem fonte externa
+    // Caso 2: logo_url é local mas arquivo sumiu E não tem fonte externa válida
     if (isLocalLogo(logo_url) && !sourceUrl) {
       log(`⚠️  #${channel_number} ${name} — URL local, arquivo sumiu, sem fonte externa`);
       summary.error++;
@@ -244,8 +269,24 @@ async function main() {
       summary.synced++;
       log(`✅ #${channel_number} ${name} — salvo`);
     } catch (e) {
-      log(`❌ #${channel_number} ${name} — ${e.message}`);
-      summary.error++;
+      // Fallback: download falhou. Se já existe arquivo local antigo, mantém ele.
+      // Caso contrário, aponta logo_url pra URL externa pra pelo menos exibir
+      // (alguns CDNs bloqueiam download mas liberam <img>).
+      const hasLocal = await fileExists(localPath);
+      if (hasLocal) {
+        log(`⚠️  #${channel_number} ${name} — download falhou (${e.message}); mantendo arquivo local existente`);
+        try { setLogoUrlRaw(channel_number, versionedUrl); } catch { /* ignore */ }
+        summary.fallback++;
+      } else {
+        try {
+          setLogoUrlRaw(channel_number, sourceUrl);
+          log(`🌐 #${channel_number} ${name} — download falhou (${e.message}); usando URL externa como fallback`);
+          summary.fallback++;
+        } catch (e2) {
+          log(`❌ #${channel_number} ${name} — ${e.message} (fallback falhou: ${e2.message})`);
+          summary.error++;
+        }
+      }
     }
   }
 
