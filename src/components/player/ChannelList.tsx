@@ -536,6 +536,10 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("keyup", handleKeyUp, true);
     return () => {
+      if (enterFavoriteTimerRef.current) {
+        clearTimeout(enterFavoriteTimerRef.current);
+        enterFavoriteTimerRef.current = null;
+      }
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
     };
