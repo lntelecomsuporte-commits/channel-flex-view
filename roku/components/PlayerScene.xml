@@ -25,17 +25,20 @@
 
     <!-- OSD inferior -->
     <Rectangle id="osdBg" width="1920" height="180" translation="[0, 900]" color="0x000000cc" visible="false" />
+    <Poster id="osdLogo" width="120" height="120" translation="[60, 930]"
+            loadDisplayMode="scaleToFit" visible="false" />
     <Label id="osdName" text="" font="font:LargeBoldSystemFont"
-           color="0xffffffff" translation="[60, 920]" visible="false" />
+           color="0xffffffff" translation="[210, 920]" visible="false" />
     <Label id="osdNum" text="" font="font:MediumSystemFont"
-           color="0xdc2626ff" translation="[60, 970]" visible="false" />
+           color="0xdc2626ff" translation="[210, 970]" visible="false" />
     <Label id="osdNow" text="" font="font:MediumBoldSystemFont"
            color="0xffffffff" translation="[700, 920]" width="1160" visible="false" />
     <Label id="osdNext" text="" font="font:SmallSystemFont"
            color="0x9ca3afff" translation="[700, 970]" width="1160" visible="false" />
     <Label id="osdHint" text="▲ Favoritos  •  ◀ ▶ pré-visualizar  •  OK lista  •  segure OK p/ favoritar"
            font="font:SmallSystemFont" color="0x6b7280ff"
-           translation="[60, 1040]" visible="false" />
+           translation="[210, 1040]" visible="false" />
+
 
     <!-- Barra de favoritos (acima do OSD) -->
     <Rectangle id="favBg" width="1920" height="260" translation="[0, 620]" color="0x000000d9" visible="false" />
