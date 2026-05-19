@@ -528,7 +528,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             return true
         end if
         ' só abre favoritos se OSD visível, sem preview ativo e não estiver zapando
-        if m.osdVisible and m.previewIdx < 0 and m.favoritesResolved <> invalid and m.favoritesResolved.count() > 0
+        if m.osdVisible and m.osdFromOk and m.previewIdx < 0 and m.favoritesResolved <> invalid and m.favoritesResolved.count() > 0
             ShowFavBar()
             m.focusZone = "favorites"
             m.favFocusIdx = 0
