@@ -22,6 +22,7 @@ sub init()
 
     ' state
     m.osdVisible = false
+    m.osdFromOk = false         ' true se OSD foi aberto por OK (libera favoritos no ▲)
     m.focusZone = "main"        ' main | favorites | list
     m.favFocusIdx = 0
     m.previewIdx = -1            ' índice em preview (left/right) ou -1 se não há preview
