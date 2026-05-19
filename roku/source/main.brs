@@ -42,36 +42,30 @@ end sub
 function InitMemoryMonitoring(port as Object) as Object
     di = invalid
     appMemory = invalid
-    try
-        di = CreateObject("roDeviceInfo")
+    di = CreateObject("roDeviceInfo")
+    if di <> invalid
         di.SetMessagePort(port)
         di.EnableLowGeneralMemoryEvent(true)
         os = di.GetOsVersion()
         if os <> invalid then print "[LNTV] Roku OS "; os.major; "."; os.minor; "."; os.revision; " build "; os.build
-    catch e
-        print "[LNTV] roDeviceInfo memory monitoring skipped: "; e.message
-        di = invalid
-    end try
+    end if
 
-    try
-        appMemory = CreateObject("roAppMemoryMonitor")
+    appMemory = CreateObject("roAppMemoryMonitor")
+    if appMemory <> invalid
         appMemory.SetMessagePort(port)
         appMemory.EnableMemoryWarningEvent(true)
         print "[LNTV] MemoryLimitPercent="; appMemory.GetMemoryLimitPercent()
         print "[LNTV] ChannelMemoryLimit="; appMemory.GetChannelMemoryLimit()
         LogAvailableMemory(appMemory)
-    catch e
-        print "[LNTV] roAppMemoryMonitor skipped: "; e.message
-        appMemory = invalid
-    end try
+    else
+        print "[LNTV] roAppMemoryMonitor unavailable"
+    end if
 
     return { di: di, appMemory: appMemory }
 end function
 
 sub LogAvailableMemory(appMemory as Object)
-    try
+    if appMemory <> invalid
         print "[LNTV] ChannelAvailableMemory="; appMemory.GetChannelAvailableMemory()
-    catch e
-        print "[LNTV] ChannelAvailableMemory unavailable: "; e.message
-    end try
+    end if
 end sub
