@@ -77,6 +77,11 @@
     <Label id="toastLabel" text="" font="font:MediumBoldSystemFont"
            color="0xfbbf24ff" translation="[660, 100]" width="600" horizAlign="center" visible="false" />
 
+    <!-- Pool oculto pra precarregar logos no cache de imagens do Roku.
+         Carrega cada logo nos 2 tamanhos usados (OSD 120x120 e preview 400x240)
+         pra que ao trocar de canal apareçam instantaneamente. -->
+    <Group id="logoPreload" visible="false" opacity="0" translation="[-4000, -4000]" />
+
     <Label id="errLabel" text="" font="font:MediumSystemFont"
            color="0xfca5a5ff" translation="[60, 60]" visible="false" />
 

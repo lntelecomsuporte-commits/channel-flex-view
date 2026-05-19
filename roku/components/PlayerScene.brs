@@ -36,6 +36,8 @@ sub init()
     m.osdTimer = m.top.findNode("osdTimer")
     m.longPressTimer = m.top.findNode("longPressTimer")
     m.toastTimer = m.top.findNode("toastTimer")
+    m.logoPreload = m.top.findNode("logoPreload")
+    m.preloadedLogos = {}
 
     m.osdVisible = false
     m.osdFromOk = false
@@ -49,6 +51,7 @@ sub init()
     m.lastIndex = m.top.channelIndex
 
     m.top.observeField("channelData", "OnChannelData")
+    m.top.observeField("channelList", "OnChannelListChanged")
     m.top.observeField("favorites", "OnFavoritesField")
     m.top.observeField("unlockedIds", "OnUnlockedChanged")
     m.top.observeField("revertRestricted", "OnRevertRestricted")
@@ -58,6 +61,44 @@ sub init()
     m.toastTimer.observeField("fire", "HideToast")
     m.chOverlay.observeField("itemSelected", "OnOverlaySelected")
     m.chOverlay.observeField("itemFocused", "OnOverlayFocused")
+end sub
+
+' ==================== PRELOAD DE LOGOS ====================
+' Cria Posters ocultos pra cada logo nos 2 tamanhos usados (OSD 120x120
+' e preview da lista 400x240). Roku decodifica e mantém o bitmap no cache
+' interno (chaveado por URI + tamanho), então quando o OSD/lista pedirem
+' a mesma URI no mesmo tamanho, aparece instantaneamente sem download.
+sub OnChannelListChanged()
+    list = m.top.channelList
+    if list = invalid then return
+    if m.logoPreload = invalid then return
+
+    ' Limpa o pool e reseta tracking se a lista mudou drasticamente
+    if m.logoPreload.getChildCount() > 0
+        m.logoPreload.removeChildrenIndex(m.logoPreload.getChildCount(), 0)
+    end if
+    m.preloadedLogos = {}
+
+    for each ch in list
+        if ch <> invalid and ch.logo_url <> invalid and ch.logo_url <> ""
+            url = ch.logo_url
+            if not m.preloadedLogos.doesExist(url)
+                m.preloadedLogos[url] = true
+                ' tamanho OSD
+                p1 = m.logoPreload.createChild("Poster")
+                p1.width = 120
+                p1.height = 120
+                p1.loadDisplayMode = "scaleToFit"
+                p1.uri = url
+                ' tamanho preview da lista
+                p2 = m.logoPreload.createChild("Poster")
+                p2.width = 400
+                p2.height = 240
+                p2.loadDisplayMode = "scaleToFit"
+                p2.uri = url
+            end if
+        end if
+    end for
 end sub
 
 ' ==================== STREAM ====================
