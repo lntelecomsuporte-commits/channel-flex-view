@@ -584,6 +584,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         else
             ShowOsd(ch)
             ShowFavBar()
+            m.osdFromOk = true
         end if
         return true
     end if
