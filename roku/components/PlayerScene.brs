@@ -575,7 +575,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             return true
         end if
         ' zap direto pra cima (single tap não faz preview)
-        SwitchChannel(1)
+        ' ▲: preview pra cima (release toca o canal)
+        PreviewChannel(1)
         return true
     end if
 
