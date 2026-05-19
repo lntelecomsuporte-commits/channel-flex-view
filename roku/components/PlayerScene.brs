@@ -418,6 +418,10 @@ sub OnLongPress()
     m.longPressFired = true
     ch = m.top.channelData
     if ch = invalid then return
+    if m.favTaskRunning = true
+        ShowToast("Aguarde...")
+        return
+    end if
     favs = m.top.favorites
     if favs = invalid then favs = []
     existingId = invalid
@@ -427,12 +431,39 @@ sub OnLongPress()
             exit for
         end if
     end for
+    task = createObject("roSGNode", "FavoriteTask")
+    m.favTaskRunning = true
+    m.favTaskChannel = ch
     if existingId <> invalid
-        res = RemoveFavorite(existingId)
-        if res.ok
+        m.favTaskMode = "remove"
+        m.favTaskExistingId = existingId
+        task.favoriteId = existingId
+        task.action = "remove"
+        ShowToast("Removendo favorito...")
+    else
+        m.favTaskMode = "add"
+        m.favTaskExistingId = ""
+        task.channelId = ch.id
+        task.action = "add"
+        ShowToast("Favoritando...")
+    end if
+    task.observeField("result", "OnFavoriteTaskDone")
+    m.favTask = task
+    task.control = "RUN"
+end sub
+
+sub OnFavoriteTaskDone(evt as Object)
+    res = evt.getData()
+    m.favTaskRunning = false
+    ch = m.favTaskChannel
+    if ch = invalid then return
+    favs = m.top.favorites
+    if favs = invalid then favs = []
+    if m.favTaskMode = "remove"
+        if res <> invalid and res.ok
             newList = []
             for each f in favs
-                if f.id <> existingId then newList.push(f)
+                if f.id <> m.favTaskExistingId then newList.push(f)
             end for
             m.top.favorites = newList
             BuildFavoritesResolved()
@@ -442,8 +473,7 @@ sub OnLongPress()
             ShowToast("Erro ao remover favorito")
         end if
     else
-        res = AddFavorite(ch.id)
-        if res.ok and res.body <> invalid and res.body.count() > 0
+        if res <> invalid and res.ok and res.body <> invalid and res.body.count() > 0
             newList = []
             for each f in favs
                 newList.push(f)
