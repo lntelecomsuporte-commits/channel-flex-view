@@ -558,7 +558,7 @@ const PlayerPage = () => {
               if (i === null || favChannels.length === 0) return i;
               return i > 0 ? i - 1 : favChannels.length - 1;
             });
-            showOSDTemporarily(true);
+            showOSDTemporarily(true, true);
             return;
           case "ArrowRight":
             e.preventDefault();
@@ -566,7 +566,7 @@ const PlayerPage = () => {
               if (i === null || favChannels.length === 0) return i;
               return i < favChannels.length - 1 ? i + 1 : 0;
             });
-            showOSDTemporarily(true);
+            showOSDTemporarily(true, true);
             return;
           case "ArrowDown":
           case "Escape":
@@ -579,7 +579,7 @@ const PlayerPage = () => {
             // Sai dos favoritos e abre a busca acima.
             setFavFocusIndex(null);
             setSearchActive(true);
-            showOSDTemporarily(true);
+            showOSDTemporarily(true, true);
             return;
           default:
             if (isSelectKey(e)) {
