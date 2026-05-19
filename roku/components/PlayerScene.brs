@@ -164,6 +164,13 @@ sub ShowOsd(ch as Object)
     m.osdNow.visible = true
     m.osdNext.visible = true
     m.osdHint.visible = true
+    if ch.logo_url <> invalid and ch.logo_url <> ""
+        m.osdLogo.uri = ch.logo_url
+        m.osdLogo.visible = true
+    else
+        m.osdLogo.uri = ""
+        m.osdLogo.visible = false
+    end if
     m.osdName.text = ch.name
     if ch.channel_number <> invalid
         m.osdNum.text = "Canal " + ch.channel_number.toStr()
@@ -190,6 +197,7 @@ end sub
 
 sub HideOsdAll()
     m.osdBg.visible = false
+    m.osdLogo.visible = false
     m.osdName.visible = false
     m.osdNum.visible = false
     m.osdNow.visible = false
