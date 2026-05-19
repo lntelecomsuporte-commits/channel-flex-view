@@ -14,6 +14,7 @@
 sub init()
     m.video = m.top.findNode("video")
     m.osdBg = m.top.findNode("osdBg")
+    m.osdLogo = m.top.findNode("osdLogo")
     m.osdName = m.top.findNode("osdName")
     m.osdNum = m.top.findNode("osdNum")
     m.osdNow = m.top.findNode("osdNow")
@@ -25,6 +26,10 @@ sub init()
     m.listBg = m.top.findNode("listBg")
     m.listTitle = m.top.findNode("listTitle")
     m.chOverlay = m.top.findNode("chOverlay")
+    m.listPreviewBg = m.top.findNode("listPreviewBg")
+    m.listPreviewLogo = m.top.findNode("listPreviewLogo")
+    m.listPreviewName = m.top.findNode("listPreviewName")
+    m.listPreviewNum = m.top.findNode("listPreviewNum")
     m.toastBg = m.top.findNode("toastBg")
     m.toastLabel = m.top.findNode("toastLabel")
     m.errLabel = m.top.findNode("errLabel")
@@ -52,6 +57,7 @@ sub init()
     m.longPressTimer.observeField("fire", "OnLongPress")
     m.toastTimer.observeField("fire", "HideToast")
     m.chOverlay.observeField("itemSelected", "OnOverlaySelected")
+    m.chOverlay.observeField("itemFocused", "OnOverlayFocused")
 end sub
 
 ' ==================== STREAM ====================
@@ -158,6 +164,13 @@ sub ShowOsd(ch as Object)
     m.osdNow.visible = true
     m.osdNext.visible = true
     m.osdHint.visible = true
+    if ch.logo_url <> invalid and ch.logo_url <> ""
+        m.osdLogo.uri = ch.logo_url
+        m.osdLogo.visible = true
+    else
+        m.osdLogo.uri = ""
+        m.osdLogo.visible = false
+    end if
     m.osdName.text = ch.name
     if ch.channel_number <> invalid
         m.osdNum.text = "Canal " + ch.channel_number.toStr()
@@ -184,6 +197,7 @@ end sub
 
 sub HideOsdAll()
     m.osdBg.visible = false
+    m.osdLogo.visible = false
     m.osdName.visible = false
     m.osdNum.visible = false
     m.osdNow.visible = false
@@ -320,6 +334,11 @@ sub ShowChannelOverlay()
     m.listBg.visible = true
     m.listTitle.visible = true
     m.chOverlay.visible = true
+    m.listPreviewBg.visible = true
+    m.listPreviewLogo.visible = true
+    m.listPreviewName.visible = true
+    m.listPreviewNum.visible = true
+    UpdateListPreview(m.top.channelIndex)
     m.focusZone = "list"
     m.chOverlay.setFocus(true)
 end sub
@@ -328,9 +347,35 @@ sub HideChannelOverlay()
     m.listBg.visible = false
     m.listTitle.visible = false
     m.chOverlay.visible = false
+    m.listPreviewBg.visible = false
+    m.listPreviewLogo.visible = false
+    m.listPreviewName.visible = false
+    m.listPreviewNum.visible = false
     m.chOverlay.setFocus(false)
     m.top.setFocus(true)
     m.focusZone = "main"
+end sub
+
+sub OnOverlayFocused(evt as Object)
+    UpdateListPreview(evt.getData())
+end sub
+
+sub UpdateListPreview(idx as Integer)
+    list = m.top.channelList
+    if list = invalid or idx < 0 or idx >= list.count() then return
+    ch = list[idx]
+    if ch = invalid then return
+    if ch.logo_url <> invalid and ch.logo_url <> ""
+        m.listPreviewLogo.uri = ch.logo_url
+    else
+        m.listPreviewLogo.uri = ""
+    end if
+    m.listPreviewName.text = ch.name
+    if ch.channel_number <> invalid
+        m.listPreviewNum.text = "Canal " + ch.channel_number.toStr()
+    else
+        m.listPreviewNum.text = ""
+    end if
 end sub
 
 sub OnOverlaySelected(evt as Object)
