@@ -310,14 +310,7 @@ sub ShowChannelOverlay()
         prefix = ""
         if favIdx[ch.id] = true then prefix = "★ "
         if ch.channel_number <> invalid then prefix = prefix + ch.channel_number.toStr() + "  "
-        epgTxt = ""
-        if ch.epg_channel_id <> invalid and ch.epg_channel_id <> ""
-            info = EpgCurrentAndNext(ch.epg_channel_id)
-            if info.current <> invalid
-                epgTxt = "   ▶ " + FormatHHMM(info.current.start_date) + " " + info.current.title
-            end if
-        end if
-        n.title = prefix + ch.name + epgTxt
+        n.title = prefix + ch.name
     end for
     m.chOverlay.content = root
     m.chOverlay.jumpToItem = m.top.channelIndex
