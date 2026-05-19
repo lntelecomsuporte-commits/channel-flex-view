@@ -237,6 +237,9 @@ sub ShowOsd(ch as Object)
 end sub
 
 sub HideOsdAll()
+    ' Se a lista estiver aberta, o timer antigo do OSD não pode mudar o
+    ' focusZone para main; senão left/right vazam para PreviewChannel.
+    if m.focusZone = "list" then return
     m.osdBg.visible = false
     m.osdLogo.visible = false
     m.osdName.visible = false
@@ -353,6 +356,10 @@ end sub
 sub ShowChannelOverlay()
     list = m.top.channelList
     if list = invalid or list.count() = 0 then return
+    ' A lista precisa controlar left/right por conta própria. Se o timer do
+    ' OSD disparar com a lista aberta, ele troca focusZone para main e as
+    ' setas passam a agir como preview de canal.
+    m.osdTimer.control = "stop"
     ' limpa qualquer preview pendente — evita que release de up/down
     ' dispare PlayPreviewed depois que a lista fechar
     m.previewIdx = -1
@@ -395,6 +402,7 @@ sub HideChannelOverlay()
     m.chOverlay.setFocus(false)
     m.top.setFocus(true)
     m.focusZone = "main"
+    if m.osdVisible then RestartOsdTimer()
 end sub
 
 sub OnOverlayFocused(evt as Object)
