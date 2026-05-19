@@ -179,6 +179,7 @@ const PlayerPage = () => {
   const enterLongPressFiredRef = useRef(false);
   const enterLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enterPressLockedRef = useRef(false);
+  const osdOpenedByOkRef = useRef(false);
 
   const [showStats, setShowStats] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -305,11 +306,14 @@ const PlayerPage = () => {
   }, [focusedEpg, focusedChannel]);
 
   const showOSDTemporarily = useCallback(
-    (withFavorites = false) => {
+    (withFavorites = false, fromOk = false) => {
+      osdOpenedByOkRef.current = fromOk;
       setShowOSD(true);
       if (withFavorites) setShowFavoritesBar(true);
+      else setShowFavoritesBar(false);
       if (osdTimeout) clearTimeout(osdTimeout);
       const t = setTimeout(() => {
+        osdOpenedByOkRef.current = false;
         setShowOSD(false);
         setShowFavoritesBar(false);
       }, 4000);
@@ -321,6 +325,9 @@ const PlayerPage = () => {
   const changeChannel = useCallback(
     (direction: "up" | "down") => {
       if (!channels?.length) return;
+      osdOpenedByOkRef.current = false;
+      setShowFavoritesBar(false);
+      setFavFocusIndex(null);
       setShowPreview(false);
       setPreviewIndex(null);
       if (previewTimeout) clearTimeout(previewTimeout);
@@ -339,6 +346,9 @@ const PlayerPage = () => {
   const showNextPreview = useCallback(
     (direction: "next" | "prev") => {
       if (!channels?.length) return;
+      osdOpenedByOkRef.current = false;
+      setShowFavoritesBar(false);
+      setFavFocusIndex(null);
       const baseIdx = previewIndex !== null ? previewIndex : currentIndex;
       const nextIdx =
         direction === "next"
