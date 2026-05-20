@@ -81,8 +81,8 @@ sub OnChannelListChanged()
 
     for each ch in list
         if ch <> invalid and ch.logo_url <> invalid and ch.logo_url <> ""
-            url = ch.logo_url
-            if not m.preloadedLogos.doesExist(url)
+            url = ResolveLogoUrl(ch.logo_url)
+            if url <> "" and not m.preloadedLogos.doesExist(url)
                 m.preloadedLogos[url] = true
                 ' tamanho OSD
                 p1 = m.logoPreload.createChild("Poster")
@@ -205,8 +205,9 @@ sub ShowOsd(ch as Object)
     m.osdNow.visible = true
     m.osdNext.visible = true
     m.osdHint.visible = true
-    if ch.logo_url <> invalid and ch.logo_url <> ""
-        m.osdLogo.uri = ch.logo_url
+    logoUri = ResolveLogoUrl(ch.logo_url)
+    if logoUri <> ""
+        m.osdLogo.uri = logoUri
         m.osdLogo.visible = true
     else
         m.osdLogo.uri = ""
@@ -309,9 +310,10 @@ sub ShowFavBar()
         bg.width = 180
         bg.height = 130
         bg.color = "0x1f2937ff"
-        if ch.logo_url <> invalid and ch.logo_url <> ""
+        favLogoUri = ResolveLogoUrl(ch.logo_url)
+        if favLogoUri <> ""
             poster = cell.createChild("Poster")
-            poster.uri = ch.logo_url
+            poster.uri = favLogoUri
             poster.width = 160
             poster.height = 110
             poster.translation = [10, 10]
@@ -414,8 +416,9 @@ sub UpdateListPreview(idx as Integer)
     if list = invalid or idx < 0 or idx >= list.count() then return
     ch = list[idx]
     if ch = invalid then return
-    if ch.logo_url <> invalid and ch.logo_url <> ""
-        m.listPreviewLogo.uri = ch.logo_url
+    prevLogoUri = ResolveLogoUrl(ch.logo_url)
+    if prevLogoUri <> ""
+        m.listPreviewLogo.uri = prevLogoUri
     else
         m.listPreviewLogo.uri = ""
     end if

@@ -64,3 +64,17 @@ sub RegistryClear()
     end for
     sec.Flush()
 end sub
+
+' Resolve URL de logo: se vier relativa (/logos/5.png?v=...) prefixa com baseUrl.
+' Se vier vazia/invalid devolve "". Caso contrário devolve como está.
+function ResolveLogoUrl(u as Dynamic) as String
+    if u = invalid then return ""
+    s = u
+    if type(s) <> "String" and type(s) <> "roString" then return ""
+    if s = "" then return ""
+    if Left(s, 1) = "/"
+        cfg = LNTV_Config()
+        return cfg.baseUrl + s
+    end if
+    return s
+end function
