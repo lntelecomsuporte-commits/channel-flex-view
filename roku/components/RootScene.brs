@@ -2,16 +2,14 @@ sub init()
     m.top.backgroundURI = ""
     m.top.backgroundColor = "0x0a0a0aff"
     m.top.setFocus(true)
-    ' Se já tem token salvo (e o refresh funciona) entra direto na Home.
-    ' Senão, mostra o login. Qualquer falha cai pro login.
-    token = SbAccessToken()
-    if token <> "" and SbUserId() <> ""
-        if SbRefresh()
-            ShowHome()
-            return
-        end if
+    ' Se já tem token salvo, vai direto pra Home (sem refresh síncrono
+    ' bloqueando o init e travando a splash). O SbGet já faz refresh
+    ' automático em 401, e se tudo falhar a Home cai pro login.
+    if SbAccessToken() <> "" and SbUserId() <> ""
+        ShowHome()
+    else
+        ShowLogin()
     end if
-    ShowLogin()
 end sub
 
 sub OnMemoryWarning(evt as Object)
