@@ -99,6 +99,12 @@ sub OnHomeLoaded(evt as Object)
     CheckUpdate(data.update)
 
     if not cats.ok or not chs.ok
+        ' Token provavelmente expirou e refresh falhou → volta pro login.
+        if cats.status = 401 or chs.status = 401 or cats.status = 0 or chs.status = 0
+            SbLogout()
+            m.top.logoutRequested = true
+            return
+        end if
         m.status.text = "Erro ao carregar dados (" + cats.status.toStr() + "/" + chs.status.toStr() + ")"
         return
     end if
