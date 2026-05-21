@@ -177,19 +177,14 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
         </button>
       </div>
       <div className="space-y-1.5">
-        {!videoEl && (
-          <div className="text-xs text-yellow-400 mb-2 pb-2 border-b border-border">
-            ⚠️ Player nativo Android (ExoPlayer): métricas de vídeo/HLS não disponíveis no WebView.
-          </div>
-        )}
-        <Row label="Resolução" value={videoEl ? stats.resolution : "n/d (nativo)"} />
-        <Row label="FPS" value={videoEl ? `${stats.fps}` : "n/d (nativo)"} />
-        <Row label="Bitrate" value={videoEl ? stats.bitrate : "n/d (nativo)"} />
-        <Row label="Banda estimada" value={videoEl ? stats.bandwidth : "n/d (nativo)"} />
-        <Row label="Buffer" value={videoEl ? stats.bufferAhead : "n/d (nativo)"} />
-        <Row label="Frames perdidos" value={videoEl ? `${stats.droppedFrames} / ${stats.totalFrames}` : "n/d (nativo)"} />
-        <Row label="Qualidade" value={videoEl ? stats.level : "n/d (nativo)"} />
-        <Row label="Codec" value={videoEl ? stats.codec : "n/d (nativo)"} />
+        <Row label="Resolução" value={stats.resolution} />
+        <Row label="FPS" value={`${stats.fps}`} />
+        <Row label="Bitrate" value={stats.bitrate} />
+        <Row label="Banda estimada" value={stats.bandwidth} />
+        <Row label="Buffer" value={stats.bufferAhead} />
+        <Row label="Frames perdidos" value={`${stats.droppedFrames} / ${stats.totalFrames}`} />
+        <Row label="Qualidade" value={stats.level} />
+        <Row label="Codec" value={stats.codec} />
         <Row
           label={`Destino ${destIp.family ?? ""}`.trim()}
           value={destIp.host ? `${destIp.address}` : "—"}
@@ -211,7 +206,6 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
           );
         })()}
       </div>
-
     </div>
   );
 });
