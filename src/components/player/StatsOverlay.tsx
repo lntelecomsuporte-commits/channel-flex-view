@@ -2,11 +2,13 @@ import { forwardRef, useEffect, useState } from "react";
 import type Hls from "hls.js";
 import { X } from "lucide-react";
 import { getDeviceProfile } from "@/lib/deviceProfile";
+import { NativePlayer, type NativePlayerStats } from "@/plugins/native-player";
 
 interface StatsOverlayProps {
   videoEl: HTMLVideoElement | null;
   hls: Hls | null;
   streamUrl?: string;
+  mode?: "html5" | "native";
   onClose: () => void;
 }
 
@@ -35,7 +37,53 @@ const formatBitrate = (bps: number) => {
   return `${bps.toFixed(0)} bps`;
 };
 
-const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, hls, streamUrl, onClose }, ref) => {
+const formatBytes = (b: number) => {
+  if (!b || !isFinite(b)) return "—";
+  if (b >= 1_073_741_824) return `${(b / 1_073_741_824).toFixed(2)} GB`;
+  if (b >= 1_048_576) return `${(b / 1_048_576).toFixed(2)} MB`;
+  if (b >= 1024) return `${(b / 1024).toFixed(0)} KB`;
+  return `${b} B`;
+};
+
+const NativeStatsBody = () => {
+  const [s, setS] = useState<NativePlayerStats>({});
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      try {
+        const next = await NativePlayer.getStats();
+        if (alive) setS(next);
+      } catch { /* plugin pode não estar pronto */ }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
+
+  const resolution = s.width && s.height ? `${s.width}x${s.height} (${s.height}p)` : "—";
+  const fps = s.frameRate && s.frameRate > 0 ? `${Math.round(s.frameRate)}` : "—";
+  const bitrate = s.bitrate ? formatBitrate(s.bitrate) : "—";
+  const bandwidth = s.bandwidthEstimateBps ? formatBitrate(s.bandwidthEstimateBps) : "—";
+  const transferred = formatBytes(s.totalBytesTransferred ?? 0);
+  const buffer = typeof s.bufferedMs === "number" ? `${(s.bufferedMs / 1000).toFixed(1)}s` : "—";
+  const dropped = typeof s.droppedFrames === "number" ? `${s.droppedFrames}` : "—";
+  const codec = s.codec || s.mimeType || "—";
+
+  return (
+    <div className="space-y-1.5">
+      <Row label="Resolução" value={resolution} />
+      <Row label="FPS" value={fps} />
+      <Row label="Bitrate" value={bitrate} />
+      <Row label="Banda estimada" value={bandwidth} />
+      <Row label="Total transferido" value={transferred} />
+      <Row label="Buffer" value={buffer} />
+      <Row label="Frames perdidos" value={dropped} />
+      <Row label="Codec" value={codec} />
+    </div>
+  );
+};
+
+const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, hls, streamUrl, mode = "html5", onClose }, ref) => {
   const [stats, setStats] = useState<Stats>({
     resolution: "—",
     fps: 0,
@@ -50,6 +98,7 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
   const [destIp, setDestIp] = useState<DestIp>({ family: null, address: "resolvendo...", host: "" });
 
   useEffect(() => {
+    if (mode === "native") return;
     if (!videoEl) return;
 
     let lastTime = performance.now();
@@ -60,7 +109,6 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
       const h = videoEl.videoHeight;
       const resolution = w && h ? `${w}x${h} (${h}p)` : "—";
 
-      // FPS via getVideoPlaybackQuality
       let fps = 0;
       let droppedFrames = 0;
       let totalFrames = 0;
@@ -77,7 +125,6 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
         lastFrames = totalFrames;
       }
 
-      // Buffer ahead
       let bufferAhead = "—";
       try {
         const buf = videoEl.buffered;
@@ -88,7 +135,6 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
         }
       } catch {}
 
-      // HLS-specific
       let bitrate = "—";
       let bandwidth = "—";
       let level = "—";
@@ -104,11 +150,9 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
         const bw = hls.bandwidthEstimate;
         if (bw) bandwidth = formatBitrate(bw);
       } else {
-        // Native playback (Safari/iOS) — estimate via webkit metrics if available
         // @ts-ignore
         const bytes = videoEl.webkitVideoDecodedByteCount;
         if (typeof bytes === "number") {
-          // not super accurate, just show decoded total
           bandwidth = `${(bytes / 1_000_000).toFixed(1)} MB total`;
         }
       }
@@ -117,12 +161,11 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [videoEl, hls]);
+  }, [videoEl, hls, mode]);
 
-  // Resolve destino IPv4/IPv6 do hostname do stream via DNS-over-HTTPS.
-  // Browsers não expõem o IP da conexão real; mostramos os endereços publicados
-  // e indicamos a família preferida (IPv6 quando disponível, conforme Happy Eyeballs).
+  // DoH só faz sentido no modo HTML5 (no nativo o foco é o ExoPlayer).
   useEffect(() => {
+    if (mode === "native") return;
     if (!streamUrl) return;
     let cancelled = false;
     let host = "";
@@ -166,7 +209,7 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
     });
 
     return () => { cancelled = true; };
-  }, [streamUrl]);
+  }, [streamUrl, mode]);
 
   return (
     <div ref={ref} className="absolute top-4 right-4 z-40 glass-panel p-4 min-w-[280px] animate-fade-in font-mono text-sm">
@@ -176,36 +219,40 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
           <X className="w-4 h-4" />
         </button>
       </div>
-      <div className="space-y-1.5">
-        <Row label="Resolução" value={stats.resolution} />
-        <Row label="FPS" value={`${stats.fps}`} />
-        <Row label="Bitrate" value={stats.bitrate} />
-        <Row label="Banda estimada" value={stats.bandwidth} />
-        <Row label="Buffer" value={stats.bufferAhead} />
-        <Row label="Frames perdidos" value={`${stats.droppedFrames} / ${stats.totalFrames}`} />
-        <Row label="Qualidade" value={stats.level} />
-        <Row label="Codec" value={stats.codec} />
-        <Row
-          label={`Destino ${destIp.family ?? ""}`.trim()}
-          value={destIp.host ? `${destIp.address}` : "—"}
-        />
-        {destIp.host && (
-          <Row label="Host" value={destIp.host} />
-        )}
-        {(() => {
-          const p = getDeviceProfile();
-          const cap = hls?.autoLevelCapping ?? -1;
-          const capLabel = cap >= 0 && hls?.levels?.[cap]
-            ? `${hls.levels[cap].height || "?"}p`
-            : "none";
-          return (
-            <>
-              <Row label="Device" value={`${p.weak ? "weak" : "strong"} (${p.reason})`} />
-              <Row label="Level cap" value={capLabel} />
-            </>
-          );
-        })()}
-      </div>
+      {mode === "native" ? (
+        <NativeStatsBody />
+      ) : (
+        <div className="space-y-1.5">
+          <Row label="Resolução" value={stats.resolution} />
+          <Row label="FPS" value={`${stats.fps}`} />
+          <Row label="Bitrate" value={stats.bitrate} />
+          <Row label="Banda estimada" value={stats.bandwidth} />
+          <Row label="Buffer" value={stats.bufferAhead} />
+          <Row label="Frames perdidos" value={`${stats.droppedFrames} / ${stats.totalFrames}`} />
+          <Row label="Qualidade" value={stats.level} />
+          <Row label="Codec" value={stats.codec} />
+          <Row
+            label={`Destino ${destIp.family ?? ""}`.trim()}
+            value={destIp.host ? `${destIp.address}` : "—"}
+          />
+          {destIp.host && (
+            <Row label="Host" value={destIp.host} />
+          )}
+          {(() => {
+            const p = getDeviceProfile();
+            const cap = hls?.autoLevelCapping ?? -1;
+            const capLabel = cap >= 0 && hls?.levels?.[cap]
+              ? `${hls.levels[cap].height || "?"}p`
+              : "none";
+            return (
+              <>
+                <Row label="Device" value={`${p.weak ? "weak" : "strong"} (${p.reason})`} />
+                <Row label="Level cap" value={capLabel} />
+              </>
+            );
+          })()}
+        </div>
+      )}
     </div>
   );
 });

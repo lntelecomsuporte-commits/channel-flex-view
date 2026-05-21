@@ -1,20 +1,25 @@
 package tv.lntelecom.net;
 
 import android.graphics.Color;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.SurfaceView;
 import android.view.View;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
 
+import androidx.media3.common.Format;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.analytics.AnalyticsListener;
 import androidx.media3.exoplayer.hls.HlsMediaSource;
 import androidx.media3.exoplayer.source.MediaSource;
 import androidx.media3.exoplayer.source.ProgressiveMediaSource;
+import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter;
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy;
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy;
 import androidx.media3.ui.AspectRatioFrameLayout;
@@ -33,11 +38,6 @@ import java.util.Map;
 /**
  * Player nativo Android (ExoPlayer/Media3) exposto via Capacitor.
  *
- * Por que existe: o <video> dentro do WebView Chromium mostra um ícone/flash
- * de player entre zaps de canal em alguns receptores Android. Tocando o
- * stream nativamente com SurfaceView atrás do WebView (transparente) elimina
- * esse artefato e padroniza o comportamento com o Fire TV.
- *
  * Bridge JS: ver src/plugins/native-player.ts
  */
 @UnstableApi
@@ -47,6 +47,10 @@ public class NativePlayerPlugin extends Plugin {
     private ExoPlayer player;
     private PlayerView playerView;
     private FrameLayout decor;
+
+    private DefaultBandwidthMeter bandwidthMeter;
+    private long totalBytesTransferred = 0L;
+    private long droppedFramesTotal = 0L;
 
     @PluginMethod
     public void load(PluginCall call) {
@@ -70,15 +74,16 @@ public class NativePlayerPlugin extends Plugin {
             try {
                 ensurePlayer();
 
+                // Zera contadores ao trocar de canal
+                totalBytesTransferred = 0L;
+                droppedFramesTotal = 0L;
+
                 DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
                         .setAllowCrossProtocolRedirects(true)
                         .setUserAgent(headers.getOrDefault("User-Agent", "LNTV/1.0"));
                 if (!headers.isEmpty()) httpFactory.setDefaultRequestProperties(headers);
 
                 MediaItem item = MediaItem.fromUri(url);
-                // Política de retry agressiva: tenta praticamente "infinito" em
-                // erros de rede (queda de internet/DNS/timeout) com backoff até
-                // 8s. Sem isso, o ExoPlayer desiste em ~3 tentativas e para preto.
                 LoadErrorHandlingPolicy retryPolicy = new DefaultLoadErrorHandlingPolicy() {
                     @Override
                     public int getMinimumLoadableRetryCount(int dataType) {
@@ -86,7 +91,6 @@ public class NativePlayerPlugin extends Plugin {
                     }
                     @Override
                     public long getRetryDelayMsFor(LoadErrorHandlingPolicy.LoadErrorInfo info) {
-                        // backoff: 1s, 2s, 4s, 8s (cap)
                         long delay = 1000L * (1L << Math.min(info.errorCount - 1, 3));
                         return Math.min(delay, 8000L);
                     }
@@ -151,6 +155,42 @@ public class NativePlayerPlugin extends Plugin {
         });
     }
 
+    /**
+     * Lê estatísticas atuais do ExoPlayer. Tudo aqui vem direto do player /
+     * BandwidthMeter / AnalyticsListener — sem dados sintetizados do JS.
+     */
+    @PluginMethod
+    public void getStats(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            JSObject out = new JSObject();
+            try {
+                if (player == null) {
+                    call.resolve(out);
+                    return;
+                }
+                Format f = player.getVideoFormat();
+                if (f != null) {
+                    if (f.width > 0) out.put("width", f.width);
+                    if (f.height > 0) out.put("height", f.height);
+                    if (f.frameRate > 0) out.put("frameRate", f.frameRate);
+                    if (f.bitrate > 0) out.put("bitrate", f.bitrate);
+                    if (f.codecs != null) out.put("codec", f.codecs);
+                    if (f.sampleMimeType != null) out.put("mimeType", f.sampleMimeType);
+                }
+                out.put("bufferedMs", player.getTotalBufferedDuration());
+                out.put("playbackState", player.getPlaybackState());
+                if (bandwidthMeter != null) {
+                    out.put("bandwidthEstimateBps", bandwidthMeter.getBitrateEstimate());
+                }
+                out.put("totalBytesTransferred", totalBytesTransferred);
+                out.put("droppedFrames", droppedFramesTotal);
+                call.resolve(out);
+            } catch (Exception e) {
+                call.reject("getStats failed: " + e.getMessage(), e);
+            }
+        });
+    }
+
     @Override
     protected void handleOnDestroy() {
         getActivity().runOnUiThread(this::releasePlayer);
@@ -159,7 +199,15 @@ public class NativePlayerPlugin extends Plugin {
 
     private void ensurePlayer() {
         if (player != null) return;
-        player = new ExoPlayer.Builder(getContext()).build();
+
+        bandwidthMeter = new DefaultBandwidthMeter.Builder(getContext()).build();
+        // EventListener.onBandwidthSample(elapsedMs, bytesTransferred, bitrateEstimate)
+        bandwidthMeter.addEventListener(new Handler(Looper.getMainLooper()),
+                (elapsedMs, bytes, bitrate) -> totalBytesTransferred += bytes);
+
+        player = new ExoPlayer.Builder(getContext())
+                .setBandwidthMeter(bandwidthMeter)
+                .build();
 
         decor = (FrameLayout) getActivity().findViewById(android.R.id.content);
         playerView = new PlayerView(getContext());
@@ -171,16 +219,19 @@ public class NativePlayerPlugin extends Plugin {
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT);
-        // index 0 = abaixo do WebView (que precisa ficar transparente)
         decor.addView(playerView, 0, lp);
 
-        // SurfaceView precisa estar em modo "media overlay" pra renderizar
-        // ACIMA do background da janela mas ABAIXO do WebView (que fica
-        // transparente). Sem isso, em muitos devices Android só vem áudio.
         View videoSurface = playerView.getVideoSurfaceView();
         if (videoSurface instanceof SurfaceView) {
             ((SurfaceView) videoSurface).setZOrderMediaOverlay(true);
         }
+
+        player.addAnalyticsListener(new AnalyticsListener() {
+            @Override
+            public void onDroppedVideoFrames(AnalyticsListener.EventTime eventTime, int droppedFrames, long elapsedMs) {
+                droppedFramesTotal += droppedFrames;
+            }
+        });
 
         player.addListener(new Player.Listener() {
             @Override
@@ -220,6 +271,9 @@ public class NativePlayerPlugin extends Plugin {
             try { decor.removeView(playerView); } catch (Exception ignored) {}
             playerView = null;
         }
+        bandwidthMeter = null;
+        totalBytesTransferred = 0L;
+        droppedFramesTotal = 0L;
     }
 
     private void setWebViewTransparent(boolean transparent) {
