@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
+import legacy from "@vitejs/plugin-legacy";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
@@ -12,7 +13,18 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
   },
-  plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [
+    react(),
+    legacy({
+      targets: ["Android >= 5", "Chrome >= 49"],
+      renderLegacyChunks: true,
+      modernPolyfills: true,
+    }),
+    mode === "development" && componentTagger(),
+  ].filter(Boolean),
+  build: {
+    target: "es2017",
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
