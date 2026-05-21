@@ -1,90 +1,61 @@
-# Plano: Player Nativo ExoPlayer no APK Android
 
-## Objetivo
-Eliminar o ícone/flash do WebView entre zaps e padronizar a reprodução entre Fire TV, Android TV e Mobile usando **ExoPlayer (Media3)** nativo embutido no APK via plugin Capacitor customizado.
+# Estatísticas no Android nativo (somente ExoPlayer)
 
-## Arquitetura
+No modo nativo (Android + `NativeAndroidPlayer`), o overlay vai mostrar **exclusivamente** dados vindos do ExoPlayer/Media3 via novo método `getStats()` no plugin. Tudo o que não vem do ExoPlayer (DNS/IP, host, device profile, reconexões em JS, último erro JS, estado JS) fica fora.
 
-```text
-┌─────────────────────────────────────────┐
-│  React (VideoPlayer.tsx)                │
-│  - Detecta isAndroidNative              │
-│  - Se Android → usa NativePlayer plugin │
-│  - Se Web/iOS → usa Video.js atual      │
-└────────────────┬────────────────────────┘
-                 │ Capacitor Bridge
-┌────────────────▼────────────────────────┐
-│  Plugin: NativePlayer (Kotlin)          │
-│  - load(url, headers, type)             │
-│  - play() / pause() / stop()            │
-│  - destroy()                            │
-│  - eventos: playing, error, ended       │
-└────────────────┬────────────────────────┘
-                 │
-┌────────────────▼────────────────────────┐
-│  ExoPlayer/Media3 (SurfaceView)         │
-│  - HLS via HlsMediaSource               │
-│  - MP4 via ProgressiveMediaSource       │
-│  - SurfaceView posicionado atrás do     │
-│    WebView (WebView transparente)       │
-└─────────────────────────────────────────┘
+## Campos no modo `native`
+
+Todos vindos do `ExoPlayer.getStats()`:
+
+- **Resolução** — `player.getVideoFormat().width × height`
+- **FPS** — `Format.frameRate`
+- **Bitrate** — `Format.bitrate`
+- **Codec** — `Format.codecs` / `sampleMimeType`
+- **Banda estimada** — `DefaultBandwidthMeter.getBitrateEstimate()`
+- **Total transferido** — bytes acumulados via `TransferListener.onBytesTransferred` (consumo de internet do canal atual)
+- **Buffer** — `player.getTotalBufferedDuration()` em ms
+- **Frames perdidos / total** — acumulados via `AnalyticsListener.onDroppedVideoFrames` + `onRenderedFirstFrame`/`VideoSize`
+
+> Sem packet loss real (ExoPlayer não expõe). Frames perdidos é o proxy mais próximo.
+
+## Modo `html5` (Web/iOS)
+Sem mudanças. Continua como está.
+
+## Implementação
+
+### `android/app/src/main/java/tv/lntelecom/net/NativePlayerPlugin.java`
+1. Criar `DefaultBandwidthMeter` compartilhado; passar para `HlsMediaSource.Factory` / `ProgressiveMediaSource.Factory` via `DataSource.Factory` configurada com `setTransferListener(bandwidthMeter)`.
+2. Adicionar um `TransferListener` próprio que soma bytes (`onBytesTransferred`) em `totalBytesTransferred`.
+3. Adicionar `AnalyticsListener` ao player com `onDroppedVideoFrames(count, elapsedMs)` → acumula `droppedFrames`.
+4. Novo `@PluginMethod getStats(PluginCall call)`:
+   ```json
+   { "width": 1920, "height": 1080, "frameRate": 30,
+     "bitrate": 4500000, "codec": "avc1.64001f", "mimeType": "video/avc",
+     "bandwidthEstimateBps": 6200000, "totalBytesTransferred": 12456789,
+     "bufferedMs": 8200, "droppedFrames": 3 }
+   ```
+   Lê em `runOnUiThread`.
+
+### `src/plugins/native-player.ts`
+Adicionar tipo `NativePlayerStats` e método `getStats(): Promise<NativePlayerStats>`.
+
+### `src/components/player/StatsOverlay.tsx`
+- Aceitar prop `mode: "native" | "html5"`.
+- No modo `native`: ignorar `videoEl`/`hls`, fazer `setInterval(1000)` chamando `NativePlayer.getStats()`, renderizar somente os campos listados acima.
+- No modo `html5`: comportamento atual sem mudanças.
+- Adicionar `formatBytes` helper para "Total transferido".
+
+### `src/pages/PlayerPage.tsx`
+Passar `mode={isNativeAndroid ? "native" : "html5"}` ao `StatsOverlay` (mesma condição que decide usar `NativeAndroidPlayer`).
+
+## Fora de escopo
+- Packet loss real.
+- IP destino, host, device profile, estado, último erro, reconexões no modo native.
+- Mudanças no overlay HTML5.
+
+## Comandos pro servidor
+Mudança Java exige rebuild do APK no GitHub Actions (workflow **Build Android APK**).
+Frontend:
 ```
-
-## Etapas
-
-### 1. Plugin Capacitor `NativePlayer`
-Criar em `android/app/src/main/java/app/lntv/nativeplayer/`:
-- `NativePlayerPlugin.kt` — métodos `load`, `play`, `pause`, `stop`, `setBounds`
-- `PlayerView` (SurfaceView) montado no `decorView` da Activity, abaixo do WebView
-- ExoPlayer com `DefaultHlsMediaSource.Factory` + `DefaultHttpDataSource.Factory` (suporta headers `Referer`/`User-Agent`)
-- Emite eventos: `playing`, `buffering`, `error`, `ended`
-
-### 2. Configuração Android
-- `app/build.gradle`: adicionar `androidx.media3:media3-exoplayer`, `media3-exoplayer-hls`, `media3-ui` (v1.4.x)
-- `MainActivity.kt`: registrar plugin e tornar WebView **transparente** (`setBackgroundColor(Color.TRANSPARENT)`) para SurfaceView aparecer por baixo
-- `styles.xml`: `windowBackground` preto (já está)
-
-### 3. Bridge TypeScript
-Criar `src/plugins/native-player.ts`:
-```ts
-export interface NativePlayerPlugin {
-  load(opts: { url: string; headers?: Record<string,string>; type: 'hls'|'mp4' }): Promise<void>;
-  play(): Promise<void>;
-  stop(): Promise<void>;
-  addListener(event: 'playing'|'error'|'ended', cb: (data:any)=>void): Promise<PluginListenerHandle>;
-}
+cd /opt/lntv-frontend && git pull && npm run build && rsync -a --delete --exclude logos dist/ /var/www/lntv/
 ```
-
-### 4. Integração no `VideoPlayer.tsx`
-- Detectar `Capacitor.getPlatform() === 'android'`
-- Se nativo: ocultar `<video>` do Video.js, chamar `NativePlayer.load(streamUrl, {Referer, 'User-Agent'}, type)`
-- Manter UI (controles, EPG, OSD) sobre o SurfaceView via WebView transparente
-- Eventos `playing` → `setFirstFrameReady(true)`; `error` → fallback ou retry
-- Cleanup em unmount: `stop()`
-
-### 5. Build APK
-- `npx cap sync android`
-- GitHub Actions roda build automático com keystore release (já configurado, mem://security/android-keystore)
-
-## Detalhes técnicos
-- **Headers**: ExoPlayer aceita Referer/UA via `DefaultHttpDataSource.Factory().setDefaultRequestProperties(headers)`
-- **Posicionamento**: SurfaceView preenche tela toda (`MATCH_PARENT`), `setZOrderMediaOverlay(false)` para ficar atrás
-- **WebView transparente**: necessário no `MainActivity.onCreate` após `super.onCreate`
-- **Zap rápido**: ExoPlayer libera Surface ao trocar `MediaSource`, sem flash do WebView
-- **Compatibilidade**: Media3 requer minSdk 21 (já atende)
-
-## Riscos / Notas
-- Aumenta tamanho do APK em ~3-4 MB (Media3)
-- Controles do Video.js (HTML overlay) continuam funcionando pois WebView fica por cima transparente
-- Airplay/Chromecast: não cobertos nesta fase (separado)
-- iOS: não afetado (continua Video.js)
-
-## Comandos pro servidor (após build)
-```bash
-cd /opt/lntv-frontend && git pull
-npm install
-npx cap sync android
-# GitHub Actions gera APK assinado automaticamente
-```
-
-Posso prosseguir com a implementação?
