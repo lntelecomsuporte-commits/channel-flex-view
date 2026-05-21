@@ -17,12 +17,27 @@ export interface NativePlayerLoadOptions {
 
 export type NativePlayerEvent = "playing" | "buffering" | "ended" | "error";
 
+export interface NativePlayerStats {
+  width?: number;
+  height?: number;
+  frameRate?: number;
+  bitrate?: number;
+  codec?: string;
+  mimeType?: string;
+  bandwidthEstimateBps?: number;
+  totalBytesTransferred?: number;
+  bufferedMs?: number;
+  droppedFrames?: number;
+  playbackState?: number;
+}
+
 export interface NativePlayerPlugin {
   load(options: NativePlayerLoadOptions): Promise<void>;
   play(): Promise<void>;
   pause(): Promise<void>;
   stop(): Promise<void>;
   destroy(): Promise<void>;
+  getStats(): Promise<NativePlayerStats>;
   addListener(
     eventName: NativePlayerEvent,
     listener: (data: { state?: number; code?: number; codeName?: string; message?: string; cause?: string }) => void,
