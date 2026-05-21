@@ -867,6 +867,7 @@ const PlayerPage = () => {
               videoEl={playerRef.current?.getVideoElement() ?? null}
               hls={playerRef.current?.getHls() ?? null}
               streamUrl={currentChannel.stream_url}
+              mode={IS_NATIVE_APK ? "native" : "html5"}
               onClose={() => setShowStats(false)}
             />
           )}
