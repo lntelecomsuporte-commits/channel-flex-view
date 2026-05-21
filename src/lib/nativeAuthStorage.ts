@@ -43,7 +43,8 @@ async function hydrate() {
 
   for (const key of KNOWN_KEYS) {
     try {
-      const { value } = await withTimeout(prefsApi.get({ key }), 1500, `get ${key}`);
+      const res = await withTimeout<{ value: string | null }>(prefsApi.get({ key }), 1500, `get ${key}`);
+      const value = res?.value ?? null;
       if (value) memCache.set(key, value);
       else {
         // fallback: tenta migrar do localStorage se houver
