@@ -7,8 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Tv, Eye, EyeOff, ArrowLeft, ArrowRight } from "lucide-react";
+import { Tv, Eye, EyeOff, ArrowLeft, ArrowRight, Copy as CopyIcon } from "lucide-react";
 import { VirtualKeyboard } from "@/components/VirtualKeyboard";
+import { getDeviceId, formatDeviceCode } from "@/plugins/device-info";
+import { getLocalFunctionUrl } from "@/lib/localBackend";
 
 const isNative = Capacitor.isNativePlatform();
 
@@ -38,6 +40,8 @@ const LoginPage = () => {
   const [activeField, setActiveField] = useState<"email" | "password">("email");
   const [isStandalone, setIsStandalone] = useState(false);
   const [isTvLayout, setIsTvLayout] = useState(false);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [deviceModel, setDeviceModel] = useState<string>("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -45,6 +49,12 @@ const LoginPage = () => {
     const update = () => setIsTvLayout(detectTvLayout());
     update();
     window.addEventListener("resize", update);
+    void getDeviceId().then((info) => {
+      if (info) {
+        setDeviceId(info.deviceId);
+        setDeviceModel([info.manufacturer, info.model].filter(Boolean).join(" "));
+      }
+    });
     return () => window.removeEventListener("resize", update);
   }, []);
 
@@ -52,6 +62,19 @@ const LoginPage = () => {
   const useVirtualKeyboard = isNative || isStandalone;
   // Layout wizard (1 campo por vez ao lado do teclado) só em TV com teclado virtual
   const useWizardLayout = useVirtualKeyboard && isTvLayout;
+  // Mostra código de dispositivo só no APK nativo Android
+  const showDeviceCode = isNative && !!deviceId;
+  const deviceCode = deviceId ? formatDeviceCode(deviceId) : "";
+
+  const copyDeviceCode = async () => {
+    if (!deviceCode) return;
+    try {
+      await navigator.clipboard.writeText(deviceCode);
+      toast.success("Código copiado");
+    } catch {
+      toast.message(deviceCode);
+    }
+  };
 
   const handleKeyPress = (key: string) => {
     if (activeField === "email") setEmail((v) => v + key);
@@ -73,6 +96,48 @@ const LoginPage = () => {
 
   const doLogin = async () => {
     setLoading(true);
+
+    // ============ APK Android: usa device-login (com binding de dispositivo) ============
+    if (isNative && deviceId) {
+      try {
+        const res = await fetch(getLocalFunctionUrl("device-login"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email,
+            password,
+            device_id: deviceId,
+            platform: "android",
+            device_name: deviceModel || "Android device",
+            app_version: "apk",
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.success) {
+          toast.error(data?.error || "Falha no login");
+          setLoading(false);
+          return;
+        }
+        // Aplica sessão retornada pelo edge function
+        const { error: sessErr } = await supabase.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+        });
+        if (sessErr) {
+          toast.error("Erro ao iniciar sessão: " + sessErr.message);
+          setLoading(false);
+          return;
+        }
+        setLoading(false);
+        navigate("/");
+      } catch (e: any) {
+        toast.error("Erro de rede: " + (e?.message || "tente novamente"));
+        setLoading(false);
+      }
+      return;
+    }
+
+    // ============ PWA / Web / iOS: login direto ============
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
@@ -104,6 +169,34 @@ const LoginPage = () => {
     setLoading(false);
     navigate("/");
   };
+
+  // Bloco do código do dispositivo — reaproveitado nos 2 layouts
+  const DeviceCodeBlock = ({ compact = false }: { compact?: boolean }) =>
+    showDeviceCode ? (
+      <div
+        className={`rounded-md border border-border bg-muted/40 ${compact ? "p-2" : "p-3"} space-y-1`}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className={`${compact ? "text-xs" : "text-sm"} text-muted-foreground`}>
+            Código do dispositivo
+          </span>
+          <button
+            type="button"
+            onClick={copyDeviceCode}
+            className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+          >
+            <CopyIcon className="h-3 w-3" /> copiar
+          </button>
+        </div>
+        <div className={`font-mono ${compact ? "text-base" : "text-lg"} tracking-wider text-foreground select-all`}>
+          {deviceCode}
+        </div>
+        <p className="text-[11px] text-muted-foreground leading-tight">
+          Se não conseguir entrar, envie este código ao suporte para liberar seu aparelho.
+        </p>
+      </div>
+    ) : null;
+
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -190,6 +283,8 @@ const LoginPage = () => {
                 </Button>
               )}
             </div>
+
+            <DeviceCodeBlock />
           </div>
 
           {/* Lado direito: teclado */}
@@ -267,6 +362,9 @@ const LoginPage = () => {
                 {loading ? "Entrando..." : "Entrar"}
               </Button>
             </form>
+
+            <DeviceCodeBlock compact />
+
 
             {useVirtualKeyboard && (
               <VirtualKeyboard

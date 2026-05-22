@@ -8,10 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Plus, Trash2, ShieldOff, ShieldCheck, Pencil, LogOut, Download, ListVideo, Copy, RefreshCw } from "lucide-react";
+import { Plus, Trash2, ShieldOff, ShieldCheck, Pencil, LogOut, Download, ListVideo, Copy, RefreshCw, Smartphone } from "lucide-react";
 const PLAYLIST_HOST = "https://tv2.lntelecom.net";
 import { useCategories } from "@/hooks/useChannels";
 import { UserStatusBadge } from "./UserStatusBadge";
+import { UserDevicesDialog } from "./UserDevicesDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type AccessStats = {
@@ -40,6 +41,7 @@ type Profile = {
   created_at: string;
   playlist_token: string | null;
   playlist_password: string | null;
+  device_limit_override: number | null;
 };
 
 function useProfiles() {
@@ -116,8 +118,9 @@ const UserManagement = () => {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
-  const [editForm, setEditForm] = useState({ password: "", display_name: "", adult_pin: "" });
+  const [editForm, setEditForm] = useState({ password: "", display_name: "", adult_pin: "", device_limit_override: "" });
   const [editCategories, setEditCategories] = useState<string[]>([]);
+  const [devicesUser, setDevicesUser] = useState<Profile | null>(null);
   const [editIntegrationAccess, setEditIntegrationAccess] = useState<Array<{
     hubsoft_config_id: string;
     hubsoft_config_name: string;
@@ -423,10 +426,18 @@ const UserManagement = () => {
     setEditingUser(profile);
     const { data } = await supabase
       .from("profiles")
-      .select("adult_pin")
+      .select("adult_pin, device_limit_override")
       .eq("user_id", profile.user_id)
       .maybeSingle();
-    setEditForm({ password: "", display_name: profile.display_name || "", adult_pin: data?.adult_pin || "" });
+    setEditForm({
+      password: "",
+      display_name: profile.display_name || "",
+      adult_pin: data?.adult_pin || "",
+      device_limit_override:
+        data?.device_limit_override === null || data?.device_limit_override === undefined
+          ? ""
+          : String(data.device_limit_override),
+    });
     const { data: roleRow } = await supabase
       .from("user_roles")
       .select("id")
@@ -472,6 +483,21 @@ const UserManagement = () => {
         .eq("user_id", editingUser.user_id);
       if (pinErr) {
         toast.error("Erro ao atualizar PIN: " + pinErr.message);
+        setUpdating(false);
+        return;
+      }
+    }
+
+    // Update device_limit_override (sempre — pode ser null pra limpar)
+    {
+      const raw = editForm.device_limit_override.trim();
+      const newVal = raw === "" ? null : Math.max(0, parseInt(raw, 10) || 0);
+      const { error: devErr } = await supabase
+        .from("profiles")
+        .update({ device_limit_override: newVal })
+        .eq("user_id", editingUser.user_id);
+      if (devErr) {
+        toast.error("Erro ao salvar limite: " + devErr.message);
         setUpdating(false);
         return;
       }
@@ -729,6 +755,9 @@ const UserManagement = () => {
                     <Button variant="ghost" size="sm" onClick={() => handleEdit(p as Profile)} title="Editar">
                       <Pencil className="h-4 w-4" />
                     </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setDevicesUser(p as Profile)} title="Dispositivos vinculados">
+                      <Smartphone className="h-4 w-4 text-primary" />
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => setPlaylistUser(p as Profile)} title="Gerar playlist M3U/HLS">
                       <ListVideo className="h-4 w-4 text-primary" />
                     </Button>
@@ -776,6 +805,21 @@ const UserManagement = () => {
                 placeholder="4 a 8 dígitos (padrão: 1234)"
               />
               <p className="text-xs text-muted-foreground">Senha pedida ao abrir canais marcados como adulto.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Limite de dispositivos (override)</Label>
+              <Input
+                type="number"
+                min={0}
+                max={50}
+                value={editForm.device_limit_override}
+                onChange={(e) => setEditForm((f) => ({ ...f, device_limit_override: e.target.value.replace(/[^0-9]/g, "") }))}
+                placeholder="Vazio = usar limite da integração Hubsoft"
+                className="max-w-[240px]"
+              />
+              <p className="text-xs text-muted-foreground">
+                Sobrescreve o limite da integração. <strong>Vazio</strong> = herda do Hubsoft (ou 3 se manual). <strong>0</strong> = ilimitado.
+              </p>
             </div>
             <div className="space-y-2">
               <Label>Categorias de Acesso (manuais)</Label>
@@ -912,6 +956,15 @@ const UserManagement = () => {
           })()}
         </DialogContent>
       </Dialog>
+
+      {devicesUser && (
+        <UserDevicesDialog
+          open={!!devicesUser}
+          onOpenChange={(v) => !v && setDevicesUser(null)}
+          userId={devicesUser.user_id}
+          userLabel={devicesUser.display_name || devicesUser.username || ""}
+        />
+      )}
     </div>
   );
 };

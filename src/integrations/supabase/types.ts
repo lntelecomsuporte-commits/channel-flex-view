@@ -189,6 +189,7 @@ export type Database = {
           api_key: string
           api_url: string
           created_at: string
+          device_limit: number
           id: string
           is_active: boolean
           name: string
@@ -203,6 +204,7 @@ export type Database = {
           api_key?: string
           api_url?: string
           created_at?: string
+          device_limit?: number
           id?: string
           is_active?: boolean
           name?: string
@@ -217,6 +219,7 @@ export type Database = {
           api_key?: string
           api_url?: string
           created_at?: string
+          device_limit?: number
           id?: string
           is_active?: boolean
           name?: string
@@ -290,6 +293,7 @@ export type Database = {
         Row: {
           adult_pin: string
           created_at: string
+          device_limit_override: number | null
           display_name: string | null
           force_signout_at: string | null
           hubsoft_client_id: string | null
@@ -305,6 +309,7 @@ export type Database = {
         Insert: {
           adult_pin?: string
           created_at?: string
+          device_limit_override?: number | null
           display_name?: string | null
           force_signout_at?: string | null
           hubsoft_client_id?: string | null
@@ -320,6 +325,7 @@ export type Database = {
         Update: {
           adult_pin?: string
           created_at?: string
+          device_limit_override?: number | null
           display_name?: string | null
           force_signout_at?: string | null
           hubsoft_client_id?: string | null
@@ -426,6 +432,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_devices: {
+        Row: {
+          app_version: string | null
+          created_at: string
+          created_by: string
+          device_id: string
+          device_label: string | null
+          device_name: string | null
+          first_login_at: string
+          id: string
+          is_active: boolean
+          last_ip: string | null
+          last_seen_at: string
+          platform: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          app_version?: string | null
+          created_at?: string
+          created_by?: string
+          device_id: string
+          device_label?: string | null
+          device_name?: string | null
+          first_login_at?: string
+          id?: string
+          is_active?: boolean
+          last_ip?: string | null
+          last_seen_at?: string
+          platform: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          app_version?: string | null
+          created_at?: string
+          created_by?: string
+          device_id?: string
+          device_label?: string | null
+          device_name?: string | null
+          first_login_at?: string
+          id?: string
+          is_active?: boolean
+          last_ip?: string | null
+          last_seen_at?: string
+          platform?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       user_favorites: {
         Row: {
@@ -615,6 +672,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      resolve_device_limit: { Args: { _user_id: string }; Returns: number }
     }
     Enums: {
       app_role: "admin" | "user"

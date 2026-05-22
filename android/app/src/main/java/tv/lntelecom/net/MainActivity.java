@@ -15,6 +15,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(PlaybackKeepAlivePlugin.class);
         registerPlugin(NativePlayerPlugin.class);
+        registerPlugin(DeviceInfoPlugin.class);
         super.onCreate(savedInstanceState);
         // Mantém a tela acesa enquanto a Activity estiver visível.
         // O foreground service cuida do CPU/processo em background.

@@ -23,6 +23,7 @@ type HubsoftConfig = {
   is_active: boolean;
   trial_enabled: boolean;
   trial_days: number;
+  device_limit: number;
 };
 
 function getErrorMessage(error: unknown) {
@@ -96,6 +97,7 @@ type FormState = {
   trial_enabled: boolean;
   trial_days: number;
   trial_category_ids: string[];
+  device_limit: number;
 };
 
 const emptyForm: FormState = {
@@ -110,6 +112,7 @@ const emptyForm: FormState = {
   trial_enabled: false,
   trial_days: 30,
   trial_category_ids: [],
+  device_limit: 3,
 };
 
 async function syncCategoriesToExistingUsers(configId: string, categoryIds: string[]): Promise<number> {
@@ -321,6 +324,7 @@ const HubsoftIntegration = () => {
       trial_enabled: !!config.trial_enabled,
       trial_days: Number(config.trial_days) || 30,
       trial_category_ids: getTrialCategoryIdsForConfig(config.id),
+      device_limit: Number((config as any).device_limit ?? 3),
     });
     setApplyToExisting(false);
     setShowForm(true);
@@ -350,6 +354,7 @@ const HubsoftIntegration = () => {
       is_active: form.is_active,
       trial_enabled: form.trial_enabled,
       trial_days: Math.max(1, Number(form.trial_days) || 30),
+      device_limit: Math.max(0, Number(form.device_limit) || 0),
     };
 
     let configId = editingId;
@@ -555,6 +560,26 @@ const HubsoftIntegration = () => {
                   <p className="text-xs text-muted-foreground">Nenhuma categoria cadastrada</p>
                 )}
               </div>
+            </div>
+
+            {/* Limite de dispositivos */}
+            <div className="space-y-2 rounded-lg border border-border p-3 bg-secondary/30">
+              <Label htmlFor="device_limit">Limite de dispositivos por usuário</Label>
+              <Input
+                id="device_limit"
+                type="number"
+                min={0}
+                max={50}
+                value={form.device_limit}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, device_limit: parseInt(e.target.value || "0", 10) }))
+                }
+                className="max-w-[140px]"
+              />
+              <p className="text-xs text-muted-foreground">
+                Quantos aparelhos cada cliente desta integração pode vincular (APK Android / Roku).
+                Use <strong>0</strong> para ilimitado. PWA/navegador não conta.
+              </p>
             </div>
 
             {/* Trial / Degustação */}
