@@ -223,7 +223,7 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
         </button>
       </div>
       {mode === "native" ? (
-        <NativeStatsBody />
+        <NativeStatsBody destIp={destIp} />
       ) : (
         <div className="space-y-1.5">
           <Row label="Resolução" value={stats.resolution} />
