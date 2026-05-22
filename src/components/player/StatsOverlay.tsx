@@ -44,7 +44,7 @@ const formatBytes = (b: number) => {
   return `${b} B`;
 };
 
-const NativeStatsBody = () => {
+const NativeStatsBody = ({ destIp }: { destIp: DestIp }) => {
   const [s, setS] = useState<NativePlayerStats>({});
   useEffect(() => {
     let alive = true;
@@ -78,6 +78,11 @@ const NativeStatsBody = () => {
       <Row label="Buffer" value={buffer} />
       <Row label="Frames perdidos" value={dropped} />
       <Row label="Codec" value={codec} />
+      <Row
+        label={`Destino ${destIp.family ?? ""}`.trim()}
+        value={destIp.host ? destIp.address : "—"}
+      />
+      {destIp.host && <Row label="Host" value={destIp.host} />}
     </div>
   );
 };
