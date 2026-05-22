@@ -110,6 +110,11 @@ export const useSessionHeartbeat = ({ channelId, channelName, isWatching = false
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const channelInfoRef = useRef({ channelId, channelName, isWatching });
   const ipsRef = useRef<{ ipv4: string | null; ipv6: string | null }>({ ipv4: null, ipv6: null });
+  const deviceRef = useRef<{ deviceId: string | null; platform: string; deviceName: string | null }>({
+    deviceId: null,
+    platform: isNativeApp ? "android" : (window.matchMedia?.("(display-mode: standalone)").matches ? "pwa" : "web"),
+    deviceName: null,
+  });
 
   useEffect(() => {
     channelInfoRef.current = { channelId, channelName, isWatching };
