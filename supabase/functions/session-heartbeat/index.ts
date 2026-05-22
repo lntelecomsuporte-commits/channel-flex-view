@@ -97,11 +97,64 @@ Deno.serve(async (req) => {
           ip_address: ipAddress,
           client_ipv4: cIpv4,
           client_ipv6: cIpv6,
+          device_id: cleanDeviceId,
+          platform: cleanPlatform,
         })
         .select("id, started_at")
         .single();
 
       if (error) return json({ error: error.message }, 400);
+
+      // Auto-vincula dispositivo nativo (APK/Roku) ao usuário, se ainda não estiver
+      // vinculado. Respeita limite — se exceder, deixa a sessão rolar mas não cadastra
+      // (admin pode cadastrar manualmente pelo painel via "Dispositivos online").
+      if (cleanDeviceId && (cleanPlatform === "android" || cleanPlatform === "roku")) {
+        const { data: existing } = await adminClient
+          .from("user_devices")
+          .select("id, user_id, is_active")
+          .eq("device_id", cleanDeviceId)
+          .eq("platform", cleanPlatform)
+          .maybeSingle();
+
+        if (existing) {
+          // Atualiza last_seen se for do mesmo user
+          if (existing.user_id === user.id) {
+            await adminClient
+              .from("user_devices")
+              .update({
+                last_seen_at: new Date().toISOString(),
+                last_ip: ipAddress,
+                app_version: typeof appVersion === "string" ? appVersion : undefined,
+                device_name: typeof deviceName === "string" ? deviceName : undefined,
+              })
+              .eq("id", existing.id);
+          }
+        } else {
+          // Checa limite antes de inserir
+          const { data: activeDevs } = await adminClient
+            .from("user_devices")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("is_active", true);
+          const { data: limitData } = await adminClient
+            .rpc("resolve_device_limit", { _user_id: user.id });
+          const limit = typeof limitData === "number" ? limitData : 3;
+          const activeCount = Array.isArray(activeDevs) ? activeDevs.length : 0;
+          if (limit === 0 || activeCount < limit) {
+            await adminClient.from("user_devices").insert({
+              user_id: user.id,
+              device_id: cleanDeviceId,
+              platform: cleanPlatform,
+              device_name: typeof deviceName === "string" ? deviceName : null,
+              app_version: typeof appVersion === "string" ? appVersion : null,
+              last_ip: ipAddress,
+              created_by: "self_register",
+              is_active: true,
+            });
+          }
+        }
+      }
+
       return json({ id: data.id });
     }
 
