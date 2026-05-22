@@ -807,6 +807,21 @@ const UserManagement = () => {
               <p className="text-xs text-muted-foreground">Senha pedida ao abrir canais marcados como adulto.</p>
             </div>
             <div className="space-y-2">
+              <Label>Limite de dispositivos (override)</Label>
+              <Input
+                type="number"
+                min={0}
+                max={50}
+                value={editForm.device_limit_override}
+                onChange={(e) => setEditForm((f) => ({ ...f, device_limit_override: e.target.value.replace(/[^0-9]/g, "") }))}
+                placeholder="Vazio = usar limite da integração Hubsoft"
+                className="max-w-[240px]"
+              />
+              <p className="text-xs text-muted-foreground">
+                Sobrescreve o limite da integração. <strong>Vazio</strong> = herda do Hubsoft (ou 3 se manual). <strong>0</strong> = ilimitado.
+              </p>
+            </div>
+            <div className="space-y-2">
               <Label>Categorias de Acesso (manuais)</Label>
               <p className="text-xs text-muted-foreground">
                 Categorias marcadas aqui são adicionadas manualmente. Não afetam o acesso vindo de integrações Hubsoft (mostrado abaixo).
