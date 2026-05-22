@@ -162,9 +162,8 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
     return () => clearInterval(interval);
   }, [videoEl, hls, mode]);
 
-  // DoH só faz sentido no modo HTML5 (no nativo o foco é o ExoPlayer).
+  // DoH: resolução de IP do host do stream — útil em ambos modos (HTML5 e native).
   useEffect(() => {
-    if (mode === "native") return;
     if (!streamUrl) return;
     let cancelled = false;
     let host = "";
@@ -208,7 +207,7 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
     });
 
     return () => { cancelled = true; };
-  }, [streamUrl, mode]);
+  }, [streamUrl]);
 
   return (
     <div ref={ref} className="absolute top-4 right-4 z-40 glass-panel p-4 min-w-[280px] animate-fade-in font-mono text-sm">
