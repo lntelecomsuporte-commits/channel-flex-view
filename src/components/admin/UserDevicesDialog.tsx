@@ -40,9 +40,21 @@ function maskDeviceId(id: string) {
   return id.length > 12 ? id.slice(0, 4) + "…" + id.slice(-6) : id;
 }
 
+type ActiveSession = {
+  id: string;
+  device_id: string | null;
+  platform: string | null;
+  user_agent: string | null;
+  last_heartbeat_at: string;
+  current_channel_name: string | null;
+  client_ipv4: string | null;
+  client_ipv6: string | null;
+};
+
 export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Props) {
   const [loading, setLoading] = useState(false);
   const [devices, setDevices] = useState<Device[]>([]);
+  const [sessions, setSessions] = useState<ActiveSession[]>([]);
   const [limit, setLimit] = useState<number | null>(null);
   const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
   const [labelDraft, setLabelDraft] = useState("");
