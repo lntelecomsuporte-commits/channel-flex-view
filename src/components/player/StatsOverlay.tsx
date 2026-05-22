@@ -1,7 +1,6 @@
 import { forwardRef, useEffect, useState } from "react";
 import type Hls from "hls.js";
 import { X } from "lucide-react";
-import { getDeviceProfile } from "@/lib/deviceProfile";
 import { NativePlayer, type NativePlayerStats } from "@/plugins/native-player";
 
 interface StatsOverlayProps {
