@@ -67,14 +67,25 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
 
   const reload = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("user_devices")
-      .select("*")
-      .eq("user_id", userId)
-      .order("last_seen_at", { ascending: false });
+    const ninetySecAgo = new Date(Date.now() - 90_000).toISOString();
+    const [{ data, error }, { data: sessData }, { data: lim }] = await Promise.all([
+      supabase
+        .from("user_devices")
+        .select("*")
+        .eq("user_id", userId)
+        .order("last_seen_at", { ascending: false }),
+      supabase
+        .from("user_sessions")
+        .select("id, device_id, platform, user_agent, last_heartbeat_at, current_channel_name, client_ipv4, client_ipv6")
+        .eq("user_id", userId)
+        .is("ended_at", null)
+        .gte("last_heartbeat_at", ninetySecAgo)
+        .order("last_heartbeat_at", { ascending: false }),
+      supabase.rpc("resolve_device_limit", { _user_id: userId }),
+    ]);
     if (error) toast.error("Erro: " + error.message);
     setDevices((data as Device[]) || []);
-    const { data: lim } = await supabase.rpc("resolve_device_limit", { _user_id: userId });
+    setSessions((sessData as ActiveSession[]) || []);
     setLimit(typeof lim === "number" ? lim : null);
     setLoading(false);
   };
