@@ -46,6 +46,10 @@ const LoginPage = () => {
   const [autoLoginTrying, setAutoLoginTrying] = useState(isNative);
   const navigate = useNavigate();
 
+  // No APK: botão Voltar sempre fecha o app na tela de login (não há para onde voltar).
+  useNativeBackButton(() => false, isNative);
+
+
   useEffect(() => {
     setIsStandalone(detectStandalone());
     const update = () => setIsTvLayout(detectTvLayout());
