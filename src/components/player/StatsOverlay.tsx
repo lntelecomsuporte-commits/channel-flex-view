@@ -21,7 +21,50 @@ interface Stats {
   bandwidth: string;
   level: string;
   codec: string;
+  format: string;
 }
+
+const prettyCodec = (raw?: string | null, mimeType?: string | null): string => {
+  const r = (raw || "").toLowerCase().trim();
+  const m = (mimeType || "").toLowerCase().trim();
+  const map: Array<[RegExp, string]> = [
+    [/^avc[13]/, "H.264 (AVC)"],
+    [/^(hev1|hvc1)/, "H.265 (HEVC)"],
+    [/^vp09/, "VP9"],
+    [/^vp08/, "VP8"],
+    [/^av01/, "AV1"],
+    [/^mp4a/, "AAC"],
+  ];
+  let name = "";
+  for (const [re, n] of map) if (re.test(r)) { name = n; break; }
+  if (!name) {
+    if (m.includes("avc") || m.includes("h264")) name = "H.264 (AVC)";
+    else if (m.includes("hevc") || m.includes("h265")) name = "H.265 (HEVC)";
+    else if (m.includes("vp9")) name = "VP9";
+    else if (m.includes("vp8")) name = "VP8";
+    else if (m.includes("av1")) name = "AV1";
+  }
+  if (name && r) return `${name} · ${raw}`;
+  return name || raw || m || "—";
+};
+
+const prettyContainer = (mimeType?: string | null, streamUrl?: string | null): string => {
+  const m = (mimeType || "").toLowerCase();
+  if (m === "video/mp4") return "MP4";
+  if (m === "video/mp2t") return "MPEG-TS (HLS)";
+  if (m === "application/vnd.apple.mpegurl" || m === "application/x-mpegurl") return "HLS";
+  if (m === "video/webm") return "WebM";
+  if (streamUrl) {
+    try {
+      const path = new URL(streamUrl).pathname.toLowerCase();
+      if (path.endsWith(".m3u8")) return "HLS";
+      if (path.endsWith(".mp4")) return "MP4";
+      if (path.endsWith(".ts")) return "MPEG-TS";
+      if (path.endsWith(".webm")) return "WebM";
+    } catch {}
+  }
+  return "—";
+};
 
 interface DestIp {
   family: "IPv4" | "IPv6" | null;
