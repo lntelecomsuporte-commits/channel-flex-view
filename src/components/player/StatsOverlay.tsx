@@ -188,13 +188,14 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
       let bitrate = "—";
       let bandwidth = "—";
       let level = "—";
-      let codec = "—";
+      let rawCodec: string | undefined;
+      let rawMime: string | undefined;
       if (hls) {
         const lvl = hls.levels?.[hls.currentLevel];
         if (lvl) {
           bitrate = formatBitrate(lvl.bitrate);
           level = `${hls.currentLevel + 1}/${hls.levels.length}`;
-          codec = lvl.codecSet || lvl.videoCodec || "—";
+          rawCodec = lvl.videoCodec || lvl.codecSet || undefined;
         }
         // @ts-ignore
         const bw = hls.bandwidthEstimate;
@@ -206,8 +207,11 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
           bandwidth = `${(bytes / 1_000_000).toFixed(1)} MB total`;
         }
       }
+      const codec = prettyCodec(rawCodec, rawMime);
+      const srcUrl = streamUrl || videoEl.currentSrc;
+      const format = prettyContainer(rawMime, srcUrl);
 
-      setStats({ resolution, fps, bitrate, bufferAhead, droppedFrames, totalFrames, bandwidth, level, codec });
+      setStats({ resolution, fps, bitrate, bufferAhead, droppedFrames, totalFrames, bandwidth, level, codec, format });
     }, 1000);
 
     return () => clearInterval(interval);
