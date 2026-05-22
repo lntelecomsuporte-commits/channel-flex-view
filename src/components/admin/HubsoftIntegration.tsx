@@ -562,6 +562,26 @@ const HubsoftIntegration = () => {
               </div>
             </div>
 
+            {/* Limite de dispositivos */}
+            <div className="space-y-2 rounded-lg border border-border p-3 bg-secondary/30">
+              <Label htmlFor="device_limit">Limite de dispositivos por usuário</Label>
+              <Input
+                id="device_limit"
+                type="number"
+                min={0}
+                max={50}
+                value={form.device_limit}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, device_limit: parseInt(e.target.value || "0", 10) }))
+                }
+                className="max-w-[140px]"
+              />
+              <p className="text-xs text-muted-foreground">
+                Quantos aparelhos cada cliente desta integração pode vincular (APK Android / Roku).
+                Use <strong>0</strong> para ilimitado. PWA/navegador não conta.
+              </p>
+            </div>
+
             {/* Trial / Degustação */}
             <div className="space-y-3 rounded-lg border border-border p-3 bg-secondary/30">
               <div className="flex items-center gap-2">
