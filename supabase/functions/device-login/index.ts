@@ -26,45 +26,42 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-  let body: any;
   try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    let body: any;
     body = await req.json();
-  } catch {
-    return json({ error: "Invalid JSON" }, 400);
-  }
+    
+    const { email, password, device_id, platform, device_name, app_version } = body || {};
+    if (!email || !password) return json({ error: "Email e senha obrigatórios" }, 400);
+    if (!device_id || typeof device_id !== "string" || device_id.length < 6) {
+      return json({ error: "device_id inválido" }, 400);
+    }
+    if (platform !== "android" && platform !== "roku") {
+      return json({ error: "platform deve ser android ou roku" }, 400);
+    }
 
-  const { email, password, device_id, platform, device_name, app_version } = body || {};
-  if (!email || !password) return json({ error: "Email e senha obrigatórios" }, 400);
-  if (!device_id || typeof device_id !== "string" || device_id.length < 6) {
-    return json({ error: "device_id inválido" }, 400);
-  }
-  if (platform !== "android" && platform !== "roku") {
-    return json({ error: "platform deve ser android ou roku" }, 400);
-  }
-
-  // 1) Login via Auth API (não criamos sessão ainda no client; só depois que device passar)
-  const authRes = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
-    method: "POST",
-    headers: {
-      apikey: serviceRoleKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ email: String(email).trim().toLowerCase(), password }),
-  });
-  const authData = await authRes.json().catch(() => ({}));
-  if (!authRes.ok || !authData?.access_token || !authData?.user?.id) {
-    return json(
-      { error: authData?.error_description || authData?.msg || "Credenciais inválidas" },
-      401,
-    );
-  }
-  const userId: string = authData.user.id;
-  const accessToken: string = authData.access_token;
-  const refreshToken: string = authData.refresh_token;
-  const clientIp = await getClientIp(req);
+    // 1) Login via SDK Auth para evitar erro upstream no ambiente self-hosted.
+    const authClient = createClient(supabaseUrl, anonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data: authData, error: authError } = await authClient.auth.signInWithPassword({
+      email: String(email).trim().toLowerCase(),
+      password,
+    });
+    if (authError || !authData?.session?.access_token || !authData?.user?.id) {
+      return json({ error: authError?.message || "Credenciais inválidas" }, 401);
+    }
+    const userId: string = authData.user.id;
+    const accessToken: string = authData.session.access_token;
+    const refreshToken: string = authData.session.refresh_token;
+    const clientIp = await getClientIp(req);
 
   // 2) Verifica se o profile está bloqueado/inativo
   const profRes = await restFetch(
