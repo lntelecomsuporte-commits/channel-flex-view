@@ -147,24 +147,27 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
     void reload();
   };
 
-  const registeredKeys = new Set(devices.map((d) => `${d.platform}:${d.device_id}`));
+  const normalizeId = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+  const registeredKeys = new Set(devices.map((d) => `${d.platform}:${normalizeId(d.device_id)}`));
   // Sessões ativas reportando device_id que ainda NÃO estão cadastradas
   const pendingOnline = sessions.filter(
     (s) =>
       s.device_id &&
       (s.platform === "android" || s.platform === "roku") &&
-      !registeredKeys.has(`${s.platform}:${s.device_id}`),
+      !registeredKeys.has(`${s.platform}:${normalizeId(s.device_id)}`),
   );
   // Mapa device_id → sessão ativa (pra mostrar badge "online" em dispositivos cadastrados)
   const onlineDevices = new Set(
-    sessions.filter((s) => s.device_id).map((s) => `${s.platform}:${s.device_id}`),
+    sessions.filter((s) => s.device_id).map((s) => `${s.platform}:${normalizeId(s.device_id!)}`),
   );
 
   const registerOnline = async (s: ActiveSession) => {
     if (!s.device_id || !s.platform) return;
+    const clean = normalizeId(s.device_id);
+    if (clean.length < 6) return toast.error("device_id inválido");
     const { error } = await supabase.from("user_devices").insert({
       user_id: userId,
-      device_id: s.device_id,
+      device_id: clean,
       platform: s.platform,
       device_name: s.user_agent?.slice(0, 120) || null,
       last_ip: s.client_ipv4 || s.client_ipv6 || null,
