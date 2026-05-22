@@ -259,28 +259,20 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     video.addEventListener("error", handleVideoError);
 
     if (engine === "hls" && !isAppleDevice && Hls.isSupported()) {
-      const profile = getDeviceProfile();
-      const isWeak = profile.weak;
       const hls = new Hls({
         enableWorker: true,
-        // Live low-latency: reduz tempo até 1º frame em ~150-300ms.
-        // Em devices fracos mantém modo padrão (decoder não acompanha LL).
-        lowLatencyMode: !isWeak,
+        lowLatencyMode: true,
         // === Fast channel zap ===
-        // liveSyncDurationCount: 1 = começa playback assim que o 1º segmento
-        // do live edge chega. Antes (2-3) esperava 2-3 segmentos completos
-        // antes do 1º frame — explicava boa parte dos ~2s no zap.
-        liveSyncDurationCount: isWeak ? 2 : 1,
-        liveMaxLatencyDurationCount: isWeak ? 10 : 5,
-        startLevel: 0,                              // 1ª qualidade = mais baixa → 1º frame rápido
-        startFragPrefetch: true,                    // pre-busca seg #0 enquanto manifest processa
-        backBufferLength: isWeak ? 10 : 0,          // libera memória cedo (zap mais leve)
-        maxBufferLength: isWeak ? 20 : 6,           // buffer alvo enxuto = recover rápido
+        liveSyncDurationCount: 1,
+        liveMaxLatencyDurationCount: 5,
+        startLevel: 0,
+        startFragPrefetch: true,
+        backBufferLength: 0,
+        maxBufferLength: 6,
         maxMaxBufferLength: 30,
-        maxBufferSize: 30 * 1000 * 1000,            // 30MB
-        maxBufferHole: 0.3,                         // pula gaps menores rápido
+        maxBufferSize: 30 * 1000 * 1000,
+        maxBufferHole: 0.3,
         nudgeMaxRetry: 5,
-        // Retries: agressivos mas com cap pra não emperrar em segmento podre.
         fragLoadingMaxRetry: 3,
         fragLoadingRetryDelay: 500,
         fragLoadingMaxRetryTimeout: 6000,
@@ -291,7 +283,6 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         levelLoadingMaxRetry: 4,
         levelLoadingRetryDelay: 400,
         levelLoadingMaxRetryTimeout: 12000,
-        // ABR conservador: sobe devagar pra não reflickar logo após startLevel:0
         abrEwmaDefaultEstimate: 500000,
         abrBandWidthFactor: 0.85,
         abrBandWidthUpFactor: 0.6,
@@ -301,31 +292,6 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
       hls.loadSource(playableStreamUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        // Plano A+: cap de qualidade em devices fracos.
-        // Procura o maior nível com altura <= maxHeight (ex: 720p).
-        if (profile.maxHeight && hls.levels?.length) {
-          let capIdx = -1;
-          let capHeight = 0;
-          hls.levels.forEach((lvl, idx) => {
-            const h = lvl.height || 0;
-            if (h <= profile.maxHeight! && h > capHeight) {
-              capHeight = h;
-              capIdx = idx;
-            }
-          });
-          if (capIdx >= 0) {
-            hls.autoLevelCapping = capIdx;
-            console.log(`[HLS] Device fraco — cap em ${capHeight}p (level ${capIdx})`);
-          } else {
-            // Single-bitrate ou só tem qualidades acima do cap → força a menor
-            const minIdx = hls.levels.reduce(
-              (acc, lvl, idx) => (lvl.height < hls.levels[acc].height ? idx : acc),
-              0,
-            );
-            hls.autoLevelCapping = minIdx;
-            console.warn(`[HLS] Device fraco — sem nível <=${profile.maxHeight}p, forçando menor (${hls.levels[minIdx].height || "?"}p)`);
-          }
-        }
         if (autoPlay) video.play().catch(() => {});
       });
 
