@@ -243,6 +243,45 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
             </div>
           )}
 
+          {pendingOnline.length > 0 && (
+            <div className="rounded-md border border-primary/40 bg-primary/5 p-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                <Wifi className="h-4 w-4" /> Dispositivos online não cadastrados ({pendingOnline.length})
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Estes aparelhos estão conectados agora mas não foram auto-cadastrados (limite atingido ou cadastro removido). Clique para vincular.
+              </p>
+              <div className="space-y-2">
+                {pendingOnline.map((s) => (
+                  <div key={s.id} className="flex items-center justify-between gap-2 rounded border border-border bg-card p-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {s.platform === "android" ? (
+                          <Smartphone className="h-4 w-4 text-primary" />
+                        ) : (
+                          <Tv2 className="h-4 w-4 text-primary" />
+                        )}
+                        <span className="text-sm font-medium">{s.platform}</span>
+                        {s.current_channel_name && (
+                          <span className="text-xs text-muted-foreground">· assistindo {s.current_channel_name}</span>
+                        )}
+                      </div>
+                      <p className="text-xs font-mono text-muted-foreground break-all">
+                        {maskDeviceId(s.device_id || "")}
+                        {(s.client_ipv4 || s.client_ipv6) && ` · ${s.client_ipv4 || s.client_ipv6}`}
+                      </p>
+                    </div>
+                    <Button size="sm" variant="default" onClick={() => registerOnline(s)}>
+                      <Plus className="h-3 w-3 mr-1" /> Cadastrar
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+
+
           {loading ? (
             <p className="text-sm text-muted-foreground">Carregando...</p>
           ) : devices.length === 0 ? (
