@@ -273,7 +273,7 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
         </button>
       </div>
       {mode === "native" ? (
-        <NativeStatsBody destIp={destIp} />
+        <NativeStatsBody destIp={destIp} streamUrl={streamUrl} />
       ) : (
         <div className="space-y-1.5">
           <Row label="Resolução" value={stats.resolution} />
@@ -284,6 +284,7 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
           <Row label="Frames perdidos" value={`${stats.droppedFrames} / ${stats.totalFrames}`} />
           <Row label="Qualidade" value={stats.level} />
           <Row label="Codec" value={stats.codec} />
+          <Row label="Formato" value={stats.format} />
           <Row
             label={`Destino ${destIp.family ?? ""}`.trim()}
             value={destIp.host ? `${destIp.address}` : "—"}
