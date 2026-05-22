@@ -1,61 +1,34 @@
+## Objetivo
+Exibir o codec nas estatísticas de forma legível (ex.: `H.264 (avc1.64001F)` ou `H.265 (hvc1.1.6.L93.B0)`) em vez do código bruto, e mostrar o container/formato do vídeo separadamente.
 
-# Estatísticas no Android nativo (somente ExoPlayer)
+## Mudanças
 
-No modo nativo (Android + `NativeAndroidPlayer`), o overlay vai mostrar **exclusivamente** dados vindos do ExoPlayer/Media3 via novo método `getStats()` no plugin. Tudo o que não vem do ExoPlayer (DNS/IP, host, device profile, reconexões em JS, último erro JS, estado JS) fica fora.
+**`src/components/player/StatsOverlay.tsx`**
+- Criar helper `prettyCodec(raw)` que mapeia prefixos:
+  - `avc1` / `avc3` → `H.264 (AVC)`
+  - `hev1` / `hvc1` → `H.265 (HEVC)`
+  - `vp09` → `VP9`
+  - `vp08` → `VP8`
+  - `av01` → `AV1`
+  - `mp4a` → `AAC` (áudio, se aparecer)
+  - fallback: retorna o raw
+- Formato final exibido: `H.264 · avc1.64001F` (nome amigável + código técnico).
+- Criar helper `prettyContainer(mimeType, streamUrl)`:
+  - Se `mimeType` existir (native): `video/mp4` → `MP4`, `video/mp2t` → `MPEG-TS (HLS)`, `application/vnd.apple.mpegurl` → `HLS`.
+  - Senão, deduzir do `streamUrl`: `.m3u8` → `HLS`, `.mp4` → `MP4`, `.ts` → `MPEG-TS`.
+- Adicionar nova linha **Formato** logo abaixo de **Codec** em ambos modos (HTML5 e Native).
+- No HTML5: passar `videoEl.currentSrc` e usar `hls?.levels[hls.currentLevel].videoCodec` no helper.
+- No Native: usar `s.codec` e `s.mimeType` do plugin.
 
-## Campos no modo `native`
+## Detalhes técnicos
+- O ExoPlayer já retorna `codec` (codecs string RFC 6381) e `mimeType` (`video/avc`, `video/hevc`, etc.) — então o mapeamento também funciona a partir do `mimeType` quando o `codecs` vier vazio.
+- HLS.js expõe `level.videoCodec` (mesmo formato RFC 6381) e `level.codecSet`.
+- Nada de mudanças em backend/plugin nativo — só apresentação.
 
-Todos vindos do `ExoPlayer.getStats()`:
+## Arquivos
+- `src/components/player/StatsOverlay.tsx`
 
-- **Resolução** — `player.getVideoFormat().width × height`
-- **FPS** — `Format.frameRate`
-- **Bitrate** — `Format.bitrate`
-- **Codec** — `Format.codecs` / `sampleMimeType`
-- **Banda estimada** — `DefaultBandwidthMeter.getBitrateEstimate()`
-- **Total transferido** — bytes acumulados via `TransferListener.onBytesTransferred` (consumo de internet do canal atual)
-- **Buffer** — `player.getTotalBufferedDuration()` em ms
-- **Frames perdidos / total** — acumulados via `AnalyticsListener.onDroppedVideoFrames` + `onRenderedFirstFrame`/`VideoSize`
-
-> Sem packet loss real (ExoPlayer não expõe). Frames perdidos é o proxy mais próximo.
-
-## Modo `html5` (Web/iOS)
-Sem mudanças. Continua como está.
-
-## Implementação
-
-### `android/app/src/main/java/tv/lntelecom/net/NativePlayerPlugin.java`
-1. Criar `DefaultBandwidthMeter` compartilhado; passar para `HlsMediaSource.Factory` / `ProgressiveMediaSource.Factory` via `DataSource.Factory` configurada com `setTransferListener(bandwidthMeter)`.
-2. Adicionar um `TransferListener` próprio que soma bytes (`onBytesTransferred`) em `totalBytesTransferred`.
-3. Adicionar `AnalyticsListener` ao player com `onDroppedVideoFrames(count, elapsedMs)` → acumula `droppedFrames`.
-4. Novo `@PluginMethod getStats(PluginCall call)`:
-   ```json
-   { "width": 1920, "height": 1080, "frameRate": 30,
-     "bitrate": 4500000, "codec": "avc1.64001f", "mimeType": "video/avc",
-     "bandwidthEstimateBps": 6200000, "totalBytesTransferred": 12456789,
-     "bufferedMs": 8200, "droppedFrames": 3 }
-   ```
-   Lê em `runOnUiThread`.
-
-### `src/plugins/native-player.ts`
-Adicionar tipo `NativePlayerStats` e método `getStats(): Promise<NativePlayerStats>`.
-
-### `src/components/player/StatsOverlay.tsx`
-- Aceitar prop `mode: "native" | "html5"`.
-- No modo `native`: ignorar `videoEl`/`hls`, fazer `setInterval(1000)` chamando `NativePlayer.getStats()`, renderizar somente os campos listados acima.
-- No modo `html5`: comportamento atual sem mudanças.
-- Adicionar `formatBytes` helper para "Total transferido".
-
-### `src/pages/PlayerPage.tsx`
-Passar `mode={isNativeAndroid ? "native" : "html5"}` ao `StatsOverlay` (mesma condição que decide usar `NativeAndroidPlayer`).
-
-## Fora de escopo
-- Packet loss real.
-- IP destino, host, device profile, estado, último erro, reconexões no modo native.
-- Mudanças no overlay HTML5.
-
-## Comandos pro servidor
-Mudança Java exige rebuild do APK no GitHub Actions (workflow **Build Android APK**).
-Frontend:
-```
+## Comandos pro servidor (após implementar)
+```bash
 cd /opt/lntv-frontend && git pull && npm run build && rsync -a --delete --exclude logos dist/ /var/www/lntv/
 ```

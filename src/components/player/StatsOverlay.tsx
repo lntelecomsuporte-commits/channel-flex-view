@@ -21,7 +21,50 @@ interface Stats {
   bandwidth: string;
   level: string;
   codec: string;
+  format: string;
 }
+
+const prettyCodec = (raw?: string | null, mimeType?: string | null): string => {
+  const r = (raw || "").toLowerCase().trim();
+  const m = (mimeType || "").toLowerCase().trim();
+  const map: Array<[RegExp, string]> = [
+    [/^avc[13]/, "H.264 (AVC)"],
+    [/^(hev1|hvc1)/, "H.265 (HEVC)"],
+    [/^vp09/, "VP9"],
+    [/^vp08/, "VP8"],
+    [/^av01/, "AV1"],
+    [/^mp4a/, "AAC"],
+  ];
+  let name = "";
+  for (const [re, n] of map) if (re.test(r)) { name = n; break; }
+  if (!name) {
+    if (m.includes("avc") || m.includes("h264")) name = "H.264 (AVC)";
+    else if (m.includes("hevc") || m.includes("h265")) name = "H.265 (HEVC)";
+    else if (m.includes("vp9")) name = "VP9";
+    else if (m.includes("vp8")) name = "VP8";
+    else if (m.includes("av1")) name = "AV1";
+  }
+  if (name && r) return `${name} · ${raw}`;
+  return name || raw || m || "—";
+};
+
+const prettyContainer = (mimeType?: string | null, streamUrl?: string | null): string => {
+  const m = (mimeType || "").toLowerCase();
+  if (m === "video/mp4") return "MP4";
+  if (m === "video/mp2t") return "MPEG-TS (HLS)";
+  if (m === "application/vnd.apple.mpegurl" || m === "application/x-mpegurl") return "HLS";
+  if (m === "video/webm") return "WebM";
+  if (streamUrl) {
+    try {
+      const path = new URL(streamUrl).pathname.toLowerCase();
+      if (path.endsWith(".m3u8")) return "HLS";
+      if (path.endsWith(".mp4")) return "MP4";
+      if (path.endsWith(".ts")) return "MPEG-TS";
+      if (path.endsWith(".webm")) return "WebM";
+    } catch {}
+  }
+  return "—";
+};
 
 interface DestIp {
   family: "IPv4" | "IPv6" | null;
@@ -44,7 +87,7 @@ const formatBytes = (b: number) => {
   return `${b} B`;
 };
 
-const NativeStatsBody = ({ destIp }: { destIp: DestIp }) => {
+const NativeStatsBody = ({ destIp, streamUrl }: { destIp: DestIp; streamUrl?: string }) => {
   const [s, setS] = useState<NativePlayerStats>({});
   useEffect(() => {
     let alive = true;
@@ -66,7 +109,8 @@ const NativeStatsBody = ({ destIp }: { destIp: DestIp }) => {
   const transferred = formatBytes(s.totalBytesTransferred ?? 0);
   const buffer = typeof s.bufferedMs === "number" ? `${(s.bufferedMs / 1000).toFixed(1)}s` : "—";
   const dropped = typeof s.droppedFrames === "number" ? `${s.droppedFrames}` : "—";
-  const codec = s.codec || s.mimeType || "—";
+  const codec = prettyCodec(s.codec, s.mimeType);
+  const format = prettyContainer(s.mimeType, streamUrl);
 
   return (
     <div className="space-y-1.5">
@@ -78,6 +122,7 @@ const NativeStatsBody = ({ destIp }: { destIp: DestIp }) => {
       <Row label="Buffer" value={buffer} />
       <Row label="Frames perdidos" value={dropped} />
       <Row label="Codec" value={codec} />
+      <Row label="Formato" value={format} />
       <Row
         label={`Destino ${destIp.family ?? ""}`.trim()}
         value={destIp.host ? destIp.address : "—"}
@@ -98,6 +143,7 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
     bandwidth: "—",
     level: "—",
     codec: "—",
+    format: "—",
   });
   const [destIp, setDestIp] = useState<DestIp>({ family: null, address: "resolvendo...", host: "" });
 
@@ -142,13 +188,14 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
       let bitrate = "—";
       let bandwidth = "—";
       let level = "—";
-      let codec = "—";
+      let rawCodec: string | undefined;
+      let rawMime: string | undefined;
       if (hls) {
         const lvl = hls.levels?.[hls.currentLevel];
         if (lvl) {
           bitrate = formatBitrate(lvl.bitrate);
           level = `${hls.currentLevel + 1}/${hls.levels.length}`;
-          codec = lvl.codecSet || lvl.videoCodec || "—";
+          rawCodec = lvl.videoCodec || lvl.codecSet || undefined;
         }
         // @ts-ignore
         const bw = hls.bandwidthEstimate;
@@ -160,8 +207,11 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
           bandwidth = `${(bytes / 1_000_000).toFixed(1)} MB total`;
         }
       }
+      const codec = prettyCodec(rawCodec, rawMime);
+      const srcUrl = streamUrl || videoEl.currentSrc;
+      const format = prettyContainer(rawMime, srcUrl);
 
-      setStats({ resolution, fps, bitrate, bufferAhead, droppedFrames, totalFrames, bandwidth, level, codec });
+      setStats({ resolution, fps, bitrate, bufferAhead, droppedFrames, totalFrames, bandwidth, level, codec, format });
     }, 1000);
 
     return () => clearInterval(interval);
@@ -223,7 +273,7 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
         </button>
       </div>
       {mode === "native" ? (
-        <NativeStatsBody destIp={destIp} />
+        <NativeStatsBody destIp={destIp} streamUrl={streamUrl} />
       ) : (
         <div className="space-y-1.5">
           <Row label="Resolução" value={stats.resolution} />
@@ -234,6 +284,7 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
           <Row label="Frames perdidos" value={`${stats.droppedFrames} / ${stats.totalFrames}`} />
           <Row label="Qualidade" value={stats.level} />
           <Row label="Codec" value={stats.codec} />
+          <Row label="Formato" value={stats.format} />
           <Row
             label={`Destino ${destIp.family ?? ""}`.trim()}
             value={destIp.host ? `${destIp.address}` : "—"}
