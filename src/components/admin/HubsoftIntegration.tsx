@@ -23,6 +23,7 @@ type HubsoftConfig = {
   is_active: boolean;
   trial_enabled: boolean;
   trial_days: number;
+  device_limit: number;
 };
 
 function getErrorMessage(error: unknown) {
@@ -96,6 +97,7 @@ type FormState = {
   trial_enabled: boolean;
   trial_days: number;
   trial_category_ids: string[];
+  device_limit: number;
 };
 
 const emptyForm: FormState = {
@@ -110,6 +112,7 @@ const emptyForm: FormState = {
   trial_enabled: false,
   trial_days: 30,
   trial_category_ids: [],
+  device_limit: 3,
 };
 
 async function syncCategoriesToExistingUsers(configId: string, categoryIds: string[]): Promise<number> {
