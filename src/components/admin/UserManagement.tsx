@@ -488,6 +488,21 @@ const UserManagement = () => {
       }
     }
 
+    // Update device_limit_override (sempre — pode ser null pra limpar)
+    {
+      const raw = editForm.device_limit_override.trim();
+      const newVal = raw === "" ? null : Math.max(0, parseInt(raw, 10) || 0);
+      const { error: devErr } = await supabase
+        .from("profiles")
+        .update({ device_limit_override: newVal })
+        .eq("user_id", editingUser.user_id);
+      if (devErr) {
+        toast.error("Erro ao salvar limite: " + devErr.message);
+        setUpdating(false);
+        return;
+      }
+    }
+
     // Always save category access
     await saveCategoryAccess(editingUser.user_id, editCategories);
 
