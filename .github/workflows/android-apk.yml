@@ -67,8 +67,8 @@ jobs:
             grep -E "versionCode|versionName" android/app/build.gradle
           fi
 
-      - name: Build web (dist/)
-        run: npm run build
+      - name: Build web (dist/) com legacy chunks pro WebView Android 5.x
+        run: BUILD_LEGACY=1 npm run build
 
       - name: Add Android platform if missing
         run: |
