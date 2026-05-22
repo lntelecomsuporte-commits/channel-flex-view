@@ -755,6 +755,9 @@ const UserManagement = () => {
                     <Button variant="ghost" size="sm" onClick={() => handleEdit(p as Profile)} title="Editar">
                       <Pencil className="h-4 w-4" />
                     </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setDevicesUser(p as Profile)} title="Dispositivos vinculados">
+                      <Smartphone className="h-4 w-4 text-primary" />
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => setPlaylistUser(p as Profile)} title="Gerar playlist M3U/HLS">
                       <ListVideo className="h-4 w-4 text-primary" />
                     </Button>
