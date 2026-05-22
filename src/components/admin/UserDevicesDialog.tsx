@@ -339,6 +339,11 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
                               manual
                             </span>
                           )}
+                          {onlineDevices.has(`${d.platform}:${d.device_id}`) && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 inline-flex items-center gap-0.5">
+                              <Wifi className="h-2.5 w-2.5" /> online
+                            </span>
+                          )}
                           {!d.is_active && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/20 text-destructive">
                               bloqueado
