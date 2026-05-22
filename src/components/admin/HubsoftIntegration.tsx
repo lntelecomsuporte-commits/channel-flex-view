@@ -324,6 +324,7 @@ const HubsoftIntegration = () => {
       trial_enabled: !!config.trial_enabled,
       trial_days: Number(config.trial_days) || 30,
       trial_category_ids: getTrialCategoryIdsForConfig(config.id),
+      device_limit: Number((config as any).device_limit ?? 3),
     });
     setApplyToExisting(false);
     setShowForm(true);
@@ -353,6 +354,7 @@ const HubsoftIntegration = () => {
       is_active: form.is_active,
       trial_enabled: form.trial_enabled,
       trial_days: Math.max(1, Number(form.trial_days) || 30),
+      device_limit: Math.max(0, Number(form.device_limit) || 0),
     };
 
     let configId = editingId;
