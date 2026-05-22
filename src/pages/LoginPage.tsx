@@ -283,6 +283,8 @@ const LoginPage = () => {
                 </Button>
               )}
             </div>
+
+            <DeviceCodeBlock />
           </div>
 
           {/* Lado direito: teclado */}
