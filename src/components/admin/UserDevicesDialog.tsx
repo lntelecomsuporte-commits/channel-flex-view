@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Trash2, ShieldOff, ShieldCheck, Plus, Smartphone, Tv2, Pencil, Check, X } from "lucide-react";
+import { Trash2, ShieldOff, ShieldCheck, Plus, Smartphone, Tv2, Pencil, Check, X, Wifi, MonitorSmartphone } from "lucide-react";
 
 type Device = {
   id: string;
