@@ -335,6 +335,58 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
             </div>
           )}
 
+          {/* Aparelhos aguardando login (beacon do APK na tela de login) */}
+          <div className="rounded-md border border-border bg-secondary/20 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <LogIn className="h-4 w-4 text-primary" />
+                Aparelhos aguardando login ({pending.length})
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => void reloadPending()}
+                disabled={pendingLoading}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 mr-1 ${pendingLoading ? "animate-spin" : ""}`} />
+                Atualizar
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              APKs abertos na tela de login nos últimos 5 minutos. Clique em "Vincular" para liberar o acesso — o aparelho entra sozinho em até 15 segundos.
+            </p>
+            {pending.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">Nenhum aparelho aguardando no momento.</p>
+            ) : (
+              <div className="space-y-2">
+                {pending.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between gap-2 rounded border border-border bg-card p-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {p.platform === "android" ? (
+                          <Smartphone className="h-4 w-4 text-primary" />
+                        ) : (
+                          <Tv2 className="h-4 w-4 text-primary" />
+                        )}
+                        <span className="text-sm font-medium">{p.device_name || p.platform}</span>
+                        <span className="text-xs text-muted-foreground">· {timeAgo(p.last_seen_at)}</span>
+                      </div>
+                      <p className="text-xs font-mono text-muted-foreground break-all">
+                        {maskDeviceId(p.device_id)}
+                        {p.last_ip && ` · ${p.last_ip}`}
+                      </p>
+                    </div>
+                    <Button size="sm" variant="default" onClick={() => void bindPending(p)}>
+                      <Plus className="h-3 w-3 mr-1" /> Vincular
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+
+
 
 
           {loading ? (
