@@ -143,6 +143,7 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
     bandwidth: "—",
     level: "—",
     codec: "—",
+    format: "—",
   });
   const [destIp, setDestIp] = useState<DestIp>({ family: null, address: "resolvendo...", host: "" });
 
