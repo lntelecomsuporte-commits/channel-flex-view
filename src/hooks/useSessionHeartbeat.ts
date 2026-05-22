@@ -192,6 +192,8 @@ export const useSessionHeartbeat = ({ channelId, channelName, isWatching = false
             isWatching: channelInfoRef.current.isWatching,
             clientIpv4: ipsRef.current.ipv4,
             clientIpv6: ipsRef.current.ipv6,
+            deviceId: deviceRef.current.deviceId,
+            platform: deviceRef.current.platform,
           },
         });
         if (hbData?.forceSignout) {
