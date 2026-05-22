@@ -541,11 +541,13 @@ export type Database = {
           created_at: string
           current_channel_id: string | null
           current_channel_name: string | null
+          device_id: string | null
           ended_at: string | null
           id: string
           ip_address: string | null
           is_watching: boolean
           last_heartbeat_at: string
+          platform: string | null
           session_token: string
           started_at: string
           user_agent: string | null
@@ -557,11 +559,13 @@ export type Database = {
           created_at?: string
           current_channel_id?: string | null
           current_channel_name?: string | null
+          device_id?: string | null
           ended_at?: string | null
           id?: string
           ip_address?: string | null
           is_watching?: boolean
           last_heartbeat_at?: string
+          platform?: string | null
           session_token: string
           started_at?: string
           user_agent?: string | null
@@ -573,11 +577,13 @@ export type Database = {
           created_at?: string
           current_channel_id?: string | null
           current_channel_name?: string | null
+          device_id?: string | null
           ended_at?: string | null
           id?: string
           ip_address?: string | null
           is_watching?: boolean
           last_heartbeat_at?: string
+          platform?: string | null
           session_token?: string
           started_at?: string
           user_agent?: string | null
