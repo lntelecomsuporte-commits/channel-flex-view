@@ -11,6 +11,7 @@ import { Tv, Eye, EyeOff, ArrowLeft, ArrowRight, Copy as CopyIcon } from "lucide
 import { VirtualKeyboard } from "@/components/VirtualKeyboard";
 import { getDeviceId, formatDeviceCode } from "@/plugins/device-info";
 import { getLocalFunctionUrl } from "@/lib/localBackend";
+import { useNativeBackButton } from "@/hooks/useNativeBackButton";
 
 const isNative = Capacitor.isNativePlatform();
 
