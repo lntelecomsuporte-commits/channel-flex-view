@@ -1,7 +1,6 @@
 import { forwardRef, useEffect, useState } from "react";
 import type Hls from "hls.js";
 import { X } from "lucide-react";
-import { getDeviceProfile } from "@/lib/deviceProfile";
 import { NativePlayer, type NativePlayerStats } from "@/plugins/native-player";
 
 interface StatsOverlayProps {
@@ -45,7 +44,7 @@ const formatBytes = (b: number) => {
   return `${b} B`;
 };
 
-const NativeStatsBody = () => {
+const NativeStatsBody = ({ destIp }: { destIp: DestIp }) => {
   const [s, setS] = useState<NativePlayerStats>({});
   useEffect(() => {
     let alive = true;
@@ -79,6 +78,11 @@ const NativeStatsBody = () => {
       <Row label="Buffer" value={buffer} />
       <Row label="Frames perdidos" value={dropped} />
       <Row label="Codec" value={codec} />
+      <Row
+        label={`Destino ${destIp.family ?? ""}`.trim()}
+        value={destIp.host ? destIp.address : "—"}
+      />
+      {destIp.host && <Row label="Host" value={destIp.host} />}
     </div>
   );
 };
@@ -163,9 +167,8 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
     return () => clearInterval(interval);
   }, [videoEl, hls, mode]);
 
-  // DoH só faz sentido no modo HTML5 (no nativo o foco é o ExoPlayer).
+  // DoH: resolução de IP do host do stream — útil em ambos modos (HTML5 e native).
   useEffect(() => {
-    if (mode === "native") return;
     if (!streamUrl) return;
     let cancelled = false;
     let host = "";
@@ -209,7 +212,7 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
     });
 
     return () => { cancelled = true; };
-  }, [streamUrl, mode]);
+  }, [streamUrl]);
 
   return (
     <div ref={ref} className="absolute top-4 right-4 z-40 glass-panel p-4 min-w-[280px] animate-fade-in font-mono text-sm">
@@ -220,7 +223,7 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
         </button>
       </div>
       {mode === "native" ? (
-        <NativeStatsBody />
+        <NativeStatsBody destIp={destIp} />
       ) : (
         <div className="space-y-1.5">
           <Row label="Resolução" value={stats.resolution} />
@@ -238,19 +241,6 @@ const StatsOverlay = forwardRef<HTMLDivElement, StatsOverlayProps>(({ videoEl, h
           {destIp.host && (
             <Row label="Host" value={destIp.host} />
           )}
-          {(() => {
-            const p = getDeviceProfile();
-            const cap = hls?.autoLevelCapping ?? -1;
-            const capLabel = cap >= 0 && hls?.levels?.[cap]
-              ? `${hls.levels[cap].height || "?"}p`
-              : "none";
-            return (
-              <>
-                <Row label="Device" value={`${p.weak ? "weak" : "strong"} (${p.reason})`} />
-                <Row label="Level cap" value={capLabel} />
-              </>
-            );
-          })()}
         </div>
       )}
     </div>
