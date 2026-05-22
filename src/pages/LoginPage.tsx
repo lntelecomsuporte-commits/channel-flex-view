@@ -235,6 +235,16 @@ const LoginPage = () => {
     void doLogin();
   };
 
+  // Enquanto tenta auto-login (APK), mostra tela de "Conectando..."
+  if (autoLoginTrying) {
+    return (
+      <div className="min-h-[100dvh] bg-background flex flex-col items-center justify-center gap-4 p-6">
+        <Tv className="h-16 w-16 text-primary animate-pulse" />
+        <p className="text-muted-foreground">Conectando dispositivo...</p>
+      </div>
+    );
+  }
+
   // ============= LAYOUT WIZARD (TV) =============
   if (useWizardLayout) {
     const isEmailStep = activeField === "email";
