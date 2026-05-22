@@ -147,6 +147,35 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
     void reload();
   };
 
+  const registeredKeys = new Set(devices.map((d) => `${d.platform}:${d.device_id}`));
+  // Sessões ativas reportando device_id que ainda NÃO estão cadastradas
+  const pendingOnline = sessions.filter(
+    (s) =>
+      s.device_id &&
+      (s.platform === "android" || s.platform === "roku") &&
+      !registeredKeys.has(`${s.platform}:${s.device_id}`),
+  );
+  // Mapa device_id → sessão ativa (pra mostrar badge "online" em dispositivos cadastrados)
+  const onlineDevices = new Set(
+    sessions.filter((s) => s.device_id).map((s) => `${s.platform}:${s.device_id}`),
+  );
+
+  const registerOnline = async (s: ActiveSession) => {
+    if (!s.device_id || !s.platform) return;
+    const { error } = await supabase.from("user_devices").insert({
+      user_id: userId,
+      device_id: s.device_id,
+      platform: s.platform,
+      device_name: s.user_agent?.slice(0, 120) || null,
+      last_ip: s.client_ipv4 || s.client_ipv6 || null,
+      created_by: "admin_manual",
+      is_active: true,
+    });
+    if (error) return toast.error("Erro: " + error.message);
+    toast.success("Dispositivo online cadastrado");
+    void reload();
+  };
+
   const activeCount = devices.filter((d) => d.is_active).length;
 
   return (
