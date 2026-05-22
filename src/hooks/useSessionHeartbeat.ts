@@ -142,6 +142,17 @@ export const useSessionHeartbeat = ({ channelId, channelName, isWatching = false
 
     const startSession = async () => {
       await refreshClientIps();
+      // Coleta deviceId nativo (APK Android) — silencioso em outras plataformas
+      try {
+        const info = await getDeviceId();
+        if (info) {
+          deviceRef.current = {
+            deviceId: info.deviceId,
+            platform: info.platform || "android",
+            deviceName: [info.manufacturer, info.model].filter(Boolean).join(" ") || null,
+          };
+        }
+      } catch {/* noop */}
       if (cancelled) return;
 
       const { data, error } = await supabase.functions.invoke("session-heartbeat", {
@@ -154,6 +165,10 @@ export const useSessionHeartbeat = ({ channelId, channelName, isWatching = false
           isWatching: channelInfoRef.current.isWatching,
           clientIpv4: ipsRef.current.ipv4,
           clientIpv6: ipsRef.current.ipv6,
+          deviceId: deviceRef.current.deviceId,
+          platform: deviceRef.current.platform,
+          deviceName: deviceRef.current.deviceName,
+          appVersion: isNativeApp ? "apk" : null,
         },
       });
 
