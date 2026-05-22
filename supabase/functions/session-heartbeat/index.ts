@@ -56,11 +56,13 @@ Deno.serve(async (req) => {
 
     if (userError || !user) return json({ error: "Unauthorized" }, 401);
 
-    const { action, sessionId, sessionToken, userAgent, channelId, channelName, isWatching, clientIpv4, clientIpv6 } =
+    const { action, sessionId, sessionToken, userAgent, channelId, channelName, isWatching, clientIpv4, clientIpv6, deviceId, platform, deviceName, appVersion } =
       await req.json();
     const ipAddress = getClientIp(req);
     const cIpv4 = sanitizeIp(clientIpv4);
     const cIpv6 = sanitizeIp(clientIpv6);
+    const cleanDeviceId = typeof deviceId === "string" && deviceId.length >= 6 ? deviceId : null;
+    const cleanPlatform = ["android", "roku", "web", "pwa"].includes(platform) ? platform : null;
 
     // Helper: verifica se admin pediu signout remoto após o início da sessão
     const checkForceSignout = async (sessionStartedAt: string | null): Promise<boolean> => {
