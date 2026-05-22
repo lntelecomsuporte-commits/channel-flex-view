@@ -42,6 +42,7 @@ const LoginPage = () => {
   const [isTvLayout, setIsTvLayout] = useState(false);
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [deviceModel, setDeviceModel] = useState<string>("");
+  const [autoLoginTrying, setAutoLoginTrying] = useState(isNative);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -49,14 +50,45 @@ const LoginPage = () => {
     const update = () => setIsTvLayout(detectTvLayout());
     update();
     window.addEventListener("resize", update);
-    void getDeviceId().then((info) => {
+    void getDeviceId().then(async (info) => {
       if (info) {
         setDeviceId(info.deviceId);
         setDeviceModel([info.manufacturer, info.model].filter(Boolean).join(" "));
+        // APK: tenta auto-login se device_id já estiver pré-cadastrado pelo admin
+        if (isNative) {
+          try {
+            const res = await fetch(getLocalFunctionUrl("device-auto-login"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                device_id: info.deviceId,
+                platform: "android",
+                device_name: [info.manufacturer, info.model].filter(Boolean).join(" ") || "Android device",
+                app_version: "apk",
+              }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data?.success && data?.access_token) {
+              const { error: sessErr } = await supabase.auth.setSession({
+                access_token: data.access_token,
+                refresh_token: data.refresh_token,
+              });
+              if (!sessErr) {
+                navigate("/");
+                return;
+              }
+            }
+          } catch {
+            // silencioso — cai pro fluxo manual
+          }
+          setAutoLoginTrying(false);
+        }
+      } else if (isNative) {
+        setAutoLoginTrying(false);
       }
     });
     return () => window.removeEventListener("resize", update);
-  }, []);
+  }, [navigate]);
 
   // Mostra teclado virtual no APK nativo OU no PWA instalado (standalone)
   const useVirtualKeyboard = isNative || isStandalone;
