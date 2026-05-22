@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 // Edge function: device-login
 // Login com password + registro/validação do dispositivo (APK Android, Roku).
