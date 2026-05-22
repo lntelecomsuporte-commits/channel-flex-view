@@ -363,6 +363,9 @@ const LoginPage = () => {
               </Button>
             </form>
 
+            <DeviceCodeBlock compact />
+
+
             {useVirtualKeyboard && (
               <VirtualKeyboard
                 onKeyPress={handleKeyPress}
