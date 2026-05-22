@@ -4,7 +4,7 @@ import mpegts from "mpegts.js";
 import { getPlayableStreamUrl, resolveChannelStreamUrl, buildProxyStreamUrl, isProxiedStreamUrl, resolveRedirects } from "@/lib/stream";
 import { Capacitor } from "@capacitor/core";
 import { extractYouTubeVideoId } from "@/lib/youtube";
-import { getDeviceProfile } from "@/lib/deviceProfile";
+
 import YouTubePlayer from "./YouTubePlayer";
 import NativeAndroidPlayer from "./NativeAndroidPlayer";
 
