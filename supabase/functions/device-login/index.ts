@@ -38,9 +38,10 @@ Deno.serve(async (req) => {
     let body: any;
     body = await req.json();
     
-    const { email, password, device_id, platform, device_name, app_version } = body || {};
+    const { email, password, device_id: rawDeviceId, platform, device_name, app_version } = body || {};
     if (!email || !password) return json({ error: "Email e senha obrigatórios" }, 400);
-    if (!device_id || typeof device_id !== "string" || device_id.length < 6) {
+    const device_id = typeof rawDeviceId === "string" ? rawDeviceId.replace(/[^a-zA-Z0-9]/g, "").toUpperCase() : "";
+    if (!device_id || device_id.length < 6) {
       return json({ error: "device_id inválido" }, 400);
     }
     if (platform !== "android" && platform !== "roku") {
