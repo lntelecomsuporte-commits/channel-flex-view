@@ -8,10 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Plus, Trash2, ShieldOff, ShieldCheck, Pencil, LogOut, Download, ListVideo, Copy, RefreshCw } from "lucide-react";
+import { Plus, Trash2, ShieldOff, ShieldCheck, Pencil, LogOut, Download, ListVideo, Copy, RefreshCw, Smartphone } from "lucide-react";
 const PLAYLIST_HOST = "https://tv2.lntelecom.net";
 import { useCategories } from "@/hooks/useChannels";
 import { UserStatusBadge } from "./UserStatusBadge";
+import { UserDevicesDialog } from "./UserDevicesDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type AccessStats = {
@@ -40,6 +41,7 @@ type Profile = {
   created_at: string;
   playlist_token: string | null;
   playlist_password: string | null;
+  device_limit_override: number | null;
 };
 
 function useProfiles() {
@@ -116,8 +118,9 @@ const UserManagement = () => {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
-  const [editForm, setEditForm] = useState({ password: "", display_name: "", adult_pin: "" });
+  const [editForm, setEditForm] = useState({ password: "", display_name: "", adult_pin: "", device_limit_override: "" });
   const [editCategories, setEditCategories] = useState<string[]>([]);
+  const [devicesUser, setDevicesUser] = useState<Profile | null>(null);
   const [editIntegrationAccess, setEditIntegrationAccess] = useState<Array<{
     hubsoft_config_id: string;
     hubsoft_config_name: string;
@@ -423,10 +426,18 @@ const UserManagement = () => {
     setEditingUser(profile);
     const { data } = await supabase
       .from("profiles")
-      .select("adult_pin")
+      .select("adult_pin, device_limit_override")
       .eq("user_id", profile.user_id)
       .maybeSingle();
-    setEditForm({ password: "", display_name: profile.display_name || "", adult_pin: data?.adult_pin || "" });
+    setEditForm({
+      password: "",
+      display_name: profile.display_name || "",
+      adult_pin: data?.adult_pin || "",
+      device_limit_override:
+        data?.device_limit_override === null || data?.device_limit_override === undefined
+          ? ""
+          : String(data.device_limit_override),
+    });
     const { data: roleRow } = await supabase
       .from("user_roles")
       .select("id")
