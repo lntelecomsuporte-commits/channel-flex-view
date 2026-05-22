@@ -170,6 +170,23 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     setResolvedContentType("");
   }, [backupIndex]);
 
+  // SKIP PREVENTIVO (web only): URLs .ts brutas (MPEG-TS sem manifest HLS)
+  // são problemáticas no navegador — mpegts.js trava com mixed content (http://)
+  // e mesmo via hls-proxy a entrega chunked é instável. No APK Android o
+  // ExoPlayer engole sem problema. Se estamos na web, a URL ativa é .ts puro
+  // e existe ao menos um backup, pula direto sem perder ~10s tentando.
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) return;
+    if (!activeStreamUrl) return;
+    if (backupIndex >= backups.length - 1) return;
+    const isRawTs = /\.(ts|m2ts)(\?|$)/i.test(activeStreamUrl);
+    if (!isRawTs) return;
+    console.warn(`[Player] URL .ts não confiável na web — pulando pro backup: ${activeStreamUrl}`);
+    setBackupIndex(backupIndex + 1);
+  }, [activeStreamUrl, backupIndex, backups.length]);
+
+
+
   // Tenta avançar para a próxima URL de backup. Retorna true se houve avanço.
   const tryNextBackup = (): boolean => {
     const next = backupIndex + 1;
