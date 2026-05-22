@@ -63,105 +63,102 @@ Deno.serve(async (req) => {
     const refreshToken: string = authData.session.refresh_token;
     const clientIp = await getClientIp(req);
 
-  // 2) Verifica se o profile está bloqueado/inativo
-  const profRes = await restFetch(
-    supabaseUrl,
-    serviceRoleKey,
-    `profiles?user_id=eq.${userId}&select=is_blocked,is_active&limit=1`,
-    "GET",
-  );
-  const prof = Array.isArray(profRes.data) ? profRes.data[0] : null;
-  if (prof?.is_blocked) return json({ error: "Acesso bloqueado. Contate o suporte." }, 403);
-  if (prof && !prof.is_active) return json({ error: "Conta inativa." }, 403);
+    // 2) Verifica se o profile está bloqueado/inativo
+    const { data: prof } = await adminClient
+      .from("profiles")
+      .select("is_blocked,is_active")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (prof?.is_blocked) return json({ error: "Acesso bloqueado. Contate o suporte." }, 403);
+    if (prof && !prof.is_active) return json({ error: "Conta inativa." }, 403);
 
-  // 3) Verifica se device_id+platform já existe
-  const existRes = await restFetch(
-    supabaseUrl,
-    serviceRoleKey,
-    `user_devices?device_id=eq.${encodeURIComponent(device_id)}&platform=eq.${platform}&select=*&limit=1`,
-    "GET",
-  );
-  const existing = Array.isArray(existRes.data) ? existRes.data[0] : null;
+    // 3) Verifica se device_id+platform já existe
+    const { data: existing } = await adminClient
+      .from("user_devices")
+      .select("*")
+      .eq("device_id", device_id)
+      .eq("platform", platform)
+      .maybeSingle();
 
-  if (existing) {
-    if (existing.user_id !== userId) {
+    if (existing) {
+      if (existing.user_id !== userId) {
+        return json({ error: "Este dispositivo está vinculado a outra conta. Contate o suporte." }, 409);
+      }
+      if (!existing.is_active) {
+        return json({ error: "Dispositivo bloqueado pelo administrador." }, 403);
+      }
+
+      const lastSeenAt = new Date().toISOString();
+      await adminClient
+        .from("user_devices")
+        .update({
+          last_seen_at: lastSeenAt,
+          last_ip: clientIp || existing.last_ip,
+          app_version: app_version || existing.app_version,
+          device_name: device_name || existing.device_name,
+        })
+        .eq("id", existing.id);
+
+      return json({
+        success: true,
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        user: authData.user,
+        device: { ...existing, last_seen_at: lastSeenAt },
+      });
+    }
+
+    // 4) Device novo — checa limite
+    const { data: activeDevices } = await adminClient
+      .from("user_devices")
+      .select("id,device_id,platform,device_label,device_name,last_seen_at")
+      .eq("user_id", userId)
+      .eq("is_active", true);
+    const active = Array.isArray(activeDevices) ? activeDevices : [];
+
+    const { data: limitData } = await adminClient.rpc("resolve_device_limit", { _user_id: userId });
+    const limit = typeof limitData === "number" ? limitData : 3;
+
+    if (limit > 0 && active.length >= limit) {
       return json(
-        { error: "Este dispositivo está vinculado a outra conta. Contate o suporte." },
-        409,
+        {
+          error: "Limite de dispositivos atingido. Remova um aparelho ou contate o suporte.",
+          limit,
+          active_devices: active,
+        },
+        403,
       );
     }
-    if (!existing.is_active) {
-      return json({ error: "Dispositivo bloqueado pelo administrador." }, 403);
+
+    // 5) Insere device
+    const { data: inserted, error: insertError } = await adminClient
+      .from("user_devices")
+      .insert({
+        user_id: userId,
+        device_id,
+        platform,
+        device_name: device_name || null,
+        app_version: app_version || null,
+        last_ip: clientIp || null,
+        created_by: "self_register",
+        is_active: true,
+      })
+      .select("*")
+      .single();
+    if (insertError) {
+      return json({ error: "Erro ao registrar dispositivo", detail: insertError.message }, 500);
     }
-    // Update last_seen
-    await restFetch(
-      supabaseUrl,
-      serviceRoleKey,
-      `user_devices?id=eq.${existing.id}`,
-      "PATCH",
-      {
-        last_seen_at: new Date().toISOString(),
-        last_ip: clientIp || existing.last_ip,
-        app_version: app_version || existing.app_version,
-        device_name: device_name || existing.device_name,
-      },
-    );
 
     return json({
       success: true,
       access_token: accessToken,
       refresh_token: refreshToken,
       user: authData.user,
-      device: { ...existing, last_seen_at: new Date().toISOString() },
+      device: inserted,
     });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro interno";
+    console.error("device-login error:", message);
+    return json({ error: message }, 500);
   }
-
-  // 4) Device novo — checa limite
-  const countRes = await restFetch(
-    supabaseUrl,
-    serviceRoleKey,
-    `user_devices?user_id=eq.${userId}&is_active=eq.true&select=id,device_id,platform,device_label,device_name,last_seen_at`,
-    "GET",
-  );
-  const active: any[] = Array.isArray(countRes.data) ? countRes.data : [];
-
-  const limitRes = await rpcFetch(supabaseUrl, serviceRoleKey, "resolve_device_limit", {
-    _user_id: userId,
-  });
-  const limit: number = typeof limitRes.data === "number" ? limitRes.data : 3;
-
-  if (limit > 0 && active.length >= limit) {
-    return json(
-      {
-        error: "Limite de dispositivos atingido. Remova um aparelho ou contate o suporte.",
-        limit,
-        active_devices: active,
-      },
-      403,
-    );
-  }
-
-  // 5) Insere device
-  const insRes = await restFetch(supabaseUrl, serviceRoleKey, "user_devices", "POST", {
-    user_id: userId,
-    device_id,
-    platform,
-    device_name: device_name || null,
-    app_version: app_version || null,
-    last_ip: clientIp || null,
-    created_by: "self_register",
-    is_active: true,
-  });
-  if (!insRes.ok) {
-    return json({ error: "Erro ao registrar dispositivo", detail: insRes.data }, 500);
-  }
-  const inserted = Array.isArray(insRes.data) ? insRes.data[0] : insRes.data;
-
-  return json({
-    success: true,
-    access_token: accessToken,
-    refresh_token: refreshToken,
-    user: authData.user,
-    device: inserted,
-  });
 });
