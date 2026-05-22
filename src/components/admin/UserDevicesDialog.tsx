@@ -124,7 +124,7 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
   };
 
   const addManual = async () => {
-    const clean = addDeviceId.replace(/[^a-zA-Z0-9]/g, "");
+    const clean = addDeviceId.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
     if (clean.length < 6) {
       toast.error("Código do dispositivo inválido");
       return;

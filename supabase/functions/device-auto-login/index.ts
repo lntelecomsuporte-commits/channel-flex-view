@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const { device_id: rawDeviceId, platform, device_name, app_version } = body || {};
 
-    const device_id = typeof rawDeviceId === "string" ? rawDeviceId.replace(/[^a-zA-Z0-9]/g, "") : "";
+    const device_id = typeof rawDeviceId === "string" ? rawDeviceId.replace(/[^a-zA-Z0-9]/g, "").toUpperCase() : "";
     if (!device_id || device_id.length < 6) {
       return json({ error: "device_id inválido" }, 400);
     }

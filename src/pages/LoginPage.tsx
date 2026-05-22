@@ -11,6 +11,7 @@ import { Tv, Eye, EyeOff, ArrowLeft, ArrowRight, Copy as CopyIcon } from "lucide
 import { VirtualKeyboard } from "@/components/VirtualKeyboard";
 import { getDeviceId, formatDeviceCode } from "@/plugins/device-info";
 import { getLocalFunctionUrl } from "@/lib/localBackend";
+import { useNativeBackButton } from "@/hooks/useNativeBackButton";
 
 const isNative = Capacitor.isNativePlatform();
 
@@ -44,6 +45,10 @@ const LoginPage = () => {
   const [deviceModel, setDeviceModel] = useState<string>("");
   const [autoLoginTrying, setAutoLoginTrying] = useState(isNative);
   const navigate = useNavigate();
+
+  // No APK: botão Voltar sempre fecha o app na tela de login (não há para onde voltar).
+  useNativeBackButton(() => false, isNative);
+
 
   useEffect(() => {
     setIsStandalone(detectStandalone());
