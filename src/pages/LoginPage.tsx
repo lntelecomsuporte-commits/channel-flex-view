@@ -50,6 +50,36 @@ const LoginPage = () => {
   useNativeBackButton(() => false, isNative);
 
 
+  // Tenta o auto-login uma vez (no boot e quando "registered=true" no beacon).
+  const tryAutoLogin = async (id: string, model: string): Promise<boolean> => {
+    try {
+      const res = await fetch(getLocalFunctionUrl("device-auto-login"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          device_id: id,
+          platform: "android",
+          device_name: model || "Android device",
+          app_version: "apk",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.success && data?.access_token) {
+        const { error: sessErr } = await supabase.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+        });
+        if (!sessErr) {
+          navigate("/");
+          return true;
+        }
+      }
+    } catch {
+      /* silencioso */
+    }
+    return false;
+  };
+
   useEffect(() => {
     setIsStandalone(detectStandalone());
     const update = () => setIsTvLayout(detectTvLayout());
@@ -58,34 +88,11 @@ const LoginPage = () => {
     void getDeviceId().then(async (info) => {
       if (info) {
         setDeviceId(info.deviceId);
-        setDeviceModel([info.manufacturer, info.model].filter(Boolean).join(" "));
-        // APK: tenta auto-login se device_id já estiver pré-cadastrado pelo admin
+        const model = [info.manufacturer, info.model].filter(Boolean).join(" ");
+        setDeviceModel(model);
         if (isNative) {
-          try {
-            const res = await fetch(getLocalFunctionUrl("device-auto-login"), {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                device_id: info.deviceId,
-                platform: "android",
-                device_name: [info.manufacturer, info.model].filter(Boolean).join(" ") || "Android device",
-                app_version: "apk",
-              }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (res.ok && data?.success && data?.access_token) {
-              const { error: sessErr } = await supabase.auth.setSession({
-                access_token: data.access_token,
-                refresh_token: data.refresh_token,
-              });
-              if (!sessErr) {
-                navigate("/");
-                return;
-              }
-            }
-          } catch {
-            // silencioso — cai pro fluxo manual
-          }
+          const ok = await tryAutoLogin(info.deviceId, model);
+          if (ok) return;
           setAutoLoginTrying(false);
         }
       } else if (isNative) {
@@ -93,7 +100,45 @@ const LoginPage = () => {
       }
     });
     return () => window.removeEventListener("resize", update);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
+
+  // Beacon: enquanto o APK está na tela de login, anuncia o aparelho a cada 15s.
+  // O admin vê o aparelho aguardando vínculo em "Dispositivos vinculados".
+  // Se o servidor responder registered=true, dispara auto-login e entra no app.
+  useEffect(() => {
+    if (!isNative || !deviceId) return;
+    let stopped = false;
+
+    const beat = async () => {
+      try {
+        const res = await fetch(getLocalFunctionUrl("device-announce"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            device_id: deviceId,
+            platform: "android",
+            device_name: deviceModel || "Android device",
+            app_version: "apk",
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!stopped && data?.registered) {
+          await tryAutoLogin(deviceId, deviceModel);
+        }
+      } catch {
+        /* offline — tenta de novo no próximo ciclo */
+      }
+    };
+
+    void beat();
+    const interval = setInterval(beat, 15000);
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deviceId, deviceModel]);
 
   // Mostra teclado virtual no APK nativo OU no PWA instalado (standalone)
   const useVirtualKeyboard = isNative || isStandalone;
