@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/lib/supabaseLocal";
 import { useAuth } from "./useAuth";
+import { getDeviceId } from "@/plugins/device-info";
 
 interface HeartbeatOptions {
   channelId?: string | null;
@@ -109,6 +110,11 @@ export const useSessionHeartbeat = ({ channelId, channelName, isWatching = false
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const channelInfoRef = useRef({ channelId, channelName, isWatching });
   const ipsRef = useRef<{ ipv4: string | null; ipv6: string | null }>({ ipv4: null, ipv6: null });
+  const deviceRef = useRef<{ deviceId: string | null; platform: string; deviceName: string | null }>({
+    deviceId: null,
+    platform: isNativeApp ? "android" : (window.matchMedia?.("(display-mode: standalone)").matches ? "pwa" : "web"),
+    deviceName: null,
+  });
 
   useEffect(() => {
     channelInfoRef.current = { channelId, channelName, isWatching };
@@ -136,6 +142,17 @@ export const useSessionHeartbeat = ({ channelId, channelName, isWatching = false
 
     const startSession = async () => {
       await refreshClientIps();
+      // Coleta deviceId nativo (APK Android) — silencioso em outras plataformas
+      try {
+        const info = await getDeviceId();
+        if (info) {
+          deviceRef.current = {
+            deviceId: info.deviceId,
+            platform: info.platform || "android",
+            deviceName: [info.manufacturer, info.model].filter(Boolean).join(" ") || null,
+          };
+        }
+      } catch {/* noop */}
       if (cancelled) return;
 
       const { data, error } = await supabase.functions.invoke("session-heartbeat", {
@@ -148,6 +165,10 @@ export const useSessionHeartbeat = ({ channelId, channelName, isWatching = false
           isWatching: channelInfoRef.current.isWatching,
           clientIpv4: ipsRef.current.ipv4,
           clientIpv6: ipsRef.current.ipv6,
+          deviceId: deviceRef.current.deviceId,
+          platform: deviceRef.current.platform,
+          deviceName: deviceRef.current.deviceName,
+          appVersion: isNativeApp ? "apk" : null,
         },
       });
 
@@ -171,6 +192,8 @@ export const useSessionHeartbeat = ({ channelId, channelName, isWatching = false
             isWatching: channelInfoRef.current.isWatching,
             clientIpv4: ipsRef.current.ipv4,
             clientIpv6: ipsRef.current.ipv6,
+            deviceId: deviceRef.current.deviceId,
+            platform: deviceRef.current.platform,
           },
         });
         if (hbData?.forceSignout) {

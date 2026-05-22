@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Trash2, ShieldOff, ShieldCheck, Plus, Smartphone, Tv2, Pencil, Check, X } from "lucide-react";
+import { Trash2, ShieldOff, ShieldCheck, Plus, Smartphone, Tv2, Pencil, Check, X, Wifi, MonitorSmartphone } from "lucide-react";
 
 type Device = {
   id: string;
@@ -40,9 +40,21 @@ function maskDeviceId(id: string) {
   return id.length > 12 ? id.slice(0, 4) + "…" + id.slice(-6) : id;
 }
 
+type ActiveSession = {
+  id: string;
+  device_id: string | null;
+  platform: string | null;
+  user_agent: string | null;
+  last_heartbeat_at: string;
+  current_channel_name: string | null;
+  client_ipv4: string | null;
+  client_ipv6: string | null;
+};
+
 export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Props) {
   const [loading, setLoading] = useState(false);
   const [devices, setDevices] = useState<Device[]>([]);
+  const [sessions, setSessions] = useState<ActiveSession[]>([]);
   const [limit, setLimit] = useState<number | null>(null);
   const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
   const [labelDraft, setLabelDraft] = useState("");
@@ -55,14 +67,25 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
 
   const reload = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("user_devices")
-      .select("*")
-      .eq("user_id", userId)
-      .order("last_seen_at", { ascending: false });
+    const ninetySecAgo = new Date(Date.now() - 90_000).toISOString();
+    const [{ data, error }, { data: sessData }, { data: lim }] = await Promise.all([
+      supabase
+        .from("user_devices")
+        .select("*")
+        .eq("user_id", userId)
+        .order("last_seen_at", { ascending: false }),
+      supabase
+        .from("user_sessions")
+        .select("id, device_id, platform, user_agent, last_heartbeat_at, current_channel_name, client_ipv4, client_ipv6")
+        .eq("user_id", userId)
+        .is("ended_at", null)
+        .gte("last_heartbeat_at", ninetySecAgo)
+        .order("last_heartbeat_at", { ascending: false }),
+      supabase.rpc("resolve_device_limit", { _user_id: userId }),
+    ]);
     if (error) toast.error("Erro: " + error.message);
     setDevices((data as Device[]) || []);
-    const { data: lim } = await supabase.rpc("resolve_device_limit", { _user_id: userId });
+    setSessions((sessData as ActiveSession[]) || []);
     setLimit(typeof lim === "number" ? lim : null);
     setLoading(false);
   };
@@ -121,6 +144,35 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
     setAddDeviceId("");
     setAddLabel("");
     setAddOpen(false);
+    void reload();
+  };
+
+  const registeredKeys = new Set(devices.map((d) => `${d.platform}:${d.device_id}`));
+  // Sessões ativas reportando device_id que ainda NÃO estão cadastradas
+  const pendingOnline = sessions.filter(
+    (s) =>
+      s.device_id &&
+      (s.platform === "android" || s.platform === "roku") &&
+      !registeredKeys.has(`${s.platform}:${s.device_id}`),
+  );
+  // Mapa device_id → sessão ativa (pra mostrar badge "online" em dispositivos cadastrados)
+  const onlineDevices = new Set(
+    sessions.filter((s) => s.device_id).map((s) => `${s.platform}:${s.device_id}`),
+  );
+
+  const registerOnline = async (s: ActiveSession) => {
+    if (!s.device_id || !s.platform) return;
+    const { error } = await supabase.from("user_devices").insert({
+      user_id: userId,
+      device_id: s.device_id,
+      platform: s.platform,
+      device_name: s.user_agent?.slice(0, 120) || null,
+      last_ip: s.client_ipv4 || s.client_ipv6 || null,
+      created_by: "admin_manual",
+      is_active: true,
+    });
+    if (error) return toast.error("Erro: " + error.message);
+    toast.success("Dispositivo online cadastrado");
     void reload();
   };
 
@@ -191,6 +243,45 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
             </div>
           )}
 
+          {pendingOnline.length > 0 && (
+            <div className="rounded-md border border-primary/40 bg-primary/5 p-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                <Wifi className="h-4 w-4" /> Dispositivos online não cadastrados ({pendingOnline.length})
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Estes aparelhos estão conectados agora mas não foram auto-cadastrados (limite atingido ou cadastro removido). Clique para vincular.
+              </p>
+              <div className="space-y-2">
+                {pendingOnline.map((s) => (
+                  <div key={s.id} className="flex items-center justify-between gap-2 rounded border border-border bg-card p-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {s.platform === "android" ? (
+                          <Smartphone className="h-4 w-4 text-primary" />
+                        ) : (
+                          <Tv2 className="h-4 w-4 text-primary" />
+                        )}
+                        <span className="text-sm font-medium">{s.platform}</span>
+                        {s.current_channel_name && (
+                          <span className="text-xs text-muted-foreground">· assistindo {s.current_channel_name}</span>
+                        )}
+                      </div>
+                      <p className="text-xs font-mono text-muted-foreground break-all">
+                        {maskDeviceId(s.device_id || "")}
+                        {(s.client_ipv4 || s.client_ipv6) && ` · ${s.client_ipv4 || s.client_ipv6}`}
+                      </p>
+                    </div>
+                    <Button size="sm" variant="default" onClick={() => registerOnline(s)}>
+                      <Plus className="h-3 w-3 mr-1" /> Cadastrar
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+
+
           {loading ? (
             <p className="text-sm text-muted-foreground">Carregando...</p>
           ) : devices.length === 0 ? (
@@ -246,6 +337,11 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
                           {d.created_by === "admin_manual" && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-400">
                               manual
+                            </span>
+                          )}
+                          {onlineDevices.has(`${d.platform}:${d.device_id}`) && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 inline-flex items-center gap-0.5">
+                              <Wifi className="h-2.5 w-2.5" /> online
                             </span>
                           )}
                           {!d.is_active && (
