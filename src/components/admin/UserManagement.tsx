@@ -956,6 +956,15 @@ const UserManagement = () => {
           })()}
         </DialogContent>
       </Dialog>
+
+      {devicesUser && (
+        <UserDevicesDialog
+          open={!!devicesUser}
+          onOpenChange={(v) => !v && setDevicesUser(null)}
+          userId={devicesUser.user_id}
+          userLabel={devicesUser.display_name || devicesUser.username || ""}
+        />
+      )}
     </div>
   );
 };
