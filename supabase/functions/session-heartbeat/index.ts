@@ -197,6 +197,8 @@ Deno.serve(async (req) => {
           ip_address: ipAddress,
           client_ipv4: cIpv4,
           client_ipv6: cIpv6,
+          ...(cleanDeviceId ? { device_id: cleanDeviceId } : {}),
+          ...(cleanPlatform ? { platform: cleanPlatform } : {}),
         })
         .eq("id", sessionId)
         .eq("user_id", user.id);
