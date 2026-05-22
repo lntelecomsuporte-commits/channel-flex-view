@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Trash2, ShieldOff, ShieldCheck, Plus, Smartphone, Tv2, Pencil, Check, X, Wifi, MonitorSmartphone } from "lucide-react";
+import { Trash2, ShieldOff, ShieldCheck, Plus, Smartphone, Tv2, Pencil, Check, X, Wifi, MonitorSmartphone, RefreshCw, LogIn } from "lucide-react";
 
 type Device = {
   id: string;
@@ -51,6 +51,24 @@ type ActiveSession = {
   client_ipv6: string | null;
 };
 
+type PendingDevice = {
+  id: string;
+  device_id: string;
+  platform: "android" | "roku";
+  device_name: string | null;
+  app_version: string | null;
+  last_ip: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+};
+
+function timeAgo(iso: string) {
+  const diff = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (diff < 60) return `há ${diff}s`;
+  if (diff < 3600) return `há ${Math.floor(diff / 60)}min`;
+  return `há ${Math.floor(diff / 3600)}h`;
+}
+
 export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Props) {
   const [loading, setLoading] = useState(false);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -64,6 +82,22 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
   const [addDeviceId, setAddDeviceId] = useState("");
   const [addLabel, setAddLabel] = useState("");
   const [adding, setAdding] = useState(false);
+
+  const [pending, setPending] = useState<PendingDevice[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+
+  const reloadPending = async () => {
+    setPendingLoading(true);
+    const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
+    const { data, error } = await supabase
+      .from("pending_devices")
+      .select("*")
+      .gte("last_seen_at", fiveMinAgo)
+      .order("last_seen_at", { ascending: false });
+    if (error) toast.error("Erro ao carregar pendentes: " + error.message);
+    setPending((data as PendingDevice[]) || []);
+    setPendingLoading(false);
+  };
 
   const reload = async () => {
     setLoading(true);
@@ -88,11 +122,29 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
     setSessions((sessData as ActiveSession[]) || []);
     setLimit(typeof lim === "number" ? lim : null);
     setLoading(false);
+    void reloadPending();
   };
 
   useEffect(() => {
     if (open) void reload();
   }, [open, userId]);
+
+  const bindPending = async (p: PendingDevice) => {
+    const { error } = await supabase.from("user_devices").insert({
+      user_id: userId,
+      device_id: p.device_id,
+      platform: p.platform,
+      device_name: p.device_name,
+      app_version: p.app_version,
+      last_ip: p.last_ip,
+      created_by: "admin_manual",
+      is_active: true,
+    });
+    if (error) return toast.error("Erro ao vincular: " + error.message);
+    await supabase.from("pending_devices").delete().eq("id", p.id);
+    toast.success("Aparelho vinculado — o cliente entrará automaticamente em alguns segundos");
+    void reload();
+  };
 
   const toggleActive = async (d: Device) => {
     const { error } = await supabase
@@ -282,6 +334,58 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
               </div>
             </div>
           )}
+
+          {/* Aparelhos aguardando login (beacon do APK na tela de login) */}
+          <div className="rounded-md border border-border bg-secondary/20 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <LogIn className="h-4 w-4 text-primary" />
+                Aparelhos aguardando login ({pending.length})
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => void reloadPending()}
+                disabled={pendingLoading}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 mr-1 ${pendingLoading ? "animate-spin" : ""}`} />
+                Atualizar
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              APKs abertos na tela de login nos últimos 5 minutos. Clique em "Vincular" para liberar o acesso — o aparelho entra sozinho em até 15 segundos.
+            </p>
+            {pending.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">Nenhum aparelho aguardando no momento.</p>
+            ) : (
+              <div className="space-y-2">
+                {pending.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between gap-2 rounded border border-border bg-card p-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {p.platform === "android" ? (
+                          <Smartphone className="h-4 w-4 text-primary" />
+                        ) : (
+                          <Tv2 className="h-4 w-4 text-primary" />
+                        )}
+                        <span className="text-sm font-medium">{p.device_name || p.platform}</span>
+                        <span className="text-xs text-muted-foreground">· {timeAgo(p.last_seen_at)}</span>
+                      </div>
+                      <p className="text-xs font-mono text-muted-foreground break-all">
+                        {maskDeviceId(p.device_id)}
+                        {p.last_ip && ` · ${p.last_ip}`}
+                      </p>
+                    </div>
+                    <Button size="sm" variant="default" onClick={() => void bindPending(p)}>
+                      <Plus className="h-3 w-3 mr-1" /> Vincular
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+
 
 
 

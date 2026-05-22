@@ -17,3 +17,9 @@ verify_jwt = false
 
 [functions.device-login]
 verify_jwt = false
+
+[functions.device-auto-login]
+verify_jwt = false
+
+[functions.device-announce]
+verify_jwt = false

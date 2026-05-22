@@ -289,6 +289,39 @@ export type Database = {
         }
         Relationships: []
       }
+      pending_devices: {
+        Row: {
+          app_version: string | null
+          device_id: string
+          device_name: string | null
+          first_seen_at: string
+          id: string
+          last_ip: string | null
+          last_seen_at: string
+          platform: string
+        }
+        Insert: {
+          app_version?: string | null
+          device_id: string
+          device_name?: string | null
+          first_seen_at?: string
+          id?: string
+          last_ip?: string | null
+          last_seen_at?: string
+          platform: string
+        }
+        Update: {
+          app_version?: string | null
+          device_id?: string
+          device_name?: string | null
+          first_seen_at?: string
+          id?: string
+          last_ip?: string | null
+          last_seen_at?: string
+          platform?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           adult_pin: string
