@@ -51,6 +51,24 @@ type ActiveSession = {
   client_ipv6: string | null;
 };
 
+type PendingDevice = {
+  id: string;
+  device_id: string;
+  platform: "android" | "roku";
+  device_name: string | null;
+  app_version: string | null;
+  last_ip: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+};
+
+function timeAgo(iso: string) {
+  const diff = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (diff < 60) return `há ${diff}s`;
+  if (diff < 3600) return `há ${Math.floor(diff / 60)}min`;
+  return `há ${Math.floor(diff / 3600)}h`;
+}
+
 export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Props) {
   const [loading, setLoading] = useState(false);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -64,6 +82,22 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
   const [addDeviceId, setAddDeviceId] = useState("");
   const [addLabel, setAddLabel] = useState("");
   const [adding, setAdding] = useState(false);
+
+  const [pending, setPending] = useState<PendingDevice[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+
+  const reloadPending = async () => {
+    setPendingLoading(true);
+    const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
+    const { data, error } = await supabase
+      .from("pending_devices")
+      .select("*")
+      .gte("last_seen_at", fiveMinAgo)
+      .order("last_seen_at", { ascending: false });
+    if (error) toast.error("Erro ao carregar pendentes: " + error.message);
+    setPending((data as PendingDevice[]) || []);
+    setPendingLoading(false);
+  };
 
   const reload = async () => {
     setLoading(true);
@@ -88,11 +122,29 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
     setSessions((sessData as ActiveSession[]) || []);
     setLimit(typeof lim === "number" ? lim : null);
     setLoading(false);
+    void reloadPending();
   };
 
   useEffect(() => {
     if (open) void reload();
   }, [open, userId]);
+
+  const bindPending = async (p: PendingDevice) => {
+    const { error } = await supabase.from("user_devices").insert({
+      user_id: userId,
+      device_id: p.device_id,
+      platform: p.platform,
+      device_name: p.device_name,
+      app_version: p.app_version,
+      last_ip: p.last_ip,
+      created_by: "admin_manual",
+      is_active: true,
+    });
+    if (error) return toast.error("Erro ao vincular: " + error.message);
+    await supabase.from("pending_devices").delete().eq("id", p.id);
+    toast.success("Aparelho vinculado — o cliente entrará automaticamente em alguns segundos");
+    void reload();
+  };
 
   const toggleActive = async (d: Device) => {
     const { error } = await supabase
