@@ -1,3 +1,14 @@
+declare const EdgeRuntime: {
+  userWorkers: {
+    create: (options: Record<string, unknown>) => Promise<{ fetch: (req: Request) => Promise<Response> }>;
+  };
+};
+
+type DenoWorkerErrors = typeof Deno.errors & {
+  WorkerAlreadyRetired?: new (...args: never[]) => Error;
+  WorkerRequestIdleTimeout?: new (...args: never[]) => Error;
+};
+
 console.log("main function started");
 
 Deno.serve(async (req: Request) => {
@@ -35,12 +46,14 @@ Deno.serve(async (req: Request) => {
 
       return await worker.fetch(req);
     } catch (error) {
-      if (error instanceof Deno.errors.WorkerAlreadyRetired) {
+      const workerErrors = Deno.errors as DenoWorkerErrors;
+
+      if (workerErrors.WorkerAlreadyRetired && error instanceof workerErrors.WorkerAlreadyRetired) {
         return await callWorker();
       }
 
-      if (error instanceof Deno.errors.WorkerRequestIdleTimeout) {
-        return new Response(JSON.stringify({ msg: error.toString() }), {
+      if (workerErrors.WorkerRequestIdleTimeout && error instanceof workerErrors.WorkerRequestIdleTimeout) {
+        return new Response(JSON.stringify({ msg: String(error) }), {
           status: 504,
           headers,
         });
