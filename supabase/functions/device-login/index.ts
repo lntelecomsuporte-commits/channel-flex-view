@@ -1,3 +1,5 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+
 // Edge function: device-login
 // Login com password + registro/validação do dispositivo (APK Android, Roku).
 // PWA/web NÃO usa essa função — login direto via supabase.auth.
@@ -13,43 +15,6 @@ const json = (data: unknown, status = 200) =>
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-
-async function restFetch(
-  supabaseUrl: string,
-  serviceRoleKey: string,
-  path: string,
-  method: string,
-  body?: unknown,
-  extraHeaders?: Record<string, string>,
-) {
-  const res = await fetch(`${supabaseUrl}/rest/v1/${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${serviceRoleKey}`,
-      apikey: serviceRoleKey,
-      "Content-Type": "application/json",
-      Prefer: "return=representation",
-      ...(extraHeaders || {}),
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
-  const data = await res.json().catch(() => null);
-  return { ok: res.ok, status: res.status, data };
-}
-
-async function rpcFetch(supabaseUrl: string, serviceRoleKey: string, fn: string, args: unknown) {
-  const res = await fetch(`${supabaseUrl}/rest/v1/rpc/${fn}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${serviceRoleKey}`,
-      apikey: serviceRoleKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(args),
-  });
-  const data = await res.json().catch(() => null);
-  return { ok: res.ok, status: res.status, data };
-}
 
 async function getClientIp(req: Request): Promise<string> {
   const xf = req.headers.get("x-forwarded-for");
