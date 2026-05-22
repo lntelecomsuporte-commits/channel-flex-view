@@ -87,7 +87,7 @@ const formatBytes = (b: number) => {
   return `${b} B`;
 };
 
-const NativeStatsBody = ({ destIp }: { destIp: DestIp }) => {
+const NativeStatsBody = ({ destIp, streamUrl }: { destIp: DestIp; streamUrl?: string }) => {
   const [s, setS] = useState<NativePlayerStats>({});
   useEffect(() => {
     let alive = true;
