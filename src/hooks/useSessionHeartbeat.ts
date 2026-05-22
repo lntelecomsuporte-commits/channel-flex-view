@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/lib/supabaseLocal";
 import { useAuth } from "./useAuth";
+import { getDeviceId } from "@/plugins/device-info";
 
 interface HeartbeatOptions {
   channelId?: string | null;
