@@ -109,7 +109,8 @@ const NativeStatsBody = ({ destIp }: { destIp: DestIp }) => {
   const transferred = formatBytes(s.totalBytesTransferred ?? 0);
   const buffer = typeof s.bufferedMs === "number" ? `${(s.bufferedMs / 1000).toFixed(1)}s` : "—";
   const dropped = typeof s.droppedFrames === "number" ? `${s.droppedFrames}` : "—";
-  const codec = s.codec || s.mimeType || "—";
+  const codec = prettyCodec(s.codec, s.mimeType);
+  const format = prettyContainer(s.mimeType, streamUrl);
 
   return (
     <div className="space-y-1.5">
@@ -121,6 +122,7 @@ const NativeStatsBody = ({ destIp }: { destIp: DestIp }) => {
       <Row label="Buffer" value={buffer} />
       <Row label="Frames perdidos" value={dropped} />
       <Row label="Codec" value={codec} />
+      <Row label="Formato" value={format} />
       <Row
         label={`Destino ${destIp.family ?? ""}`.trim()}
         value={destIp.host ? destIp.address : "—"}
