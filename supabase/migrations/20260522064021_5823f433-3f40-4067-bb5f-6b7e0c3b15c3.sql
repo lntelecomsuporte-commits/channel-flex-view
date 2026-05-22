@@ -1,0 +1,1 @@
+UPDATE public.user_devices SET device_id = UPPER(device_id) WHERE device_id <> UPPER(device_id);
