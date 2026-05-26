@@ -65,7 +65,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onDestroy() {
+    public void onDestroy() {
         if (screenOffReceiver != null) {
             try { unregisterReceiver(screenOffReceiver); } catch (Exception ignored) {}
             screenOffReceiver = null;
