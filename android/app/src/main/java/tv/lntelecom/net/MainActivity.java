@@ -1,5 +1,9 @@
 package tv.lntelecom.net;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.KeyEvent;
@@ -11,6 +15,9 @@ import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
+    private BroadcastReceiver screenOffReceiver;
+    private boolean shuttingDown = false;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(PlaybackKeepAlivePlugin.class);
@@ -18,7 +25,6 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DeviceInfoPlugin.class);
         super.onCreate(savedInstanceState);
         // Mantém a tela acesa enquanto a Activity estiver visível.
-        // O foreground service cuida do CPU/processo em background.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().getDecorView().setBackgroundColor(Color.BLACK);
 
@@ -31,6 +37,66 @@ public class MainActivity extends BridgeActivity {
 
             WebSettings settings = webView.getSettings();
             settings.setMediaPlaybackRequiresUserGesture(false);
+        }
+
+        // Detecta Power do controle (Android TV / Fire TV) — quando a tela
+        // apaga / entra em stand-by, encerramos o app e liberamos RAM.
+        // ACTION_SCREEN_OFF SÓ funciona com receiver dinâmico (não no manifest).
+        screenOffReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
+                    shutdownAndRelease("screen_off");
+                }
+            }
+        };
+        registerReceiver(screenOffReceiver, new IntentFilter(Intent.ACTION_SCREEN_OFF));
+    }
+
+    /**
+     * Disparado quando o usuário aperta Home (casinha) ou Recents.
+     * NÃO é disparado por diálogos do sistema, ligações, etc — só ação
+     * intencional do usuário pra sair do app. Encerramos e liberamos RAM.
+     */
+    @Override
+    protected void onUserLeaveHint() {
+        super.onUserLeaveHint();
+        shutdownAndRelease("user_leave_hint");
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (screenOffReceiver != null) {
+            try { unregisterReceiver(screenOffReceiver); } catch (Exception ignored) {}
+            screenOffReceiver = null;
+        }
+        super.onDestroy();
+    }
+
+    /**
+     * Para o foreground service de playback, remove a Activity da lista de
+     * recentes e mata o processo pra liberar memória completamente.
+     * Em TV boxes com 1GB de RAM isso é necessário — sem System.exit o
+     * processo Java fica residente mesmo após finish().
+     */
+    private void shutdownAndRelease(String reason) {
+        if (shuttingDown) return;
+        shuttingDown = true;
+        try {
+            android.util.Log.i("LNTV", "Shutting down (" + reason + ")");
+            // Para o foreground service que mantém o processo vivo
+            try {
+                stopService(new Intent(this, PlaybackKeepAliveService.class));
+            } catch (Exception ignored) {}
+            // Remove da lista de apps recentes e encerra a Activity
+            finishAndRemoveTask();
+        } finally {
+            // Mata o processo Java pra garantir liberação total de RAM.
+            // Pequeno delay pra dar tempo do finishAndRemoveTask processar.
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                () -> System.exit(0),
+                150
+            );
         }
     }
 

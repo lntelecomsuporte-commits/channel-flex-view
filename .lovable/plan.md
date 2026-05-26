@@ -1,42 +1,50 @@
 ## Objetivo
 
-Hoje, quando o APK abre, ele só tenta `device-auto-login` uma vez. Se falhar, fica parado na tela de login e o admin não sabe que aquele aparelho existe (a menos que o cliente leia o código manualmente).
+Mudar o comportamento do APK Android pra **fechar e liberar memória** quando o usuário:
+1. Aperta o botão **Home** (casinha) do controle
+2. Aperta o botão **Power** do controle (entra em stand-by)
 
-Quero que **enquanto o usuário estiver na tela de login**, o APK envie um "beacon" periódico ao servidor anunciando seu `device_id` + modelo + IP. No painel admin, em **Dispositivos vinculados**, vai aparecer uma seção nova **"Aparelhos aguardando login"** com botão **Atualizar** para puxar a lista. Um clique vincula o aparelho ao usuário aberto. Quando o cliente loga, o APK para de mandar beacon.
+Hoje o app fica vivo em background via foreground service — vamos reverter isso pra esses dois casos específicos.
 
 ## Mudanças
 
-### 1. Banco — nova tabela `pending_devices`
-- `device_id` (texto, UPPERCASE) + `platform` → chave única
-- `device_name`, `app_version`, `last_ip`, `last_seen_at`, `first_seen_at`
-- RLS: só admin lê. Insert/upsert via edge function (service role).
-- Cleanup: registros com `last_seen_at < now() - 5 min` são considerados offline (filtrados na listagem; um cron simples ou DELETE quando ficar > 1 dia).
+### 1. `android/app/src/main/java/tv/lntelecom/net/MainActivity.java`
 
-### 2. Edge function `device-announce` (nova)
-- POST `{ device_id, platform, device_name, app_version }`
-- Faz UPSERT em `pending_devices` (atualiza `last_seen_at`, `last_ip`).
-- Se o device já estiver cadastrado em `user_devices`, **remove** o registro de `pending_devices` (não polui a lista).
-- Resposta leve: `{ ok: true, registered: boolean }` — se `registered=true`, o APK pode parar o beacon e tentar `device-auto-login` de novo.
+Adicionar lifecycle hooks pra detectar quando a Activity vai pra background:
 
-### 3. Frontend — `LoginPage.tsx`
-- Após o `device-auto-login` inicial falhar (APK não cadastrado), inicia `setInterval` a cada **15s** chamando `device-announce`.
-- Se a resposta indicar `registered=true`, dispara `device-auto-login` automaticamente e entra no app.
-- Para o interval quando: login manual com sucesso, componente desmonta, ou app vai pra background.
+- **`onUserLeaveHint()`** — chamado quando o usuário aperta Home explicitamente (não quando abre notificação ou recebe ligação). É o sinal mais limpo pra distinguir "Home" de outras causas de pausa.
+- **`onStop()`** — chamado quando a tela apaga / stand-by / app sai de foco totalmente.
 
-### 4. Admin — `UserDevicesDialog.tsx`
-- Nova seção **"Aparelhos aguardando login"** (acima dos já cadastrados), com botão **Atualizar**.
-- Lista lê de `pending_devices` (últimos 5 min). Para cada item: modelo, IP, código mascarado, "visto há Xs", botão **Vincular a este usuário**.
-- Vincular = INSERT em `user_devices` (com `device_id` já UPPERCASE) + DELETE em `pending_devices`.
-- Filtro de plataforma igual ao card "online não cadastrados".
+Em ambos os casos:
+1. Parar o foreground service (`PlaybackKeepAliveService`)
+2. Chamar `finishAndRemoveTask()` pra remover da lista de apps recentes e encerrar a Activity
+3. Em `onStop()` adicionar `System.exit(0)` após `finishAndRemoveTask()` pra garantir que o processo morra e libere RAM (em TV boxes de 1GB isso importa)
+
+### 2. `BroadcastReceiver` pra detectar stand-by (tela apaga)
+
+Registrar um receiver pro `Intent.ACTION_SCREEN_OFF` dentro da `MainActivity` (registro dinâmico, não no manifest — `ACTION_SCREEN_OFF` só funciona com receiver dinâmico). Quando a tela apaga (power do controle em Android TV/Fire TV), o receiver dispara o mesmo fluxo de "fechar e liberar memória".
+
+### 3. `src/components/player/NativeAndroidPlayer.tsx` e `VideoPlayer.tsx`
+
+Garantir cleanup do ExoPlayer / hls.js quando a página perde visibilidade definitivamente (já existe parcialmente — só validar que `release()` é chamado).
 
 ## Detalhes técnicos
 
-- `pending_devices` é **global** (não tem `user_id`) — qualquer admin abrindo qualquer usuário vê os mesmos aparelhos. Isso é intencional: o admin escolhe a qual conta vincular.
-- O beacon é mais barato que `device-auto-login` (sem geração de magiclink). É só upsert.
-- Não criamos sessão nem token — o aparelho continua deslogado até o admin vincular.
-- O frontend usa o mesmo padrão de `getLocalFunctionUrl()` que já existe.
+- **`onUserLeaveHint` vs `onPause`**: usamos `onUserLeaveHint` porque ele só dispara em ações intencionais do usuário (Home, Recents). `onPause` também dispara quando aparece um diálogo do sistema, o que fecharia o app indevidamente.
+- **`finishAndRemoveTask()`** remove da lista de "apps recentes" — quando o usuário reabre pelo launcher, é boot do zero (splash → login auto via device → home).
+- **`System.exit(0)`** é agressivo mas necessário em TV boxes com pouca RAM: sem isso o processo Java fica residente mesmo após `finish()`.
+- **Auto-login** já existe (device-auto-login) então reabrir o app não pede credencial — vai direto pro último canal/home.
+- **Trade-off**: cold start fica ~2-3s mais lento ao reabrir (vs <200ms instantâneo de hoje), em troca de zero consumo de RAM em background.
 
-## Fora do escopo
+## Fora de escopo
 
-- Notificação push pro admin quando um novo aparelho aparece (pode ser realtime futuramente).
-- Tela admin global de "todos os aparelhos aguardando" (vai ficar dentro do dialog por usuário por enquanto, conforme pedido).
+- Não muda comportamento web/PWA (só nativo Android).
+- Não muda Roku (que já tem ciclo de vida próprio gerenciado pelo SO).
+- Não remove o `PlaybackKeepAliveService` — ele continua útil enquanto o app está em foreground (impede LMK durante uso ativo). Só paramos ele ao sair.
+
+## Validação
+
+Após deploy do APK novo, testar no Fire TV / TV box:
+1. Abrir app, tocar canal, apertar Home → app some da lista de recentes, RAM liberada (verificar via `adb shell dumpsys meminfo tv.lntelecom.net`).
+2. Abrir app, apertar Power do controle → tela apaga + app encerra.
+3. Reabrir pelo launcher → boot limpo, auto-login, último canal.
