@@ -104,13 +104,17 @@ public class NativePlayerPlugin extends Plugin {
                             .createMediaSource(item);
                 }
 
+                // Mantém o WebView opaco enquanto o ExoPlayer prepara o canal.
+                // Em alguns Androids/TV boxes, deixar transparente antes do 1º
+                // frame faz a tela ficar preta mesmo com o player em READY.
+                setWebViewTransparent(false);
                 player.setMediaSource(source);
                 player.prepare();
                 player.setPlayWhenReady(true);
 
-                setWebViewTransparent(true);
                 call.resolve();
             } catch (Exception e) {
+                setWebViewTransparent(false);
                 call.reject("load failed: " + e.getMessage(), e);
             }
         });
@@ -230,7 +234,7 @@ public class NativePlayerPlugin extends Plugin {
                 JSObject data = new JSObject();
                 data.put("state", state);
                 if (state == Player.STATE_READY) {
-                    notifyListeners("playing", data);
+                    notifyListeners("buffering", data);
                 } else if (state == Player.STATE_BUFFERING) {
                     notifyListeners("buffering", data);
                 } else if (state == Player.STATE_ENDED) {
@@ -239,7 +243,16 @@ public class NativePlayerPlugin extends Plugin {
             }
 
             @Override
+            public void onRenderedFirstFrame() {
+                setWebViewTransparent(true);
+                JSObject data = new JSObject();
+                data.put("state", player != null ? player.getPlaybackState() : Player.STATE_READY);
+                notifyListeners("playing", data);
+            }
+
+            @Override
             public void onPlayerError(PlaybackException error) {
+                setWebViewTransparent(false);
                 JSObject data = new JSObject();
                 data.put("code", error.errorCode);
                 data.put("codeName", error.getErrorCodeName());
