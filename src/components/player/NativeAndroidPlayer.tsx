@@ -28,8 +28,8 @@ const detectType = (url: string): NativeStreamType => {
  * Player nativo Android (ExoPlayer/Media3) via Capacitor.
  * Substitui o <video> do WebView para eliminar o ícone/flash entre zaps.
  *
- * O SurfaceView do ExoPlayer fica ATRÁS do WebView (que o plugin torna
- * transparente em load() e devolve a preto em stop()/destroy()).
+ * O TextureView do ExoPlayer fica ATRÁS do WebView (que o plugin torna
+ * transparente só após o 1º frame e devolve a preto em stop()/destroy()).
  * Toda a UI (controles, EPG, OSD) continua sendo HTML por cima.
  */
 const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
@@ -142,7 +142,7 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
       };
     }, []);
 
-    // Placeholder transparente — o vídeo real está no SurfaceView nativo
+    // Placeholder transparente — o vídeo real está no TextureView nativo
     // POR BAIXO do WebView. Mostramos só o spinner quando ainda sem 1º frame.
     return (
       <>

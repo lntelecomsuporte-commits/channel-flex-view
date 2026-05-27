@@ -70,7 +70,7 @@
   }
 
   /* Quando o player nativo Android (ExoPlayer) está ativo, o vídeo é
-     renderizado num SurfaceView ATRÁS do WebView. Pra ele aparecer,
+     renderizado num TextureView ATRÁS do WebView. Pra ele aparecer,
      html/body/#root precisam ser transparentes — senão o fundo escuro do
      React cobre o vídeo e o usuário só ouve áudio. */
   html.native-player-active,
