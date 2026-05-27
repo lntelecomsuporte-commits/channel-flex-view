@@ -56,8 +56,10 @@ const isAndroidNativePlatform = () =>
   Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
 
 const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>((props, ref) => {
-  if (isAndroidNativePlatform()) {
-    return <NativeAndroidPlayer ref={ref} {...props} />;
+  const [nativeFallback, setNativeFallback] = useState(false);
+
+  if (isAndroidNativePlatform() && !nativeFallback) {
+    return <NativeAndroidPlayer ref={ref} {...props} onStartupTimeout={() => setNativeFallback(true)} />;
   }
   return <HlsVideoPlayer ref={ref} {...props} />;
 });
