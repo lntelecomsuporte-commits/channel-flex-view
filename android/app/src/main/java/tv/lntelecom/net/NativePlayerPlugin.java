@@ -1,5 +1,6 @@
 package tv.lntelecom.net;
 
+import android.graphics.Color;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.LayoutInflater;
