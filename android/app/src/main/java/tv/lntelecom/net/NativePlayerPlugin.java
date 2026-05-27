@@ -3,7 +3,6 @@ package tv.lntelecom.net;
 import android.graphics.Color;
 import android.os.Handler;
 import android.os.Looper;
-import android.view.LayoutInflater;
 import android.view.SurfaceView;
 import android.view.View;
 import android.webkit.WebView;
@@ -23,6 +22,7 @@ import androidx.media3.exoplayer.source.ProgressiveMediaSource;
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter;
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy;
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy;
+import androidx.media3.ui.AspectRatioFrameLayout;
 import androidx.media3.ui.PlayerView;
 
 import com.getcapacitor.JSObject;
@@ -106,17 +106,13 @@ public class NativePlayerPlugin extends Plugin {
                             .createMediaSource(item);
                 }
 
-                // Mantém o WebView opaco enquanto o ExoPlayer prepara o canal.
-                // Em alguns Androids/TV boxes, deixar transparente antes do 1º
-                // frame faz a tela ficar preta mesmo com o player em READY.
-                setWebViewTransparent(false);
                 player.setMediaSource(source);
                 player.prepare();
                 player.setPlayWhenReady(true);
 
+                setWebViewTransparent(true);
                 call.resolve();
             } catch (Exception e) {
-                setWebViewTransparent(false);
                 call.reject("load failed: " + e.getMessage(), e);
             }
         });
@@ -214,37 +210,26 @@ public class NativePlayerPlugin extends Plugin {
                 .build();
 
         decor = (FrameLayout) getActivity().findViewById(android.R.id.content);
-        playerView = (PlayerView) LayoutInflater.from(getContext())
-                .inflate(R.layout.exo_texture_player_view, decor, false);
+        playerView = new PlayerView(getContext());
         playerView.setPlayer(player);
-
-        // SurfaceView no overlay plane (mesma técnica de APKs nativos de IPTV).
-        // Necessário em TV boxes baratas (Allwinner/Rockchip) onde TextureView
-        // dá tela preta. setZOrderMediaOverlay(true) coloca a Surface acima do
-        // background da janela mas abaixo da WebView — combinado com WebView
-        // transparente, o vídeo aparece e os controles HTML ficam por cima.
-        View surface = playerView.getVideoSurfaceView();
-        if (surface instanceof SurfaceView) {
-            ((SurfaceView) surface).setZOrderMediaOverlay(true);
-        }
+        playerView.setUseController(false);
+        playerView.setBackgroundColor(Color.BLACK);
+        playerView.setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FIT);
 
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT);
         decor.addView(playerView, 0, lp);
 
+        View videoSurface = playerView.getVideoSurfaceView();
+        if (videoSurface instanceof SurfaceView) {
+            ((SurfaceView) videoSurface).setZOrderMediaOverlay(true);
+        }
+
         player.addAnalyticsListener(new AnalyticsListener() {
             @Override
             public void onDroppedVideoFrames(AnalyticsListener.EventTime eventTime, int droppedFrames, long elapsedMs) {
                 droppedFramesTotal += droppedFrames;
-            }
-
-            @Override
-            public void onRenderedFirstFrame(AnalyticsListener.EventTime eventTime, Object output, long renderTimeMs) {
-                setWebViewTransparent(true);
-                JSObject data = new JSObject();
-                data.put("state", player != null ? player.getPlaybackState() : Player.STATE_READY);
-                notifyListeners("playing", data);
             }
         });
 
@@ -254,7 +239,7 @@ public class NativePlayerPlugin extends Plugin {
                 JSObject data = new JSObject();
                 data.put("state", state);
                 if (state == Player.STATE_READY) {
-                    notifyListeners("buffering", data);
+                    notifyListeners("playing", data);
                 } else if (state == Player.STATE_BUFFERING) {
                     notifyListeners("buffering", data);
                 } else if (state == Player.STATE_ENDED) {
@@ -264,7 +249,6 @@ public class NativePlayerPlugin extends Plugin {
 
             @Override
             public void onPlayerError(PlaybackException error) {
-                setWebViewTransparent(false);
                 JSObject data = new JSObject();
                 data.put("code", error.errorCode);
                 data.put("codeName", error.getErrorCodeName());
