@@ -1,9 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  IMPORTANTE: surface_type="surface_view" (NÃO texture_view).
+  TextureView depende de composição GL e falha (tela preta) em TV boxes
+  baratas (Allwinner/Rockchip, Android 7-9). SurfaceView usa um plano
+  de overlay de hardware dedicado — mesma abordagem dos APKs nativos
+  de IPTV concorrentes. Combinado com setZOrderMediaOverlay(true) no
+  código Java, o vídeo renderiza acima do background do app mas abaixo
+  da WebView (que precisa estar transparente sobre o vídeo).
+-->
 <androidx.media3.ui.PlayerView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#000000"
-    app:surface_type="texture_view"
+    app:surface_type="surface_view"
     app:use_controller="false"
     app:resize_mode="fit" />
