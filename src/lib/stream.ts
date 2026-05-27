@@ -1,7 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/lib/supabaseLocal";
 import { LOCAL_AUTH_STORAGE_KEY, getLocalFunctionUrl } from "@/lib/localBackend";
-import { isLegacyApkRuntime } from "@/lib/runtime";
 
 /**
  * REGRA IMUTÁVEL DESTE PROJETO (LN TV self-hosted):
@@ -168,10 +167,6 @@ export const getPlayableStreamUrl = (streamUrl: string): string => {
   try {
     const parsedUrl = new URL(streamUrl);
 
-    if (isLegacyApkRuntime()) {
-      return buildProxyStreamUrl(streamUrl) ?? streamUrl;
-    }
-
     if (Capacitor.isNativePlatform()) {
       // APK com ExoPlayer nativo (NativeAndroidPlayer): toca HTTP e HTTPS
       // direto, sem proxy. ExoPlayer fala socket direto e herda
@@ -211,7 +206,7 @@ export const resolveChannelStreamUrl = async (
   // "Ocultar URL" só faz sentido no web (DevTools/F12). No APK não há como
   // o usuário inspecionar a URL, então ignoramos a flag e usamos o fluxo
   // padrão (HTTPS direto, HTTP pelo proxy) — melhor latência no zap.
-  if (useProxyToken && channelId && !Capacitor.isNativePlatform() && !isLegacyApkRuntime()) {
+  if (useProxyToken && channelId && !Capacitor.isNativePlatform()) {
     const signed = await buildSignedProxyStreamUrl(streamUrl, channelId);
     if (signed) return signed;
     // Segurança (web): se admin marcou "Ocultar URL" e o token falhou,
