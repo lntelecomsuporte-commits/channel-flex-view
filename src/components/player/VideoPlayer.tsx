@@ -5,6 +5,7 @@ import { getPlayableStreamUrl, resolveChannelStreamUrl, buildProxyStreamUrl, isP
 import { Capacitor } from "@capacitor/core";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 import { getDeviceProfile } from "@/lib/deviceProfile";
+import { isAndroidNativeRuntime, isLegacyApkRuntime } from "@/lib/runtime";
 import YouTubePlayer from "./YouTubePlayer";
 import NativeAndroidPlayer from "./NativeAndroidPlayer";
 
@@ -49,14 +50,8 @@ export interface VideoPlayerHandle {
   getHls: () => Hls | null;
 }
 
-// Detecta APK Android (não vale pra iOS nem Web) — nesses casos roteia pro
-// player nativo ExoPlayer/Media3 via plugin Capacitor, que elimina o ícone/
-// flash do WebView entre zaps de canal.
-const isAndroidNativePlatform = () =>
-  Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
-
 const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>((props, ref) => {
-  if (isAndroidNativePlatform()) {
+  if (isAndroidNativeRuntime()) {
     return <NativeAndroidPlayer ref={ref} {...props} />;
   }
   return <HlsVideoPlayer ref={ref} {...props} />;
@@ -114,7 +109,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
       let url: string;
       if (corsFallback) {
         url = buildProxyStreamUrl(activeStreamUrl) ?? getPlayableStreamUrl(activeStreamUrl);
-      } else if (forceProxyNative && Capacitor.isNativePlatform()) {
+      } else if ((forceProxyNative && Capacitor.isNativePlatform()) || isLegacyApkRuntime()) {
         url = buildProxyStreamUrl(activeStreamUrl) ?? getPlayableStreamUrl(activeStreamUrl);
       } else {
         url = getPlayableStreamUrl(activeStreamUrl);

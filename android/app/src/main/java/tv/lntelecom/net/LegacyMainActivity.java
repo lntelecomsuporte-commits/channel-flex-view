@@ -83,6 +83,7 @@ public class LegacyMainActivity extends Activity {
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
+        settings.setUserAgentString(settings.getUserAgentString() + " LNTVLegacy/1.0");
         // Cache do WebView habilitado pra reduzir reloads agressivos
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -110,7 +111,7 @@ public class LegacyMainActivity extends Activity {
         });
 
         setContentView(webView);
-        webView.loadUrl("https://tv2.lntelecom.net/");
+        webView.loadUrl("https://tv2.lntelecom.net/?legacy=1");
     }
 
     @Override
