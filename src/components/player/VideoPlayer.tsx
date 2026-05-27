@@ -5,6 +5,7 @@ import { getPlayableStreamUrl, resolveChannelStreamUrl, buildProxyStreamUrl, isP
 import { Capacitor } from "@capacitor/core";
 import { extractYouTubeVideoId } from "@/lib/youtube";
 import { getDeviceProfile } from "@/lib/deviceProfile";
+import { isAndroidNativeRuntime, isLegacyApkRuntime } from "@/lib/runtime";
 import YouTubePlayer from "./YouTubePlayer";
 import NativeAndroidPlayer from "./NativeAndroidPlayer";
 
@@ -49,14 +50,8 @@ export interface VideoPlayerHandle {
   getHls: () => Hls | null;
 }
 
-// Detecta APK Android (não vale pra iOS nem Web) — nesses casos roteia pro
-// player nativo ExoPlayer/Media3 via plugin Capacitor, que elimina o ícone/
-// flash do WebView entre zaps de canal.
-const isAndroidNativePlatform = () =>
-  Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
-
 const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>((props, ref) => {
-  if (isAndroidNativePlatform()) {
+  if (isAndroidNativeRuntime()) {
     return <NativeAndroidPlayer ref={ref} {...props} />;
   }
   return <HlsVideoPlayer ref={ref} {...props} />;
@@ -76,6 +71,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
   const [resolvedContentType, setResolvedContentType] = useState<string>("");
   const [corsFallback, setCorsFallback] = useState(false);
   const [firstFrameReady, setFirstFrameReady] = useState(false);
+  const [legacyNativeHlsFailed, setLegacyNativeHlsFailed] = useState(false);
   
   const [backupIndex, setBackupIndex] = useState(-1);
   const backups = backupStreamUrls?.filter((u) => !!u && u.trim().length > 0) ?? [];
@@ -114,7 +110,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
       let url: string;
       if (corsFallback) {
         url = buildProxyStreamUrl(activeStreamUrl) ?? getPlayableStreamUrl(activeStreamUrl);
-      } else if (forceProxyNative && Capacitor.isNativePlatform()) {
+      } else if ((forceProxyNative && Capacitor.isNativePlatform()) || isLegacyApkRuntime()) {
         url = buildProxyStreamUrl(activeStreamUrl) ?? getPlayableStreamUrl(activeStreamUrl);
       } else {
         url = getPlayableStreamUrl(activeStreamUrl);
@@ -162,6 +158,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     setBackupIndex(-1);
     setCorsFallback(false);
     setResolvedContentType("");
+    setLegacyNativeHlsFailed(false);
   }, [streamUrl]);
 
   // Se mudar de backup dentro do mesmo canal, cada URL precisa recomeçar limpa.
@@ -202,6 +199,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
 
     // Detecta engine pela extensão da URL: .m3u8 → hls.js, resto → tag <video>.
     const engine = detectEngine(playableStreamUrl, activeStreamUrl, resolvedContentType);
+    const useLegacyNativeHls = isLegacyApkRuntime() && engine === "hls" && !legacyNativeHlsFailed;
     console.log(`[Player] engine=${engine} url=${playableStreamUrl.slice(0, 80)}...`);
 
     // === HOT-SWAP: reusa instância Hls entre zaps (ganho ~200-400ms) ===
@@ -258,7 +256,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     };
     video.addEventListener("error", handleVideoError);
 
-    if (engine === "hls" && !isAppleDevice && Hls.isSupported()) {
+    if (engine === "hls" && !useLegacyNativeHls && !isAppleDevice && Hls.isSupported()) {
       const profile = getDeviceProfile();
       const isWeak = profile.weak;
       const hls = new Hls({
@@ -500,8 +498,9 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         const result = tsPlayer.play();
         if (result instanceof Promise) result.catch(() => {});
       }
-    } else if (engine === "native" || (engine === "hls" && isAppleDevice && video.canPlayType("application/vnd.apple.mpegurl"))) {
-      // Player nativo: MP4 progressivo ou HLS no Safari/iOS (AirPlay).
+    } else if (engine === "native" || useLegacyNativeHls || (engine === "hls" && isAppleDevice && video.canPlayType("application/vnd.apple.mpegurl"))) {
+      // Player nativo: MP4 progressivo, HLS no Safari/iOS (AirPlay) ou
+      // Legacy APK primeiro tenta o pipeline HLS nativo do WebView antigo.
       currentEngineRef.current = "native";
       video.src = playableStreamUrl;
       if (autoPlay) video.play().catch(() => {});
@@ -520,6 +519,11 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     let noDataSince: number | null = null;
     const triggerReload = (reason: string) => {
       console.warn(`[Watchdog] ${reason} — recarregando stream`);
+      if (useLegacyNativeHls) {
+        console.warn("[Legacy] HLS nativo sem imagem — alternando para hls.js");
+        setLegacyNativeHlsFailed(true);
+        return;
+      }
       lastTimeCheckedAt = Date.now();
       noDataSince = null;
       if (hlsRef.current) {
@@ -569,7 +573,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
       // NÃO destrói hlsRef/mpegtsRef aqui — o hot-swap reusa a instância
       // entre zaps. Cleanup real acontece no useEffect de unmount abaixo.
     };
-  }, [playableStreamUrl, autoPlay, activeStreamUrl, proxyTokenFailure, resolvedContentType]);
+  }, [playableStreamUrl, autoPlay, activeStreamUrl, proxyTokenFailure, resolvedContentType, legacyNativeHlsFailed]);
 
   // Unmount: derruba engines persistentes (hot-swap mantinha entre zaps).
   useEffect(() => {
