@@ -48,8 +48,15 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
 
     // Reset backup ao mudar canal principal.
     useEffect(() => {
+      setFirstFrameReady(false);
+      setLastError(null);
       setBackupIndex(-1);
     }, [streamUrl]);
+
+    useEffect(() => {
+      setFirstFrameReady(false);
+      setLastError(null);
+    }, [activeStreamUrl]);
 
     // Listeners de eventos do player nativo.
     useEffect(() => {
