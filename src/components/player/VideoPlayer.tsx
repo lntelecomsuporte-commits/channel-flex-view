@@ -498,8 +498,9 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         const result = tsPlayer.play();
         if (result instanceof Promise) result.catch(() => {});
       }
-    } else if (engine === "native" || (engine === "hls" && isAppleDevice && video.canPlayType("application/vnd.apple.mpegurl"))) {
-      // Player nativo: MP4 progressivo ou HLS no Safari/iOS (AirPlay).
+    } else if (engine === "native" || useLegacyNativeHls || (engine === "hls" && isAppleDevice && video.canPlayType("application/vnd.apple.mpegurl"))) {
+      // Player nativo: MP4 progressivo, HLS no Safari/iOS (AirPlay) ou
+      // Legacy APK primeiro tenta o pipeline HLS nativo do WebView antigo.
       currentEngineRef.current = "native";
       video.src = playableStreamUrl;
       if (autoPlay) video.play().catch(() => {});
