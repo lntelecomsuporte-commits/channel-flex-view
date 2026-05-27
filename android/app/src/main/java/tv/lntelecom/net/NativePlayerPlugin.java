@@ -4,6 +4,8 @@ import android.graphics.Color;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.LayoutInflater;
+import android.view.SurfaceView;
+import android.view.View;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
 
@@ -215,6 +217,16 @@ public class NativePlayerPlugin extends Plugin {
         playerView = (PlayerView) LayoutInflater.from(getContext())
                 .inflate(R.layout.exo_texture_player_view, decor, false);
         playerView.setPlayer(player);
+
+        // SurfaceView no overlay plane (mesma técnica de APKs nativos de IPTV).
+        // Necessário em TV boxes baratas (Allwinner/Rockchip) onde TextureView
+        // dá tela preta. setZOrderMediaOverlay(true) coloca a Surface acima do
+        // background da janela mas abaixo da WebView — combinado com WebView
+        // transparente, o vídeo aparece e os controles HTML ficam por cima.
+        View surface = playerView.getVideoSurfaceView();
+        if (surface instanceof SurfaceView) {
+            ((SurfaceView) surface).setZOrderMediaOverlay(true);
+        }
 
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
