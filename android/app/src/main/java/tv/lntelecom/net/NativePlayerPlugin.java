@@ -4,6 +4,8 @@ import android.graphics.Color;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.LayoutInflater;
+import android.view.SurfaceView;
+import android.view.View;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
 
