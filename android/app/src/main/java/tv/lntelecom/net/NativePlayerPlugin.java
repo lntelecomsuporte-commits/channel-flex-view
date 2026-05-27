@@ -3,7 +3,7 @@ package tv.lntelecom.net;
 import android.graphics.Color;
 import android.os.Handler;
 import android.os.Looper;
-import android.view.SurfaceView;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
@@ -210,7 +210,8 @@ public class NativePlayerPlugin extends Plugin {
                 .build();
 
         decor = (FrameLayout) getActivity().findViewById(android.R.id.content);
-        playerView = new PlayerView(getContext());
+        playerView = (PlayerView) LayoutInflater.from(getContext())
+                .inflate(R.layout.exo_texture_player_view, decor, false);
         playerView.setPlayer(player);
         playerView.setUseController(false);
         playerView.setBackgroundColor(Color.BLACK);
@@ -220,11 +221,6 @@ public class NativePlayerPlugin extends Plugin {
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT);
         decor.addView(playerView, 0, lp);
-
-        View videoSurface = playerView.getVideoSurfaceView();
-        if (videoSurface instanceof SurfaceView) {
-            ((SurfaceView) videoSurface).setZOrderMediaOverlay(true);
-        }
 
         player.addAnalyticsListener(new AnalyticsListener() {
             @Override
