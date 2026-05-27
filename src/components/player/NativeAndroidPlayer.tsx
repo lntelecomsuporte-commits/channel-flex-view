@@ -15,7 +15,6 @@ interface Props {
   useProxyToken?: boolean;
   forceProxyNative?: boolean;
   backupStreamUrls?: string[] | null;
-  onStartupTimeout?: () => void;
 }
 
 const detectType = (url: string): NativeStreamType => {
@@ -28,12 +27,12 @@ const detectType = (url: string): NativeStreamType => {
  * Player nativo Android (ExoPlayer/Media3) via Capacitor.
  * Substitui o <video> do WebView para eliminar o ícone/flash entre zaps.
  *
- * O TextureView do ExoPlayer fica ATRÁS do WebView (que o plugin torna
- * transparente só após o 1º frame e devolve a preto em stop()/destroy()).
+ * O SurfaceView do ExoPlayer fica ATRÁS do WebView (que o plugin torna
+ * transparente em load() e devolve a preto em stop()/destroy()).
  * Toda a UI (controles, EPG, OSD) continua sendo HTML por cima.
  */
 const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
-  ({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, forceProxyNative = false, backupStreamUrls = null, onStartupTimeout }, ref) => {
+  ({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, forceProxyNative = false, backupStreamUrls = null }, ref) => {
     const [backupIndex, setBackupIndex] = useState(-1);
     const backups = backupStreamUrls?.filter((u) => !!u && u.trim().length > 0) ?? [];
     const activeStreamUrl = backupIndex < 0 ? streamUrl : (backups[backupIndex] ?? streamUrl);
@@ -49,23 +48,8 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
 
     // Reset backup ao mudar canal principal.
     useEffect(() => {
-      setFirstFrameReady(false);
-      setLastError(null);
       setBackupIndex(-1);
     }, [streamUrl]);
-
-    useEffect(() => {
-      setFirstFrameReady(false);
-      setLastError(null);
-    }, [activeStreamUrl]);
-
-    useEffect(() => {
-      if (firstFrameReady || lastError) return;
-      const t = setTimeout(() => {
-        onStartupTimeout?.();
-      }, 10_000);
-      return () => clearTimeout(t);
-    }, [firstFrameReady, lastError, activeStreamUrl, onStartupTimeout]);
 
     // Listeners de eventos do player nativo.
     useEffect(() => {
@@ -142,7 +126,7 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
       };
     }, []);
 
-    // Placeholder transparente — o vídeo real está no TextureView nativo
+    // Placeholder transparente — o vídeo real está no SurfaceView nativo
     // POR BAIXO do WebView. Mostramos só o spinner quando ainda sem 1º frame.
     return (
       <>
