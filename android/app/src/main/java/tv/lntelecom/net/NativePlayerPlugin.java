@@ -218,6 +218,16 @@ public class NativePlayerPlugin extends Plugin {
                 .inflate(R.layout.exo_texture_player_view, decor, false);
         playerView.setPlayer(player);
 
+        // SurfaceView no overlay plane (mesma técnica de APKs nativos de IPTV).
+        // Necessário em TV boxes baratas (Allwinner/Rockchip) onde TextureView
+        // dá tela preta. setZOrderMediaOverlay(true) coloca a Surface acima do
+        // background da janela mas abaixo da WebView — combinado com WebView
+        // transparente, o vídeo aparece e os controles HTML ficam por cima.
+        View surface = playerView.getVideoSurfaceView();
+        if (surface instanceof SurfaceView) {
+            ((SurfaceView) surface).setZOrderMediaOverlay(true);
+        }
+
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT);
