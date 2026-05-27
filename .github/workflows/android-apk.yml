@@ -6,11 +6,6 @@ on:
     paths:
       - 'android/**'
       - 'resources/**'
-      - 'src/**'
-      - 'public/**'
-      - 'index.html'
-      - 'vite.config.ts'
-      - 'tailwind.config.ts'
       - 'capacitor.config.ts'
       - 'package.json'
       - 'package-lock.json'
