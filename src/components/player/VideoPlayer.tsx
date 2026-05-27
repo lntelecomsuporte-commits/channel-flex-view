@@ -52,18 +52,34 @@ export interface VideoPlayerHandle {
 // Detecta APK Android (não vale pra iOS nem Web) — nesses casos roteia pro
 // player nativo ExoPlayer/Media3 via plugin Capacitor, que elimina o ícone/
 // flash do WebView entre zaps de canal.
-// Desativado por padrão: em alguns TV boxes o WebView fica preto após login
-// quando o TextureView nativo entra por baixo. Mantemos o HTML5 como caminho
-// seguro até validarmos o ExoPlayer nesses aparelhos.
-const ENABLE_ANDROID_NATIVE_PLAYER = false;
+//
+// ExoPlayer fica ATIVO por padrão. Em devices conhecidos por dar tela preta
+// (TextureView por baixo do WebView não compõe), entra na denylist abaixo e
+// cai pro HTML5/HLS automaticamente. Adicione padrões do userAgent conforme
+// novos aparelhos forem identificados.
+const ANDROID_NATIVE_PLAYER_DENYLIST: RegExp[] = [
+  // Exemplos (descomente/edite conforme necessário):
+  // /MiBox/i,           // Xiaomi Mi Box S
+  // /AFT[A-Z0-9]+/i,    // Fire TV
+  // /BRAVIA/i,          // Sony Bravia
+];
 
 const isAndroidNativePlatform = () =>
   Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
 
+const isDeviceDenylistedForNativePlayer = () => {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  return ANDROID_NATIVE_PLAYER_DENYLIST.some((re) => re.test(ua));
+};
+
+const shouldUseAndroidNativePlayer = () =>
+  isAndroidNativePlatform() && !isDeviceDenylistedForNativePlayer();
+
 const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>((props, ref) => {
   const [nativeFallback, setNativeFallback] = useState(false);
 
-  if (ENABLE_ANDROID_NATIVE_PLAYER && isAndroidNativePlatform() && !nativeFallback) {
+  if (shouldUseAndroidNativePlayer() && !nativeFallback) {
     return <NativeAndroidPlayer ref={ref} {...props} onStartupTimeout={() => setNativeFallback(true)} />;
   }
   return <HlsVideoPlayer ref={ref} {...props} />;
