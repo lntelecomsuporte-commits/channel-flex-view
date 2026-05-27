@@ -226,6 +226,14 @@ public class NativePlayerPlugin extends Plugin {
             public void onDroppedVideoFrames(AnalyticsListener.EventTime eventTime, int droppedFrames, long elapsedMs) {
                 droppedFramesTotal += droppedFrames;
             }
+
+            @Override
+            public void onRenderedFirstFrame(AnalyticsListener.EventTime eventTime, Object output, long renderTimeMs) {
+                setWebViewTransparent(true);
+                JSObject data = new JSObject();
+                data.put("state", player != null ? player.getPlaybackState() : Player.STATE_READY);
+                notifyListeners("playing", data);
+            }
         });
 
         player.addListener(new Player.Listener() {
@@ -240,14 +248,6 @@ public class NativePlayerPlugin extends Plugin {
                 } else if (state == Player.STATE_ENDED) {
                     notifyListeners("ended", data);
                 }
-            }
-
-            @Override
-            public void onRenderedFirstFrame() {
-                setWebViewTransparent(true);
-                JSObject data = new JSObject();
-                data.put("state", player != null ? player.getPlaybackState() : Player.STATE_READY);
-                notifyListeners("playing", data);
             }
 
             @Override
