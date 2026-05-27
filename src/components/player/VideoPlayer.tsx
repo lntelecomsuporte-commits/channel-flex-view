@@ -4,8 +4,7 @@ import mpegts from "mpegts.js";
 import { getPlayableStreamUrl, resolveChannelStreamUrl, buildProxyStreamUrl, isProxiedStreamUrl, resolveRedirects } from "@/lib/stream";
 import { Capacitor } from "@capacitor/core";
 import { extractYouTubeVideoId } from "@/lib/youtube";
-import { getDeviceProfile } from "@/lib/deviceProfile";
-import { isAndroidNativeRuntime, isLegacyApkRuntime } from "@/lib/runtime";
+
 import YouTubePlayer from "./YouTubePlayer";
 import NativeAndroidPlayer from "./NativeAndroidPlayer";
 
@@ -50,8 +49,14 @@ export interface VideoPlayerHandle {
   getHls: () => Hls | null;
 }
 
+// Detecta APK Android (não vale pra iOS nem Web) — nesses casos roteia pro
+// player nativo ExoPlayer/Media3 via plugin Capacitor, que elimina o ícone/
+// flash do WebView entre zaps de canal.
+const isAndroidNativePlatform = () =>
+  Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
+
 const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>((props, ref) => {
-  if (isAndroidNativeRuntime()) {
+  if (isAndroidNativePlatform()) {
     return <NativeAndroidPlayer ref={ref} {...props} />;
   }
   return <HlsVideoPlayer ref={ref} {...props} />;
@@ -71,7 +76,6 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
   const [resolvedContentType, setResolvedContentType] = useState<string>("");
   const [corsFallback, setCorsFallback] = useState(false);
   const [firstFrameReady, setFirstFrameReady] = useState(false);
-  const [legacyNativeHlsFailed, setLegacyNativeHlsFailed] = useState(false);
   
   const [backupIndex, setBackupIndex] = useState(-1);
   const backups = backupStreamUrls?.filter((u) => !!u && u.trim().length > 0) ?? [];
@@ -110,7 +114,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
       let url: string;
       if (corsFallback) {
         url = buildProxyStreamUrl(activeStreamUrl) ?? getPlayableStreamUrl(activeStreamUrl);
-      } else if ((forceProxyNative && Capacitor.isNativePlatform()) || isLegacyApkRuntime()) {
+      } else if (forceProxyNative && Capacitor.isNativePlatform()) {
         url = buildProxyStreamUrl(activeStreamUrl) ?? getPlayableStreamUrl(activeStreamUrl);
       } else {
         url = getPlayableStreamUrl(activeStreamUrl);
@@ -158,7 +162,6 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     setBackupIndex(-1);
     setCorsFallback(false);
     setResolvedContentType("");
-    setLegacyNativeHlsFailed(false);
   }, [streamUrl]);
 
   // Se mudar de backup dentro do mesmo canal, cada URL precisa recomeçar limpa.
@@ -166,6 +169,23 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     setCorsFallback(false);
     setResolvedContentType("");
   }, [backupIndex]);
+
+  // SKIP PREVENTIVO (web only): URLs .ts brutas (MPEG-TS sem manifest HLS)
+  // são problemáticas no navegador — mpegts.js trava com mixed content (http://)
+  // e mesmo via hls-proxy a entrega chunked é instável. No APK Android o
+  // ExoPlayer engole sem problema. Se estamos na web, a URL ativa é .ts puro
+  // e existe ao menos um backup, pula direto sem perder ~10s tentando.
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) return;
+    if (!activeStreamUrl) return;
+    if (backupIndex >= backups.length - 1) return;
+    const isRawTs = /\.(ts|m2ts)(\?|$)/i.test(activeStreamUrl);
+    if (!isRawTs) return;
+    console.warn(`[Player] URL .ts não confiável na web — pulando pro backup: ${activeStreamUrl}`);
+    setBackupIndex(backupIndex + 1);
+  }, [activeStreamUrl, backupIndex, backups.length]);
+
+
 
   // Tenta avançar para a próxima URL de backup. Retorna true se houve avanço.
   const tryNextBackup = (): boolean => {
@@ -199,7 +219,6 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
 
     // Detecta engine pela extensão da URL: .m3u8 → hls.js, resto → tag <video>.
     const engine = detectEngine(playableStreamUrl, activeStreamUrl, resolvedContentType);
-    const useLegacyNativeHls = isLegacyApkRuntime() && engine === "hls" && !legacyNativeHlsFailed;
     console.log(`[Player] engine=${engine} url=${playableStreamUrl.slice(0, 80)}...`);
 
     // === HOT-SWAP: reusa instância Hls entre zaps (ganho ~200-400ms) ===
@@ -256,29 +275,21 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     };
     video.addEventListener("error", handleVideoError);
 
-    if (engine === "hls" && !useLegacyNativeHls && !isAppleDevice && Hls.isSupported()) {
-      const profile = getDeviceProfile();
-      const isWeak = profile.weak;
+    if (engine === "hls" && !isAppleDevice && Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
-        // Live low-latency: reduz tempo até 1º frame em ~150-300ms.
-        // Em devices fracos mantém modo padrão (decoder não acompanha LL).
-        lowLatencyMode: !isWeak,
+        lowLatencyMode: true,
         // === Fast channel zap ===
-        // liveSyncDurationCount: 1 = começa playback assim que o 1º segmento
-        // do live edge chega. Antes (2-3) esperava 2-3 segmentos completos
-        // antes do 1º frame — explicava boa parte dos ~2s no zap.
-        liveSyncDurationCount: isWeak ? 2 : 1,
-        liveMaxLatencyDurationCount: isWeak ? 10 : 5,
-        startLevel: 0,                              // 1ª qualidade = mais baixa → 1º frame rápido
-        startFragPrefetch: true,                    // pre-busca seg #0 enquanto manifest processa
-        backBufferLength: isWeak ? 10 : 0,          // libera memória cedo (zap mais leve)
-        maxBufferLength: isWeak ? 20 : 6,           // buffer alvo enxuto = recover rápido
+        liveSyncDurationCount: 1,
+        liveMaxLatencyDurationCount: 5,
+        startLevel: 0,
+        startFragPrefetch: true,
+        backBufferLength: 0,
+        maxBufferLength: 6,
         maxMaxBufferLength: 30,
-        maxBufferSize: 30 * 1000 * 1000,            // 30MB
-        maxBufferHole: 0.3,                         // pula gaps menores rápido
+        maxBufferSize: 30 * 1000 * 1000,
+        maxBufferHole: 0.3,
         nudgeMaxRetry: 5,
-        // Retries: agressivos mas com cap pra não emperrar em segmento podre.
         fragLoadingMaxRetry: 3,
         fragLoadingRetryDelay: 500,
         fragLoadingMaxRetryTimeout: 6000,
@@ -289,7 +300,6 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         levelLoadingMaxRetry: 4,
         levelLoadingRetryDelay: 400,
         levelLoadingMaxRetryTimeout: 12000,
-        // ABR conservador: sobe devagar pra não reflickar logo após startLevel:0
         abrEwmaDefaultEstimate: 500000,
         abrBandWidthFactor: 0.85,
         abrBandWidthUpFactor: 0.6,
@@ -299,31 +309,6 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
       hls.loadSource(playableStreamUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        // Plano A+: cap de qualidade em devices fracos.
-        // Procura o maior nível com altura <= maxHeight (ex: 720p).
-        if (profile.maxHeight && hls.levels?.length) {
-          let capIdx = -1;
-          let capHeight = 0;
-          hls.levels.forEach((lvl, idx) => {
-            const h = lvl.height || 0;
-            if (h <= profile.maxHeight! && h > capHeight) {
-              capHeight = h;
-              capIdx = idx;
-            }
-          });
-          if (capIdx >= 0) {
-            hls.autoLevelCapping = capIdx;
-            console.log(`[HLS] Device fraco — cap em ${capHeight}p (level ${capIdx})`);
-          } else {
-            // Single-bitrate ou só tem qualidades acima do cap → força a menor
-            const minIdx = hls.levels.reduce(
-              (acc, lvl, idx) => (lvl.height < hls.levels[acc].height ? idx : acc),
-              0,
-            );
-            hls.autoLevelCapping = minIdx;
-            console.warn(`[HLS] Device fraco — sem nível <=${profile.maxHeight}p, forçando menor (${hls.levels[minIdx].height || "?"}p)`);
-          }
-        }
         if (autoPlay) video.play().catch(() => {});
       });
 
@@ -498,9 +483,8 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         const result = tsPlayer.play();
         if (result instanceof Promise) result.catch(() => {});
       }
-    } else if (engine === "native" || useLegacyNativeHls || (engine === "hls" && isAppleDevice && video.canPlayType("application/vnd.apple.mpegurl"))) {
-      // Player nativo: MP4 progressivo, HLS no Safari/iOS (AirPlay) ou
-      // Legacy APK primeiro tenta o pipeline HLS nativo do WebView antigo.
+    } else if (engine === "native" || (engine === "hls" && isAppleDevice && video.canPlayType("application/vnd.apple.mpegurl"))) {
+      // Player nativo: MP4 progressivo ou HLS no Safari/iOS (AirPlay).
       currentEngineRef.current = "native";
       video.src = playableStreamUrl;
       if (autoPlay) video.play().catch(() => {});
@@ -519,11 +503,6 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     let noDataSince: number | null = null;
     const triggerReload = (reason: string) => {
       console.warn(`[Watchdog] ${reason} — recarregando stream`);
-      if (useLegacyNativeHls) {
-        console.warn("[Legacy] HLS nativo sem imagem — alternando para hls.js");
-        setLegacyNativeHlsFailed(true);
-        return;
-      }
       lastTimeCheckedAt = Date.now();
       noDataSince = null;
       if (hlsRef.current) {
@@ -573,7 +552,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
       // NÃO destrói hlsRef/mpegtsRef aqui — o hot-swap reusa a instância
       // entre zaps. Cleanup real acontece no useEffect de unmount abaixo.
     };
-  }, [playableStreamUrl, autoPlay, activeStreamUrl, proxyTokenFailure, resolvedContentType, legacyNativeHlsFailed]);
+  }, [playableStreamUrl, autoPlay, activeStreamUrl, proxyTokenFailure, resolvedContentType]);
 
   // Unmount: derruba engines persistentes (hot-swap mantinha entre zaps).
   useEffect(() => {

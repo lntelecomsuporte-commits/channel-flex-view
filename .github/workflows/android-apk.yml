@@ -197,27 +197,13 @@ jobs:
           grep minSdkVersion android/variables.gradle
           npx cap sync android
           python3 - <<'PY'
-          import re
           from pathlib import Path
           manifest = Path('android/app/src/main/AndroidManifest.xml')
           text = manifest.read_text()
-          # Remove the standalone LegacyMainActivity <activity> block (and any
-          # preceding XML comment) to avoid duplicate-activity errors after we
-          # rename MainActivity → LegacyMainActivity below.
-          text = re.sub(
-              r'\n\s*(<!--[^<]*?-->\s*)?<activity\b[^>]*android:name="\.LegacyMainActivity"[\s\S]*?</activity>\n',
-              '\n',
-              text,
-          )
-          # Also remove the versioned TvLauncherActivity block — it extends
-          # MainActivity in the main APK; for legacy we regenerate it below
-          # extending LegacyMainActivity, and the manifest entry stays valid
-          # because the class name is unchanged.
           text = text.replace('android:name=".MainActivity"', 'android:name=".LegacyMainActivity"', 1)
           text = text.replace('android:theme="@style/AppTheme.NoActionBarLaunch"', 'android:theme="@style/AppTheme.LegacyLaunch"', 1)
           manifest.write_text(text)
           PY
-
           cat > "android/app/src/main/java/tv/lntelecom/net/TvLauncherActivity${VERSION_CODE}.java" <<EOF
           package tv.lntelecom.net;
 

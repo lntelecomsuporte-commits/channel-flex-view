@@ -61,36 +61,6 @@
 
         </activity>
 
-        <!--
-          Activity Legacy: WebView puro (sem Capacitor / sem ExoPlayer nativo),
-          carrega https://tv2.lntelecom.net/ direto. Serve como canal de teste
-          para receptores problemáticos (TVSTICK / titan_p1 / Allwinner kernel
-          4.9.x) onde o player nativo dá tela preta. O usuário escolhe no
-          launcher: "LN TV" (principal) ou "LN TV Legacy".
-        -->
-        <activity
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
-            android:name=".LegacyMainActivity"
-            android:label="LN TV Legacy"
-            android:theme="@style/AppTheme.NoActionBarLaunch"
-            android:launchMode="singleTask"
-            android:windowSoftInputMode="adjustResize|stateHidden"
-            android:enabled="true"
-            android:exported="true"
-            android:icon="@drawable/ic_launcher_tv"
-            android:logo="@drawable/tv_launcher_logo"
-            android:banner="@drawable/tv_banner"
-            android:roundIcon="@drawable/ic_launcher_tv">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
-            </intent-filter>
-        </activity>
-
         <!-- Foreground service que segura o processo enquanto o usuário está vendo TV.
              Sem isso o Android low-memory-killer fecha o app depois de horas em ocioso. -->
         <service
