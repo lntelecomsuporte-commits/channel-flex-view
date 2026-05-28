@@ -125,8 +125,8 @@ class SupabaseClient(
         if (!d.ok) return false
         return try {
             val obj = JSONObject(d.body.substringAfter("\n", d.body))
-            val tok = obj.optString("access_token").takeIf { it.isNotEmpty() } ?: return false
-            saveSession(tok, obj.optString("refresh_token").takeIf { it.isNotEmpty() }, obj.optJSONObject("user")?.optString("id"), obj.optLong("expires_in", 3600))
+            val tok = obj.sessionToken("access_token") ?: return false
+            saveSession(tok, obj.sessionToken("refresh_token"), obj.sessionUserId(), obj.optLong("expires_in", 3600))
             true
         } catch (_: Exception) { false }
     }
@@ -159,6 +159,8 @@ class SupabaseClient(
         if (tok.isNullOrEmpty()) {
             // Se o backend só confirmou que o aparelho já está vinculado, entra pela sessão do device.
             if (deviceAutoLogin(deviceId, deviceName, appVersion)) return true to null
+            // Fallback final: email/senha normal. O vínculo já foi validado pelo device-login OK.
+            if (email.contains("@") && signInPassword(email, password)) return true to null
             return false to "Resposta sem access_token"
         }
         saveSession(tok, obj.sessionToken("refresh_token"), obj.sessionUserId())
@@ -169,6 +171,10 @@ class SupabaseClient(
         login: String, password: String,
         deviceId: String, deviceName: String, appVersion: String,
     ): Pair<Boolean, String?> {
+        // Se o aparelho já está vinculado no painel, não depende mais da senha digitada.
+        // Isso evita ficar preso em "Resposta sem access_token" quando o backend confirma vínculo.
+        if (deviceAutoLogin(deviceId, deviceName, appVersion)) return true to null
+
         var lastResult: Pair<Boolean, String?> = false to "Login vazio"
         for ((idx, candidate) in loginCandidates(login).withIndex()) {
             val label = if (candidate == login.trim().lowercase()) candidate else "$candidate (CPF→email)"

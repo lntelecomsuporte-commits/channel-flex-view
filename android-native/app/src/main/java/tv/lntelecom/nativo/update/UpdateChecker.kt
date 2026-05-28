@@ -22,17 +22,22 @@ class UpdateChecker(private val ctx: Context, private val http: OkHttpClient) {
     data class Update(val versionCode: Int, val versionName: String, val url: String)
 
     fun check(currentVersionCode: Int): Update? {
-        return try {
-            val req = Request.Builder().url("${App.BACKEND}/version.json").get().build()
-            http.newCall(req).execute().use { res ->
-                if (!res.isSuccessful) return null
-                val obj = JSONObject(res.body?.string() ?: return null)
-                val vc = obj.optInt("nativoVersionCode", -1)
-                val vn = obj.optString("nativoVersionName", "")
-                val url = obj.optString("nativoUrl", "")
-                if (vc > currentVersionCode && url.isNotEmpty()) Update(vc, vn, url) else null
+        for (path in listOf("version-nativo.json", "version.json")) {
+            try {
+                val req = Request.Builder().url("${App.BACKEND}/$path").get().build()
+                http.newCall(req).execute().use { res ->
+                    if (!res.isSuccessful) return@use
+                    val obj = JSONObject(res.body?.string() ?: return@use)
+                    val vc = obj.optInt("nativoVersionCode", -1)
+                    val vn = obj.optString("nativoVersionName", "")
+                    val url = obj.optString("nativoUrl", "")
+                    if (vc > currentVersionCode && url.isNotEmpty()) return Update(vc, vn, url)
+                }
+            } catch (_: Exception) {
+                // Tenta o próximo endpoint.
             }
-        } catch (_: Exception) { null }
+        }
+        return null
     }
 
     fun download(update: Update): File? {

@@ -68,6 +68,17 @@ jobs:
           VERSION_NAME: ${{ env.VERSION_NAME }}
         run: ./gradlew assembleRelease --no-daemon --stacktrace
 
+      - name: Write native update metadata
+        run: |
+          mkdir -p ../out
+          cat > ../out/version-nativo.json <<EOF
+          {
+            "nativoVersionCode": ${VERSION_CODE},
+            "nativoVersionName": "${VERSION_NAME}",
+            "nativoUrl": "https://tv2.lntelecom.net/downloads/lntv-nativo.apk"
+          }
+          EOF
+
 
       - name: Stage APK + show size
         run: |
@@ -84,7 +95,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lntv-nativo-apk
-          path: out/*.apk
+          path: |
+            out/*.apk
+            out/version-nativo.json
           retention-days: 30
 
       - name: Attach to GitHub Release
@@ -102,5 +115,6 @@ jobs:
           files: |
             out/lntv-nativo.apk
             out/lntv-nativo-${{ env.VERSION_CODE }}.apk
+            out/version-nativo.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
