@@ -1,49 +1,32 @@
+# Lista de canais vazia em WebView antiga
+
 ## Diagnóstico
 
-Você está certo: o preto acontece **antes da lista de canais**, então não é o player. O fluxo após `navigate("/")` é:
+Na TV com WebView antiga (a mesma onde adicionamos o polyfill `crypto.randomUUID`), ao apertar OK 2x:
 
-```
-LoginPage.doLogin() → setSession() → navigate("/")
-  → ProtectedRoute (useAuth.getSession + has_role RPC)
-    → Index → PlayerPage (useChannels + useEPG + useFavorites + …)
-```
+- O **cabeçalho** da lista aparece ("Canais · ↑↓ navegar/solte abre · ←→ ±5 · OK selecionar · segure OK favoritar · ESC fechar") — então o componente `ChannelList` monta e o keyboard listener funciona (por isso ←→ e troca de canal funcionam).
+- A **área da lista virtualizada** (`FixedSizeList` do `react-window`) fica em branco.
 
-Qualquer erro JS não tratado em qualquer ponto desse pipeline deixa a tela preta sem feedback nenhum — exatamente o que você descreve.
+A lista só é renderizada quando `listSize.height > 0` (em `src/components/player/ChannelList.tsx`, linha 565). Esse valor vem de `containerRef.current.clientHeight`, medido em `useLayoutEffect` com `ResizeObserver`.
 
-**Hipóteses prováveis** nos receptores pirata (Android TV box 5/6/7 com Chromium velho):
+Na WebView antiga (Chromium < 92), o cálculo `flex: 1 1 0% + min-height: 0` dentro de um pai `absolute inset-0 flex flex-col` pode retornar `clientHeight = 0` no primeiro paint. Como o tamanho fica em 0 "estável", o `ResizeObserver` nunca dispara de novo — a lista fica permanentemente escondida.
 
-1. **Bundle ES2017 sem polyfills** — `vite.config.ts` está em `target: "es2017"` e o plugin legacy **só roda com `BUILD_LEGACY=1`**. O `lntv-latest.apk` hoje **não** usa legacy, então features modernas (top-level await em chunks dinâmicos, certas APIs) podem quebrar no WebView antigo.
-2. **Erro silencioso em algum hook do boot** (useChannels, useEPG, useFavorites, session-heartbeat) — qualquer throw síncrono no render mata a árvore React e gera tela preta.
-3. **Capacitor Preferences** travando além do timeout em algum modelo específico.
+## Plano de correção
 
-Sem um overlay de erro visível, é cego — por isso a v216 "parecia funcionar": pode ter sido coincidência de qual chunk o WebView aguentou.
+Tornar a medição de altura robusta para WebViews antigas, mantendo o comportamento atual nas modernas. Mudanças apenas em `src/components/player/ChannelList.tsx`:
 
-## Plano
+1. **Fallback de altura via `window.innerHeight`** — se após a primeira medição o container reportar `clientHeight === 0`, usar `window.innerHeight - alturaDoHeader` como altura efetiva da lista. Garante que algo renderize mesmo com layout flex quebrado.
 
-### 1. Overlay global de erro (instalado no `index.html`, antes do bundle React)
-Captura `window.onerror` + `unhandledrejection` + erro de carregamento de `<script>` e mostra **na tela** (não só no console, que ninguém vê no APK). Inclui também um indicador "boot step" que vai mudando (`auth-storage → session → channels → ready`) — se travar, sabemos exatamente onde.
+2. **Retry com `requestAnimationFrame`** — re-medir no próximo frame e em um `setTimeout(100ms)` depois do mount, cobrindo o caso em que o layout do flex só estabiliza depois do paint inicial na WebView antiga.
 
-### 2. Forçar build legacy no APK principal
-Mudar o workflow `android-apk.yml` pra rodar `BUILD_LEGACY=1 npm run build` **antes** de gerar o `lntv-latest.apk` (não só o legacy). Custo: build ~2min mais lento. Benefício: o mesmo APK roda em Chrome 49+ (Android 5+) sem precisar de APK separado.
+3. **Altura mínima explícita no container da lista** — adicionar `style={{ minHeight: 0, height: '100%' }}` ao wrapper que recebe o `containerRef`, reforçando o cálculo da altura em layouts flex problemáticos.
 
-### 3. Error Boundary React no topo
-Envelopar `<App/>` num ErrorBoundary que renderiza a mensagem do erro + stack na tela em vez de retornar `null` (que vira preto).
+4. **Polling defensivo enquanto altura == 0** — se após 3 tentativas o `clientHeight` continuar 0, parar de tentar e usar o fallback de `window.innerHeight` permanentemente naquela sessão.
 
-### 4. Pedir info do device (próxima mensagem)
-Pra fechar o diagnóstico: marca/modelo do receptor + versão Android (Configurações → Sobre). Com o overlay instalado, você manda print da tela e a gente vê o erro real.
+Nada na lógica de teclado, EPG, favoritos ou navegação muda. É puramente medição de layout.
 
-## Arquivos afetados
+## Verificação
 
-- `index.html` — script inline de captura de erros + boot stepper visível
-- `src/main.tsx` — emite eventos de boot step + ErrorBoundary
-- `src/App.tsx` — wrap em ErrorBoundary
-- `src/components/ErrorBoundary.tsx` — novo
-- `.github/workflows/android-apk.yml` — `BUILD_LEGACY=1` no build do APK principal
-
-## Sem mudanças
-
-- Player nativo, fluxo de login, edge functions, RLS — nada disso é tocado. É puramente instrumentação + compat de build.
-
-## Resultado esperado
-
-Próximo APK que você instalar: se travar de novo, **aparece texto vermelho na tela** com o erro exato (ex: "TypeError: Object.hasOwn is not a function at chunk-XYZ.js:42") em vez de preto. Com isso fechamos o problema em 1 iteração.
+Após o build e instalação do APK na TV problemática:
+- Apertar OK 2x → lista de canais deve aparecer preenchida.
+- Confirmar que TVs modernas (Fire TV, etc.) continuam com o mesmo comportamento (a medição via `ResizeObserver` segue como caminho preferencial).
