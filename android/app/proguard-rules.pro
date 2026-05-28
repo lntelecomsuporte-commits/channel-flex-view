@@ -1,21 +1,41 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
+# ProGuard / R8 rules para LN TV
 #
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# Capacitor + plugins usam reflection no startup pra registrar pontes JS<->Java.
+# Sem essas regras, R8 remove classes "não usadas" e o app crasha no boot.
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Preserve line numbers for stack traces
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
+-keepattributes *Annotation*, Signature, Exceptions, InnerClasses, EnclosingMethod
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# === Capacitor core + bridge ===
+-keep class com.getcapacitor.** { *; }
+-keep @com.getcapacitor.annotation.CapacitorPlugin class * { *; }
+-keepclassmembers class * {
+  @com.getcapacitor.PluginMethod public *;
+}
+-keep class com.capacitorjs.** { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# === Capacitor community plugins ===
+-keep class io.capawesome.capacitorjs.** { *; }
+-keep class com.capacitor.community.** { *; }
+
+# === AndroidX Media3 / ExoPlayer ===
+-keep class androidx.media3.** { *; }
+-dontwarn androidx.media3.**
+
+# === Nossos plugins nativos e Activities ===
+-keep class tv.lntelecom.net.** { *; }
+
+# === Cordova fallback (se houver plugins legacy) ===
+-keep class org.apache.cordova.** { *; }
+-keep class org.crosswalk.engine.** { *; }
+
+# === WebView JS interface (genérico) ===
+-keepclassmembers class * {
+  @android.webkit.JavascriptInterface <methods>;
+}
+
+# === Suprimir warnings ===
+-dontwarn com.getcapacitor.**
+-dontwarn org.apache.cordova.**
