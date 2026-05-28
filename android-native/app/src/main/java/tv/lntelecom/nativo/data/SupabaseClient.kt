@@ -12,7 +12,7 @@ import org.json.JSONObject
  * Bate em https://tv2.lntelecom.net/auth/v1 e /rest/v1 — mesma API do frontend web.
  */
 class SupabaseClient(
-    private val http: OkHttpClient,
+    val http: OkHttpClient,
     private val baseUrl: String,
     private val anonKey: String,
     private val prefs: Prefs
@@ -38,7 +38,6 @@ class SupabaseClient(
 
     // --- AUTH ---
 
-    /** POST /auth/v1/token?grant_type=password */
     fun signInPassword(email: String, password: String): Boolean {
         val body = json(mapOf("email" to email, "password" to password))
         val req = Request.Builder()
@@ -52,14 +51,12 @@ class SupabaseClient(
             val obj = JSONObject(res.body?.string() ?: return false)
             prefs.accessToken = obj.optString("access_token").takeIf { it.isNotEmpty() } ?: return false
             prefs.refreshToken = obj.optString("refresh_token")
-            val expiresIn = obj.optLong("expires_in", 3600)
-            prefs.expiresAt = System.currentTimeMillis() + expiresIn * 1000L
+            prefs.expiresAt = System.currentTimeMillis() + obj.optLong("expires_in", 3600) * 1000L
             prefs.userId = obj.optJSONObject("user")?.optString("id")
             return true
         }
     }
 
-    /** POST /auth/v1/token?grant_type=refresh_token */
     fun refreshSession(): Boolean {
         val refresh = prefs.refreshToken ?: return false
         val body = json(mapOf("refresh_token" to refresh))
@@ -85,9 +82,7 @@ class SupabaseClient(
         }
     }
 
-    fun signOut() {
-        prefs.clearSession()
-    }
+    fun signOut() { prefs.clearSession() }
 
     // --- REST ---
 
@@ -97,7 +92,22 @@ class SupabaseClient(
         return http.newCall(req).execute()
     }
 
-    /** Chama uma edge function. */
+    fun insert(table: String, row: Map<String, Any?>): Response {
+        ensureFreshSession()
+        val req = baseRequest("$restUrl/$table")
+            .header("Content-Type", "application/json")
+            .header("Prefer", "return=minimal")
+            .post(json(row))
+            .build()
+        return http.newCall(req).execute()
+    }
+
+    fun delete(path: String): Response {
+        ensureFreshSession()
+        val req = baseRequest("$restUrl/$path").delete().build()
+        return http.newCall(req).execute()
+    }
+
     fun callFunction(name: String, body: Map<String, Any?>): Response {
         ensureFreshSession()
         val req = baseRequest("$functionsUrl/$name")
