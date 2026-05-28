@@ -110,13 +110,15 @@ Deno.serve(async (req) => {
           token_hash: linkData.properties.hashed_token,
           type: "magiclink",
         });
-        if (otpErr || !otpData?.session?.access_token || !otpData?.user?.id) {
+        const session = otpData?.session;
+        const user = otpData?.user ?? session?.user;
+        if (otpErr || !session?.access_token || !user?.id) {
           return json({ error: "Falha ao validar sessão: " + (otpErr?.message || "no session") }, 500);
         }
-        userId = otpData.user.id;
-        accessToken = otpData.session.access_token;
-        refreshToken = otpData.session.refresh_token;
-        authUser = otpData.user;
+        userId = user.id;
+        accessToken = session.access_token;
+        refreshToken = session.refresh_token;
+        authUser = user;
       }
     }
 
