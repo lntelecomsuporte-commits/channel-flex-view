@@ -19,4 +19,4 @@
 
 # Activities/services pra evitar StripException no install
 -keep class tv.lntelecom.nativo.ui.** { *; }
--keep class tv.lntelecom.nativo.UpdateInstallActivity { *; }
+-keep class tv.lntelecom.nativo.update.UpdateInstallActivity { *; }
