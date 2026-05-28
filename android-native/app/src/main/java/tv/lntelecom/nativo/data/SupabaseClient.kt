@@ -8,9 +8,10 @@ import okhttp3.Response
 import org.json.JSONObject
 
 /**
- * Cliente Supabase REST direto contra o backend self-hosted, sem WebView.
- * Bate em https://tv2.lntelecom.net/auth/v1 e /rest/v1 — mesma API do frontend web.
+ * Resultado HTTP cru pra debug visual no login.
  */
+data class HttpDebug(val ok: Boolean, val status: Int, val body: String, val error: String? = null)
+
 class SupabaseClient(
     val http: OkHttpClient,
     private val baseUrl: String,
@@ -20,6 +21,10 @@ class SupabaseClient(
     val authUrl = "$baseUrl/auth/v1"
     val restUrl = "$baseUrl/rest/v1"
     val functionsUrl = "$baseUrl/functions/v1"
+
+    /** Último debug HTTP capturado (para exibição na tela). */
+    @Volatile var lastDebug: HttpDebug? = null
+        private set
 
     private fun json(map: Map<String, Any?>): okhttp3.RequestBody {
         val obj = JSONObject()
@@ -36,8 +41,6 @@ class SupabaseClient(
         return b
     }
 
-    // --- AUTH ---
-
     private fun saveSession(accessToken: String, refreshToken: String?, userId: String?, expiresIn: Long = 3600) {
         prefs.accessToken = accessToken
         prefs.refreshToken = refreshToken
@@ -45,140 +48,114 @@ class SupabaseClient(
         if (!userId.isNullOrEmpty()) prefs.userId = userId
     }
 
-    /** Fallback direto via /auth/v1/token (sem registro de device). */
+    private fun execDebug(req: Request, label: String): HttpDebug {
+        return try {
+            http.newCall(req).execute().use { res ->
+                val body = res.body?.string().orEmpty()
+                val d = HttpDebug(res.isSuccessful, res.code, body.take(800))
+                lastDebug = d.copy(body = "[$label] HTTP ${res.code}\n${d.body}")
+                d
+            }
+        } catch (e: Exception) {
+            val d = HttpDebug(false, -1, "", e.message ?: e.javaClass.simpleName)
+            lastDebug = d.copy(body = "[$label] EXCEPTION: ${d.error}")
+            d
+        }
+    }
+
     fun signInPassword(email: String, password: String): Boolean {
-        val body = json(mapOf("email" to email, "password" to password))
         val req = Request.Builder()
             .url("$authUrl/token?grant_type=password")
             .header("apikey", anonKey)
             .header("Content-Type", "application/json")
-            .post(body)
+            .post(json(mapOf("email" to email, "password" to password)))
             .build()
-        http.newCall(req).execute().use { res ->
-            if (!res.isSuccessful) return false
-            val obj = JSONObject(res.body?.string() ?: return false)
+        val d = execDebug(req, "auth/token")
+        if (!d.ok) return false
+        return try {
+            val obj = JSONObject(d.body.substringAfter("\n", d.body))
             val tok = obj.optString("access_token").takeIf { it.isNotEmpty() } ?: return false
-            saveSession(
-                tok,
-                obj.optString("refresh_token").takeIf { it.isNotEmpty() },
-                obj.optJSONObject("user")?.optString("id"),
-                obj.optLong("expires_in", 3600),
-            )
-            return true
-        }
+            saveSession(tok, obj.optString("refresh_token").takeIf { it.isNotEmpty() }, obj.optJSONObject("user")?.optString("id"), obj.optLong("expires_in", 3600))
+            true
+        } catch (_: Exception) { false }
     }
 
-    /**
-     * Login com password + registro do device via edge function device-login.
-     * Retorna Pair(ok, mensagemDeErro?).
-     */
     fun deviceLogin(
-        email: String,
-        password: String,
-        deviceId: String,
-        deviceName: String,
-        appVersion: String,
+        email: String, password: String,
+        deviceId: String, deviceName: String, appVersion: String,
     ): Pair<Boolean, String?> {
-        val payload = json(
-            mapOf(
-                "email" to email,
-                "password" to password,
-                "device_id" to deviceId,
-                "platform" to "android",
-                "device_name" to deviceName,
-                "app_version" to appVersion,
-            )
-        )
+        val payload = json(mapOf(
+            "email" to email, "password" to password,
+            "device_id" to deviceId, "platform" to "android",
+            "device_name" to deviceName, "app_version" to appVersion,
+        ))
         val req = Request.Builder()
             .url("$functionsUrl/device-login")
             .header("apikey", anonKey)
             .header("Authorization", "Bearer $anonKey")
             .header("Content-Type", "application/json")
-            .post(payload)
-            .build()
-        http.newCall(req).execute().use { res ->
-            val txt = res.body?.string().orEmpty()
-            val obj = try { JSONObject(txt) } catch (_: Exception) { JSONObject() }
-            if (!res.isSuccessful) {
-                return false to (obj.optString("error").takeIf { it.isNotEmpty() } ?: "HTTP ${res.code}")
-            }
-            val tok = obj.optString("access_token").takeIf { it.isNotEmpty() }
-                ?: return false to "Resposta inválida"
-            saveSession(
-                tok,
-                obj.optString("refresh_token").takeIf { it.isNotEmpty() },
-                obj.optJSONObject("user")?.optString("id"),
-            )
-            return true to null
+            .post(payload).build()
+        val d = execDebug(req, "device-login")
+        val raw = d.body.substringAfter("\n", d.body)
+        val obj = try { JSONObject(raw) } catch (_: Exception) { JSONObject() }
+        if (!d.ok) {
+            val msg = obj.optString("error").takeIf { it.isNotEmpty() }
+                ?: d.error
+                ?: "HTTP ${d.status}"
+            return false to msg
         }
+        val tok = obj.optString("access_token").takeIf { it.isNotEmpty() }
+            ?: return false to "Resposta sem access_token"
+        saveSession(tok, obj.optString("refresh_token").takeIf { it.isNotEmpty() }, obj.optJSONObject("user")?.optString("id"))
+        return true to null
     }
 
-    /** Beacon pending_devices. Retorna true se admin já vinculou (APK deve tentar auto-login). */
     fun deviceAnnounce(deviceId: String, deviceName: String, appVersion: String): Boolean {
-        val payload = json(
-            mapOf(
-                "device_id" to deviceId,
-                "platform" to "android",
-                "device_name" to deviceName,
-                "app_version" to appVersion,
-            )
-        )
+        val payload = json(mapOf(
+            "device_id" to deviceId, "platform" to "android",
+            "device_name" to deviceName, "app_version" to appVersion,
+        ))
         val req = Request.Builder()
             .url("$functionsUrl/device-announce")
             .header("apikey", anonKey)
             .header("Authorization", "Bearer $anonKey")
             .header("Content-Type", "application/json")
-            .post(payload)
-            .build()
+            .post(payload).build()
+        val d = execDebug(req, "device-announce")
+        if (!d.ok) return false
         return try {
-            http.newCall(req).execute().use { res ->
-                if (!res.isSuccessful) return false
-                val obj = JSONObject(res.body?.string() ?: return false)
-                obj.optBoolean("registered", false)
-            }
+            JSONObject(d.body.substringAfter("\n", d.body)).optBoolean("registered", false)
         } catch (_: Exception) { false }
     }
 
-    /** Autenticação sem senha (admin pré-vinculou o device). */
     fun deviceAutoLogin(deviceId: String, deviceName: String, appVersion: String): Boolean {
-        val payload = json(
-            mapOf(
-                "device_id" to deviceId,
-                "platform" to "android",
-                "device_name" to deviceName,
-                "app_version" to appVersion,
-            )
-        )
+        val payload = json(mapOf(
+            "device_id" to deviceId, "platform" to "android",
+            "device_name" to deviceName, "app_version" to appVersion,
+        ))
         val req = Request.Builder()
             .url("$functionsUrl/device-auto-login")
             .header("apikey", anonKey)
             .header("Authorization", "Bearer $anonKey")
             .header("Content-Type", "application/json")
-            .post(payload)
-            .build()
+            .post(payload).build()
+        val d = execDebug(req, "device-auto-login")
+        if (!d.ok) return false
         return try {
-            http.newCall(req).execute().use { res ->
-                if (!res.isSuccessful) return false
-                val obj = JSONObject(res.body?.string() ?: return false)
-                val tok = obj.optString("access_token").takeIf { it.isNotEmpty() } ?: return false
-                saveSession(
-                    tok,
-                    obj.optString("refresh_token").takeIf { it.isNotEmpty() },
-                    obj.optString("user_id").takeIf { it.isNotEmpty() },
-                )
-                true
-            }
+            val obj = JSONObject(d.body.substringAfter("\n", d.body))
+            val tok = obj.optString("access_token").takeIf { it.isNotEmpty() } ?: return false
+            saveSession(tok, obj.optString("refresh_token").takeIf { it.isNotEmpty() }, obj.optString("user_id").takeIf { it.isNotEmpty() })
+            true
         } catch (_: Exception) { false }
     }
 
     fun refreshSession(): Boolean {
         val refresh = prefs.refreshToken ?: return false
-        val body = json(mapOf("refresh_token" to refresh))
         val req = Request.Builder()
             .url("$authUrl/token?grant_type=refresh_token")
             .header("apikey", anonKey)
             .header("Content-Type", "application/json")
-            .post(body)
+            .post(json(mapOf("refresh_token" to refresh)))
             .build()
         http.newCall(req).execute().use { res ->
             if (!res.isSuccessful) { prefs.clearSession(); return false }
@@ -197,8 +174,6 @@ class SupabaseClient(
     }
 
     fun signOut() { prefs.clearSession() }
-
-    // --- REST ---
 
     fun get(path: String): Response {
         ensureFreshSession()

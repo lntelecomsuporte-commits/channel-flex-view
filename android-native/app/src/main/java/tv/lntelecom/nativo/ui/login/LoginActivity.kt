@@ -36,10 +36,12 @@ class LoginActivity : AppCompatActivity() {
                 val registered = withContext(Dispatchers.IO) {
                     try { sb.deviceAnnounce(deviceId, deviceName, appVersion) } catch (_: Exception) { false }
                 }
+                appendDebug("announce registered=$registered :: ${sb.lastDebug?.body}")
                 if (registered) {
                     val ok = withContext(Dispatchers.IO) {
                         try { sb.deviceAutoLogin(deviceId, deviceName, appVersion) } catch (_: Exception) { false }
                     }
+                    appendDebug("auto-login ok=$ok :: ${sb.lastDebug?.body}")
                     if (ok) { goToChannels(); return@launch }
                 }
                 beaconHandler.postDelayed(self, 10_000L)
@@ -47,6 +49,11 @@ class LoginActivity : AppCompatActivity() {
         }
     }
 
+    private fun appendDebug(line: String) {
+        val ts = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())
+        val current = b.debugLog.text?.toString().orEmpty()
+        b.debugLog.text = "$current\n[$ts] $line".trim()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,10 +67,15 @@ class LoginActivity : AppCompatActivity() {
         deviceName = "${Build.MANUFACTURER} ${Build.MODEL}"
 
         b.deviceInfo.text = deviceName
-        b.deviceCode.text = DeviceId.formatCode(deviceId)
+        b.deviceCode.text = DeviceId.formatCode(deviceId).ifEmpty { "(sem código)" }
 
-        // Auto-login se já tem sessão válida
+        appendDebug("BACKEND=${App.BACKEND}")
+        appendDebug("device_id=$deviceId")
+        appendDebug("device_name=$deviceName")
+        appendDebug("app_version=$appVersion")
+
         if (prefs.accessToken != null) {
+            appendDebug("sessão salva → indo pra channels")
             goToChannels()
             return
         }
@@ -71,11 +83,11 @@ class LoginActivity : AppCompatActivity() {
         b.btnLogin.setOnClickListener { doLogin() }
         b.inputPassword.setOnEditorActionListener { _, _, _ -> doLogin(); true }
 
-        // Tenta auto-login (caso admin já tenha vinculado esse aparelho)
         lifecycleScope.launch {
             val ok = withContext(Dispatchers.IO) {
                 try { sb.deviceAutoLogin(deviceId, deviceName, appVersion) } catch (_: Exception) { false }
             }
+            appendDebug("auto-login inicial ok=$ok :: ${sb.lastDebug?.body}")
             if (ok) goToChannels() else startBeacon()
         }
     }
@@ -93,9 +105,13 @@ class LoginActivity : AppCompatActivity() {
     private fun doLogin() {
         val email = b.inputEmail.text.toString().trim()
         val pass = b.inputPassword.text.toString()
-        if (email.isEmpty() || pass.isEmpty()) return
+        if (email.isEmpty() || pass.isEmpty()) {
+            appendDebug("email/senha vazio")
+            return
+        }
         setLoading(true)
         b.errorMsg.visibility = View.GONE
+        appendDebug("login → email=$email")
 
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
@@ -103,6 +119,7 @@ class LoginActivity : AppCompatActivity() {
                 catch (e: Exception) { false to (e.message ?: "Erro de rede") }
             }
             setLoading(false)
+            appendDebug("login resp ok=${result.first} msg=${result.second} :: ${sb.lastDebug?.body}")
             if (result.first) {
                 goToChannels()
             } else {
