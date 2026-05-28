@@ -1,0 +1,109 @@
+package tv.lntelecom.nativo.data
+
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import org.json.JSONObject
+
+/**
+ * Cliente Supabase REST direto contra o backend self-hosted, sem WebView.
+ * Bate em https://tv2.lntelecom.net/auth/v1 e /rest/v1 — mesma API do frontend web.
+ */
+class SupabaseClient(
+    private val http: OkHttpClient,
+    private val baseUrl: String,
+    private val anonKey: String,
+    private val prefs: Prefs
+) {
+    val authUrl = "$baseUrl/auth/v1"
+    val restUrl = "$baseUrl/rest/v1"
+    val functionsUrl = "$baseUrl/functions/v1"
+
+    private fun json(map: Map<String, Any?>): okhttp3.RequestBody {
+        val obj = JSONObject()
+        map.forEach { (k, v) -> obj.put(k, v) }
+        return obj.toString().toRequestBody("application/json".toMediaType())
+    }
+
+    private fun baseRequest(url: String, withAuth: Boolean = true): Request.Builder {
+        val b = Request.Builder().url(url).header("apikey", anonKey)
+        if (withAuth) {
+            val tok = prefs.accessToken ?: anonKey
+            b.header("Authorization", "Bearer $tok")
+        }
+        return b
+    }
+
+    // --- AUTH ---
+
+    /** POST /auth/v1/token?grant_type=password */
+    fun signInPassword(email: String, password: String): Boolean {
+        val body = json(mapOf("email" to email, "password" to password))
+        val req = Request.Builder()
+            .url("$authUrl/token?grant_type=password")
+            .header("apikey", anonKey)
+            .header("Content-Type", "application/json")
+            .post(body)
+            .build()
+        http.newCall(req).execute().use { res ->
+            if (!res.isSuccessful) return false
+            val obj = JSONObject(res.body?.string() ?: return false)
+            prefs.accessToken = obj.optString("access_token").takeIf { it.isNotEmpty() } ?: return false
+            prefs.refreshToken = obj.optString("refresh_token")
+            val expiresIn = obj.optLong("expires_in", 3600)
+            prefs.expiresAt = System.currentTimeMillis() + expiresIn * 1000L
+            prefs.userId = obj.optJSONObject("user")?.optString("id")
+            return true
+        }
+    }
+
+    /** POST /auth/v1/token?grant_type=refresh_token */
+    fun refreshSession(): Boolean {
+        val refresh = prefs.refreshToken ?: return false
+        val body = json(mapOf("refresh_token" to refresh))
+        val req = Request.Builder()
+            .url("$authUrl/token?grant_type=refresh_token")
+            .header("apikey", anonKey)
+            .header("Content-Type", "application/json")
+            .post(body)
+            .build()
+        http.newCall(req).execute().use { res ->
+            if (!res.isSuccessful) { prefs.clearSession(); return false }
+            val obj = JSONObject(res.body?.string() ?: return false)
+            prefs.accessToken = obj.optString("access_token")
+            prefs.refreshToken = obj.optString("refresh_token")
+            prefs.expiresAt = System.currentTimeMillis() + obj.optLong("expires_in", 3600) * 1000L
+            return true
+        }
+    }
+
+    fun ensureFreshSession() {
+        if (prefs.accessToken != null && System.currentTimeMillis() > prefs.expiresAt - 60_000) {
+            refreshSession()
+        }
+    }
+
+    fun signOut() {
+        prefs.clearSession()
+    }
+
+    // --- REST ---
+
+    fun get(path: String): Response {
+        ensureFreshSession()
+        val req = baseRequest("$restUrl/$path").get().build()
+        return http.newCall(req).execute()
+    }
+
+    /** Chama uma edge function. */
+    fun callFunction(name: String, body: Map<String, Any?>): Response {
+        ensureFreshSession()
+        val req = baseRequest("$functionsUrl/$name")
+            .header("Content-Type", "application/json")
+            .post(json(body))
+            .build()
+        return http.newCall(req).execute()
+    }
+}
