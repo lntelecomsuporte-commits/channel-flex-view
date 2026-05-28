@@ -236,7 +236,7 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
               : ""
         }`}
       >
-        <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-md overflow-hidden bg-white/10 flex items-center justify-center relative">
+        <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-md overflow-hidden bg-white/10 flex items-center justify-center relative mr-3">
           {channel.logo_url ? (
             <CachedLogo src={channel.logo_url} alt={channel.name} className="w-full h-full object-contain p-0.5" loading="lazy" decoding="async" />
           ) : (
@@ -244,7 +244,7 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
           )}
           {isFav && <Star className="absolute -top-1 -right-1 w-3.5 h-3.5 fill-yellow-400 text-yellow-400 drop-shadow" />}
         </div>
-        <div className="flex-shrink-0 w-20 sm:w-24">
+        <div className="flex-shrink-0 w-20 sm:w-24 mr-3">
           <span className="text-lg sm:text-xl font-bold text-foreground">{String(channel.channel_number).padStart(3, "0")}</span>
           <p className="text-xs sm:text-sm text-muted-foreground truncate leading-tight">{channel.name}</p>
         </div>
@@ -253,7 +253,7 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
             <ChannelEPGInfo programs={programs} altText={altText} epgType={epgType} onClickSynopsis={onSynopsis} />
           </div>
         )}
-        {isActive && <span className="text-xs text-primary font-bold flex-shrink-0">● ATUAL</span>}
+        {isActive && <span className="text-xs text-primary font-bold flex-shrink-0 ml-2">● ATUAL</span>}
       </div>
     </div>
   );
@@ -340,13 +340,17 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
 
     const update = () => {
       const w = el.clientWidth || window.innerWidth;
-      let h = el.clientHeight;
-      if (h <= 0 || forceFallback) {
-        // Fallback pra WebView antiga onde flex-1 + min-h-0 retorna 0
-        h = Math.max(0, window.innerHeight - HEADER_FALLBACK_PX);
+      const measured = el.clientHeight;
+      const viewportFallback = Math.max(0, window.innerHeight - HEADER_FALLBACK_PX);
+      // Em WebView antiga, flex-1+min-h-0 às vezes retorna 0 ou um valor pequeno (~200px)
+      // que não enche a tela. Se o medido for menos que 60% da viewport, usa fallback.
+      const tooSmall = measured > 0 && measured < window.innerHeight * 0.6;
+      let h = measured;
+      if (h <= 0 || forceFallback || tooSmall) {
+        h = viewportFallback;
       }
       setListSize({ width: w, height: h });
-      if (el.clientHeight <= 0) {
+      if (measured <= 0 || tooSmall) {
         attempts += 1;
         if (attempts >= 3) forceFallback = true;
       }

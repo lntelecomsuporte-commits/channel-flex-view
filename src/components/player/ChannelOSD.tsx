@@ -62,11 +62,11 @@ const ChannelOSD = ({ channel, visible, isFavorite, epgEnabled = true }: Channel
 
   return (
     <div className="absolute bottom-0 left-0 right-0 osd-gradient p-4 sm:p-6 lg:p-8 animate-slide-up z-10">
-      {/* Main row */}
+      {/* Main row — usa margens explícitas + gap pra funcionar em WebView antiga (sem suporte a flex gap) */}
       <div className="flex items-center gap-4 sm:gap-5 lg:gap-6">
         {/* Logo */}
         {channel.logo_url && (
-          <div className="flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 rounded-lg overflow-hidden bg-white/10 flex items-center justify-center">
+          <div className="flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 rounded-lg overflow-hidden bg-white/10 flex items-center justify-center mr-4 sm:mr-5 lg:mr-6">
             <CachedLogo
               src={channel.logo_url}
               alt={channel.name}
@@ -76,7 +76,7 @@ const ChannelOSD = ({ channel, visible, isFavorite, epgEnabled = true }: Channel
         )}
 
         {/* Channel number */}
-        <span className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground tracking-tight flex-shrink-0">
+        <span className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground tracking-tight flex-shrink-0 mr-4 sm:mr-5 lg:mr-6">
           {String(channel.channel_number).padStart(3, "0")}
         </span>
 
