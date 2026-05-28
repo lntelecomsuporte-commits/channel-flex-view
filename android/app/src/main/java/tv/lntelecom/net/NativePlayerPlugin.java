@@ -52,6 +52,19 @@ public class NativePlayerPlugin extends Plugin {
     private long totalBytesTransferred = 0L;
     private long droppedFramesTotal = 0L;
 
+    // === Stall watchdog & auto-retry ===
+    // Guarda o último source carregado pra poder re-preparar quando o stream
+    // travar silenciosamente (BUFFERING > 8s) ou der erro de rede.
+    private MediaSource lastSource;
+    private String lastUrl;
+    private String lastType;
+    private Map<String, String> lastHeaders;
+    private final Handler stallHandler = new Handler(Looper.getMainLooper());
+    private Runnable stallCheck;
+    private int autoRetryCount = 0;
+    private static final long STALL_TIMEOUT_MS = 8000L;
+    private static final int MAX_AUTO_RETRIES = 6;
+
     @PluginMethod
     public void load(PluginCall call) {
         final String url = call.getString("url");
