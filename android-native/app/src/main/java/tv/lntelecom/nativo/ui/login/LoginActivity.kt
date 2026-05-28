@@ -52,7 +52,8 @@ class LoginActivity : AppCompatActivity() {
     private fun appendDebug(line: String) {
         val ts = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())
         val current = b.debugLog.text?.toString().orEmpty()
-        b.debugLog.text = "$current\n[$ts] $line".trim()
+        // Mais recente no topo
+        b.debugLog.text = "[$ts] $line\n$current".trim()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

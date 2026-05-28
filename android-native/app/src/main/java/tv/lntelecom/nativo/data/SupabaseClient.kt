@@ -52,8 +52,10 @@ class SupabaseClient(
         return try {
             http.newCall(req).execute().use { res ->
                 val body = res.body?.string().orEmpty()
-                val d = HttpDebug(res.isSuccessful, res.code, body.take(800))
-                lastDebug = d.copy(body = "[$label] HTTP ${res.code}\n${d.body}")
+                // Mantém body COMPLETO em `d.body` pro parser; só trunca pro display.
+                val d = HttpDebug(res.isSuccessful, res.code, body)
+                val preview = body.take(300).replace("\n", " ")
+                lastDebug = HttpDebug(res.isSuccessful, res.code, "[$label] HTTP ${res.code} $preview")
                 d
             }
         } catch (e: Exception) {
