@@ -33,8 +33,8 @@ class App : Application(), ImageLoaderFactory {
 
     companion object {
         const val BACKEND = "https://tv2.lntelecom.net"
-        // Mesma anon key publicável usada pelo frontend web
+        // Chave pública local do backend self-hosted (mesma usada pelo Roku/servidor).
         const val ANON_KEY =
-            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94dW5remx0bWxhZmF0emZpaWtqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNDcwNDIsImV4cCI6MjA5MDkyMzA0Mn0.9OhGbfjGuoXQaars3TIZ7QyVBnWrWrgkHP3ktWHfMkY"
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc3MDA0OTQwLCJleHAiOjIwOTIzNjQ5NDB9.9BCUjjQPaZLLhZnJnpor4cfq7kO6IbjFpt78hPBGyow"
     }
 }
