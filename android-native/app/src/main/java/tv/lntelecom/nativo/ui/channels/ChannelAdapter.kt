@@ -34,12 +34,12 @@ class ChannelAdapter(
         val logoUrl = StreamUrl.resolveLogo(c.logoUrl)
         if (logoUrl != null) {
             holder.b.logo.load(logoUrl) {
-                placeholder(R.drawable.ic_launcher_foreground)
-                error(R.drawable.ic_launcher_foreground)
+                placeholder(R.mipmap.ic_launcher)
+                error(R.mipmap.ic_launcher)
                 crossfade(false)
             }
         } else {
-            holder.b.logo.setImageResource(R.drawable.ic_launcher_foreground)
+            holder.b.logo.setImageResource(R.mipmap.ic_launcher)
         }
         holder.b.root.setOnClickListener { onClick(c) }
     }
