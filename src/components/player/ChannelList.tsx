@@ -236,7 +236,7 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
               : ""
         }`}
       >
-        <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-md overflow-hidden bg-white/10 flex items-center justify-center relative">
+        <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-md overflow-hidden bg-white/10 flex items-center justify-center relative mr-3">
           {channel.logo_url ? (
             <CachedLogo src={channel.logo_url} alt={channel.name} className="w-full h-full object-contain p-0.5" loading="lazy" decoding="async" />
           ) : (
@@ -244,7 +244,7 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
           )}
           {isFav && <Star className="absolute -top-1 -right-1 w-3.5 h-3.5 fill-yellow-400 text-yellow-400 drop-shadow" />}
         </div>
-        <div className="flex-shrink-0 w-20 sm:w-24">
+        <div className="flex-shrink-0 w-20 sm:w-24 mr-3">
           <span className="text-lg sm:text-xl font-bold text-foreground">{String(channel.channel_number).padStart(3, "0")}</span>
           <p className="text-xs sm:text-sm text-muted-foreground truncate leading-tight">{channel.name}</p>
         </div>
@@ -253,7 +253,7 @@ const Row = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
             <ChannelEPGInfo programs={programs} altText={altText} epgType={epgType} onClickSynopsis={onSynopsis} />
           </div>
         )}
-        {isActive && <span className="text-xs text-primary font-bold flex-shrink-0">● ATUAL</span>}
+        {isActive && <span className="text-xs text-primary font-bold flex-shrink-0 ml-2">● ATUAL</span>}
       </div>
     </div>
   );
