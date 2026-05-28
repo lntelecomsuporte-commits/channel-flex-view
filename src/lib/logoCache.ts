@@ -82,22 +82,31 @@ export function getCachedLogo(url: string): string | null {
 
 const inflight = new Set<string>();
 const queue: Array<{ url: string; version: string }> = [];
-let processing = false;
+const MAX_PARALLEL = 8; // baixa vários logos em paralelo (WebView aguenta tranquilo)
+let activeWorkers = 0;
 
-async function processQueue() {
-  if (processing) return;
-  processing = true;
-  while (queue.length) {
-    const item = queue.shift()!;
-    if (inflight.has(item.url)) continue;
-    inflight.add(item.url);
-    try {
-      await downloadOne(item.url, item.version);
-    } catch { /* ignore */ }
-    inflight.delete(item.url);
-    await new Promise((r) => setTimeout(r, 50));
+async function worker() {
+  activeWorkers++;
+  try {
+    while (queue.length) {
+      const item = queue.shift()!;
+      if (inflight.has(item.url)) continue;
+      inflight.add(item.url);
+      try {
+        await downloadOne(item.url, item.version);
+      } catch { /* ignore */ }
+      inflight.delete(item.url);
+    }
+  } finally {
+    activeWorkers--;
   }
-  processing = false;
+}
+
+function kickWorkers() {
+  const want = Math.min(MAX_PARALLEL, queue.length);
+  while (activeWorkers < want) {
+    worker();
+  }
 }
 
 async function downloadOne(url: string, version: string) {
@@ -122,15 +131,17 @@ async function downloadOne(url: string, version: string) {
  *  - Se está em cache mas versão diferente → baixa de novo.
  *  - Se versão igual → faz NADA (zero rede).
  *
- * Chame isto UMA vez quando a lista de canais carregar.
+ * Estratégia: na primeira abertura baixa TUDO em paralelo (8 conexões
+ * simultâneas) o mais rápido possível. Depois só confere versão e re-baixa
+ * o que mudou.
  */
 export function primeLogoVersions(items: Array<{ url: string | null | undefined; version: string | null | undefined }>) {
   const cache = load();
   let queued = 0;
-  const appOrigin = typeof window !== "undefined" ? window.location.origin : "";
   for (const item of items) {
     if (!item.url) continue;
-    if (!item.url.startsWith(appOrigin) && !item.url.startsWith("/")) continue;
+    // Aceita qualquer URL (absoluta http(s) ou relativa /logos/...).
+    // CachedLogo já resolve para tv2.lntelecom.net no APK Capacitor.
     const version = item.version || "";
     const existing = cache[item.url];
     if (existing && existing.version === version) continue; // já está atualizado
@@ -139,11 +150,8 @@ export function primeLogoVersions(items: Array<{ url: string | null | undefined;
     queued++;
   }
   if (queued === 0) return;
-  if ("requestIdleCallback" in window) {
-    (window as any).requestIdleCallback(() => processQueue(), { timeout: 2000 });
-  } else {
-    setTimeout(processQueue, 200);
-  }
+  // Sem requestIdleCallback nem setTimeout: começa AGORA, em paralelo.
+  kickWorkers();
 }
 
 type Listener = (url: string, dataUrl: string) => void;
