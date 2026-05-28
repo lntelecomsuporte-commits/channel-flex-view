@@ -29,8 +29,9 @@ class LoginActivity : AppCompatActivity() {
     private val appVersion: String by lazy { "nativo-${BuildConfig.VERSION_NAME}" }
 
     private val beaconHandler = Handler(Looper.getMainLooper())
-    private val beaconRunnable = object : Runnable {
+    private val beaconRunnable: Runnable = object : Runnable {
         override fun run() {
+            val self = this
             lifecycleScope.launch {
                 val registered = withContext(Dispatchers.IO) {
                     try { sb.deviceAnnounce(deviceId, deviceName, appVersion) } catch (_: Exception) { false }
@@ -41,10 +42,11 @@ class LoginActivity : AppCompatActivity() {
                     }
                     if (ok) { goToChannels(); return@launch }
                 }
-                beaconHandler.postDelayed(this@run, 10_000L)
+                beaconHandler.postDelayed(self, 10_000L)
             }
         }
     }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
