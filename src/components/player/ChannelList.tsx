@@ -340,13 +340,17 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
 
     const update = () => {
       const w = el.clientWidth || window.innerWidth;
-      let h = el.clientHeight;
-      if (h <= 0 || forceFallback) {
-        // Fallback pra WebView antiga onde flex-1 + min-h-0 retorna 0
-        h = Math.max(0, window.innerHeight - HEADER_FALLBACK_PX);
+      const measured = el.clientHeight;
+      const viewportFallback = Math.max(0, window.innerHeight - HEADER_FALLBACK_PX);
+      // Em WebView antiga, flex-1+min-h-0 às vezes retorna 0 ou um valor pequeno (~200px)
+      // que não enche a tela. Se o medido for menos que 60% da viewport, usa fallback.
+      const tooSmall = measured > 0 && measured < window.innerHeight * 0.6;
+      let h = measured;
+      if (h <= 0 || forceFallback || tooSmall) {
+        h = viewportFallback;
       }
       setListSize({ width: w, height: h });
-      if (el.clientHeight <= 0) {
+      if (measured <= 0 || tooSmall) {
         attempts += 1;
         if (attempts >= 3) forceFallback = true;
       }
