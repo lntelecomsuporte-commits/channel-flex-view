@@ -77,18 +77,6 @@ public class MainActivity extends BridgeActivity {
                 }
             }
         };
-
-        // Detecta Power do controle (Android TV / Fire TV) — quando a tela
-        // apaga / entra em stand-by, encerramos o app e liberamos RAM.
-        // ACTION_SCREEN_OFF SÓ funciona com receiver dinâmico (não no manifest).
-        screenOffReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
-                    shutdownAndRelease("screen_off");
-                }
-            }
-        };
         registerReceiver(screenOffReceiver, new IntentFilter(Intent.ACTION_SCREEN_OFF));
     }
 
