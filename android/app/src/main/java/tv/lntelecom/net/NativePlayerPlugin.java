@@ -371,6 +371,11 @@ public class NativePlayerPlugin extends Plugin {
     }
 
     private void releasePlayer() {
+        cancelStallCheck();
+        lastSource = null;
+        lastUrl = null;
+        lastHeaders = null;
+        autoRetryCount = 0;
         if (player != null) {
             try { player.release(); } catch (Exception ignored) {}
             player = null;
