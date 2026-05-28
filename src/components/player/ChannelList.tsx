@@ -589,7 +589,7 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
         </div>
       </div>
 
-      <div className="flex-1 min-h-0" ref={containerRef}>
+      <div className="flex-1 min-h-0" ref={containerRef} style={{ minHeight: 0, height: '100%' }}>
         {filteredChannels.length === 0 ? (
           <div className="flex items-center justify-center py-12">
             <p className="text-muted-foreground text-sm">Nenhum canal encontrado.</p>
