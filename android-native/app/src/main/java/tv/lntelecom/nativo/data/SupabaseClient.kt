@@ -45,7 +45,7 @@ class SupabaseClient(
 
     private fun responsePreview(label: String, status: Int, body: String): String {
         val prefix = "[$label] HTTP $status"
-        val obj = try { JSONObject(body) } catch (_: Exception) { null }
+        val obj = parseJsonObject(body)
         if (obj != null) {
             val parts = mutableListOf(prefix)
             listOf("success", "registered", "is_active", "code", "error", "detail", "msg", "message", "limit").forEach { key ->
@@ -86,6 +86,21 @@ class SupabaseClient(
         val start = clean.indexOf('{')
         val end = clean.lastIndexOf('}')
         return if (start >= 0 && end >= start) JSONObject(clean.substring(start, end + 1)) else JSONObject(clean)
+    }
+
+    private fun parseJsonObject(body: String): JSONObject? = try { jsonObjectFromBody(body) } catch (_: Exception) { null }
+
+    private fun extractJsonString(body: String, key: String): String? {
+        val pattern = Regex("\\\"${Regex.escape(key)}\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"")
+        return pattern.find(body)?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() }
+    }
+
+    private fun tokenFromResponse(obj: JSONObject?, body: String, key: String): String? {
+        return obj?.sessionToken(key) ?: extractJsonString(body, key)
+    }
+
+    private fun userIdFromResponse(obj: JSONObject?, body: String): String? {
+        return obj?.sessionUserId() ?: extractJsonString(body, "user_id")
     }
 
     private fun JSONObject.sessionObject(): JSONObject? {
