@@ -148,9 +148,9 @@ class SupabaseClient(
         val d = execDebug(req, "auth/token")
         if (!d.ok) return false
         return try {
-            val obj = jsonObjectFromBody(d.body)
-            val tok = obj.sessionToken("access_token") ?: return false
-            saveSession(tok, obj.sessionToken("refresh_token"), obj.sessionUserId(), obj.optLong("expires_in", 3600))
+            val obj = parseJsonObject(d.body)
+            val tok = tokenFromResponse(obj, d.body, "access_token") ?: return false
+            saveSession(tok, tokenFromResponse(obj, d.body, "refresh_token"), userIdFromResponse(obj, d.body), obj?.optLong("expires_in", 3600) ?: 3600)
             true
         } catch (_: Exception) { false }
     }
@@ -171,14 +171,14 @@ class SupabaseClient(
             .header("Content-Type", "application/json")
             .post(payload).build()
         val d = execDebug(req, "device-login")
-        val obj = try { jsonObjectFromBody(d.body) } catch (_: Exception) { JSONObject() }
+        val obj = parseJsonObject(d.body)
         if (!d.ok) {
-            val msg = obj.optString("error").takeIf { it.isNotEmpty() }
+            val msg = obj?.optString("error")?.takeIf { it.isNotEmpty() }
                 ?: d.error
                 ?: "HTTP ${d.status}"
             return false to msg
         }
-        val tok = obj.sessionToken("access_token")
+        val tok = tokenFromResponse(obj, d.body, "access_token")
         if (tok.isNullOrEmpty()) {
             // Se o backend só confirmou que o aparelho já está vinculado, entra pela sessão do device.
             if (deviceAutoLogin(deviceId, deviceName, appVersion)) return true to null
@@ -186,7 +186,7 @@ class SupabaseClient(
             if (email.contains("@") && signInPassword(email, password)) return true to null
             return false to "Resposta sem access_token"
         }
-        saveSession(tok, obj.sessionToken("refresh_token"), obj.sessionUserId())
+        saveSession(tok, tokenFromResponse(obj, d.body, "refresh_token"), userIdFromResponse(obj, d.body))
         return true to null
     }
 
@@ -243,9 +243,9 @@ class SupabaseClient(
         val d = execDebug(req, "device-auto-login")
         if (!d.ok) return false
         return try {
-            val obj = jsonObjectFromBody(d.body)
-            val tok = obj.sessionToken("access_token") ?: return false
-            saveSession(tok, obj.sessionToken("refresh_token"), obj.sessionUserId())
+            val obj = parseJsonObject(d.body)
+            val tok = tokenFromResponse(obj, d.body, "access_token") ?: return false
+            saveSession(tok, tokenFromResponse(obj, d.body, "refresh_token"), userIdFromResponse(obj, d.body))
             true
         } catch (_: Exception) { false }
     }
