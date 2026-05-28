@@ -45,7 +45,7 @@ class SupabaseClient(
 
     private fun responsePreview(label: String, status: Int, body: String): String {
         val prefix = "[$label] HTTP $status"
-        val obj = try { JSONObject(body) } catch (_: Exception) { null }
+        val obj = parseJsonObject(body)
         if (obj != null) {
             val parts = mutableListOf(prefix)
             listOf("success", "registered", "is_active", "code", "error", "detail", "msg", "message", "limit").forEach { key ->
@@ -86,6 +86,21 @@ class SupabaseClient(
         val start = clean.indexOf('{')
         val end = clean.lastIndexOf('}')
         return if (start >= 0 && end >= start) JSONObject(clean.substring(start, end + 1)) else JSONObject(clean)
+    }
+
+    private fun parseJsonObject(body: String): JSONObject? = try { jsonObjectFromBody(body) } catch (_: Exception) { null }
+
+    private fun extractJsonString(body: String, key: String): String? {
+        val pattern = Regex("\\\"${Regex.escape(key)}\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"")
+        return pattern.find(body)?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() }
+    }
+
+    private fun tokenFromResponse(obj: JSONObject?, body: String, key: String): String? {
+        return obj?.sessionToken(key) ?: extractJsonString(body, key)
+    }
+
+    private fun userIdFromResponse(obj: JSONObject?, body: String): String? {
+        return obj?.sessionUserId() ?: extractJsonString(body, "user_id")
     }
 
     private fun JSONObject.sessionObject(): JSONObject? {
@@ -133,9 +148,9 @@ class SupabaseClient(
         val d = execDebug(req, "auth/token")
         if (!d.ok) return false
         return try {
-            val obj = jsonObjectFromBody(d.body)
-            val tok = obj.sessionToken("access_token") ?: return false
-            saveSession(tok, obj.sessionToken("refresh_token"), obj.sessionUserId(), obj.optLong("expires_in", 3600))
+            val obj = parseJsonObject(d.body)
+            val tok = tokenFromResponse(obj, d.body, "access_token") ?: return false
+            saveSession(tok, tokenFromResponse(obj, d.body, "refresh_token"), userIdFromResponse(obj, d.body), obj?.optLong("expires_in", 3600) ?: 3600)
             true
         } catch (_: Exception) { false }
     }
@@ -156,14 +171,14 @@ class SupabaseClient(
             .header("Content-Type", "application/json")
             .post(payload).build()
         val d = execDebug(req, "device-login")
-        val obj = try { jsonObjectFromBody(d.body) } catch (_: Exception) { JSONObject() }
+        val obj = parseJsonObject(d.body)
         if (!d.ok) {
-            val msg = obj.optString("error").takeIf { it.isNotEmpty() }
+            val msg = obj?.optString("error")?.takeIf { it.isNotEmpty() }
                 ?: d.error
                 ?: "HTTP ${d.status}"
             return false to msg
         }
-        val tok = obj.sessionToken("access_token")
+        val tok = tokenFromResponse(obj, d.body, "access_token")
         if (tok.isNullOrEmpty()) {
             // Se o backend só confirmou que o aparelho já está vinculado, entra pela sessão do device.
             if (deviceAutoLogin(deviceId, deviceName, appVersion)) return true to null
@@ -171,7 +186,7 @@ class SupabaseClient(
             if (email.contains("@") && signInPassword(email, password)) return true to null
             return false to "Resposta sem access_token"
         }
-        saveSession(tok, obj.sessionToken("refresh_token"), obj.sessionUserId())
+        saveSession(tok, tokenFromResponse(obj, d.body, "refresh_token"), userIdFromResponse(obj, d.body))
         return true to null
     }
 
@@ -228,9 +243,9 @@ class SupabaseClient(
         val d = execDebug(req, "device-auto-login")
         if (!d.ok) return false
         return try {
-            val obj = jsonObjectFromBody(d.body)
-            val tok = obj.sessionToken("access_token") ?: return false
-            saveSession(tok, obj.sessionToken("refresh_token"), obj.sessionUserId())
+            val obj = parseJsonObject(d.body)
+            val tok = tokenFromResponse(obj, d.body, "access_token") ?: return false
+            saveSession(tok, tokenFromResponse(obj, d.body, "refresh_token"), userIdFromResponse(obj, d.body))
             true
         } catch (_: Exception) { false }
     }
