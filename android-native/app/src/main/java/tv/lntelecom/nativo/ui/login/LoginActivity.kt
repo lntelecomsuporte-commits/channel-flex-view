@@ -51,9 +51,13 @@ class LoginActivity : AppCompatActivity() {
 
     private fun appendDebug(line: String) {
         val ts = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())
-        val current = b.debugLog.text?.toString().orEmpty()
-        // Mais recente no topo
-        b.debugLog.text = "[$ts] $line\n$current".trim()
+        val currentLines = b.debugLog.text?.toString().orEmpty()
+            .lines()
+            .filter { it.isNotBlank() }
+            .take(18)
+        // Ordem decrescente fixa: sempre mostra o mais recente no topo da área visível.
+        b.debugLog.text = (listOf("[$ts] $line") + currentLines).take(18).joinToString("\n")
+        b.debugScroll.post { b.debugScroll.scrollTo(0, 0) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
