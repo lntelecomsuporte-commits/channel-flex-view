@@ -8,6 +8,7 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.View;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.view.WindowManager;
 import android.webkit.WebView;
@@ -17,6 +18,29 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     private BroadcastReceiver screenOffReceiver;
     private boolean shuttingDown = false;
+    /** Quando true, suprime shutdownAndRelease (instalador do APK abrindo). */
+    private static volatile boolean installingUpdate = false;
+    private static volatile long installingUpdateUntil = 0L;
+
+    public static boolean isInstallingUpdate() {
+        if (!installingUpdate) return false;
+        if (System.currentTimeMillis() > installingUpdateUntil) {
+            installingUpdate = false;
+            return false;
+        }
+        return true;
+    }
+
+    /** Bridge JS pra sinalizar que o instalador do APK vai abrir. */
+    public class LntvNativeBridge {
+        @JavascriptInterface
+        public void setInstallingUpdate(boolean v) {
+            installingUpdate = v;
+            // Auto-expira em 2 min, pra não travar shutdown pra sempre
+            installingUpdateUntil = System.currentTimeMillis() + 2 * 60 * 1000L;
+            android.util.Log.i("LNTV", "setInstallingUpdate=" + v);
+        }
+    }
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -37,6 +61,9 @@ public class MainActivity extends BridgeActivity {
 
             WebSettings settings = webView.getSettings();
             settings.setMediaPlaybackRequiresUserGesture(false);
+
+            // Bridge pra suprimir shutdown quando o instalador do APK abrir
+            webView.addJavascriptInterface(new LntvNativeBridge(), "LntvNative");
         }
 
         // Detecta Power do controle (Android TV / Fire TV) — quando a tela
@@ -61,6 +88,10 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onUserLeaveHint() {
         super.onUserLeaveHint();
+        if (isInstallingUpdate()) {
+            android.util.Log.i("LNTV", "onUserLeaveHint ignorado: instalando update");
+            return;
+        }
         shutdownAndRelease("user_leave_hint");
     }
 

@@ -212,6 +212,13 @@ export function useAppUpdate(): UseAppUpdateResult {
   const download = useCallback(async () => {
     if (!available) return;
 
+    // Sinaliza pro nativo NÃO matar o processo quando o instalador do APK
+    // (outra Activity) abrir e disparar onUserLeaveHint.
+    try {
+      const native = (window as unknown as { LntvNative?: { setInstallingUpdate: (v: boolean) => void } }).LntvNative;
+      native?.setInstallingUpdate(true);
+    } catch { /* noop */ }
+
     // Legacy (Android 5.x): plugins de filesystem/file-opener não estão disponíveis.
     // Delega pro bridge nativo, que abre o APK no navegador do sistema (download + install).
     const legacy = getLegacyBridge();
