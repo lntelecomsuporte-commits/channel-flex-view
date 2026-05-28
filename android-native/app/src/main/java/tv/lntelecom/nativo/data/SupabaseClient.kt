@@ -79,6 +79,25 @@ class SupabaseClient(
         if (!userId.isNullOrEmpty()) prefs.userId = userId
     }
 
+    private fun JSONObject.sessionObject(): JSONObject? {
+        optJSONObject("session")?.let { return it }
+        optJSONObject("data")?.optJSONObject("session")?.let { return it }
+        return null
+    }
+
+    private fun JSONObject.sessionToken(key: String): String? {
+        optString(key).takeIf { it.isNotEmpty() }?.let { return it }
+        sessionObject()?.optString(key)?.takeIf { it.isNotEmpty() }?.let { return it }
+        return null
+    }
+
+    private fun JSONObject.sessionUserId(): String? {
+        optJSONObject("user")?.optString("id")?.takeIf { it.isNotEmpty() }?.let { return it }
+        optString("user_id").takeIf { it.isNotEmpty() }?.let { return it }
+        sessionObject()?.optJSONObject("user")?.optString("id")?.takeIf { it.isNotEmpty() }?.let { return it }
+        return null
+    }
+
     private fun execDebug(req: Request, label: String): HttpDebug {
         return try {
             http.newCall(req).execute().use { res ->
@@ -136,9 +155,13 @@ class SupabaseClient(
                 ?: "HTTP ${d.status}"
             return false to msg
         }
-        val tok = obj.optString("access_token").takeIf { it.isNotEmpty() }
-            ?: return false to "Resposta sem access_token"
-        saveSession(tok, obj.optString("refresh_token").takeIf { it.isNotEmpty() }, obj.optJSONObject("user")?.optString("id"))
+        val tok = obj.sessionToken("access_token")
+        if (tok.isNullOrEmpty()) {
+            // Se o backend só confirmou que o aparelho já está vinculado, entra pela sessão do device.
+            if (deviceAutoLogin(deviceId, deviceName, appVersion)) return true to null
+            return false to "Resposta sem access_token"
+        }
+        saveSession(tok, obj.sessionToken("refresh_token"), obj.sessionUserId())
         return true to null
     }
 
@@ -192,8 +215,8 @@ class SupabaseClient(
         if (!d.ok) return false
         return try {
             val obj = JSONObject(d.body.substringAfter("\n", d.body))
-            val tok = obj.optString("access_token").takeIf { it.isNotEmpty() } ?: return false
-            saveSession(tok, obj.optString("refresh_token").takeIf { it.isNotEmpty() }, obj.optString("user_id").takeIf { it.isNotEmpty() })
+            val tok = obj.sessionToken("access_token") ?: return false
+            saveSession(tok, obj.sessionToken("refresh_token"), obj.sessionUserId())
             true
         } catch (_: Exception) { false }
     }
