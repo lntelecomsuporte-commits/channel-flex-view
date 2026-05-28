@@ -316,13 +316,16 @@ jobs:
             APKs gerados:
             - **lntv-latest.apk** — Android 6.0+ (minSdk 23) — recomendado, com auto-update
             - **lntv-legacy.apk** — Android 5.0+ (minSdk 21) — TV boxes/dispositivos antigos
+            - **lntv-slim.apk** — EXPERIMENTAL — Android 6+ sem assets web bundled + R8/minify (auto-update NÃO aponta pra ele, instalar manualmente pra testar tamanho/performance)
 
             versionCode: ${{ env.VERSION_CODE }}
             versionName: ${{ env.VERSION_NAME }}
           files: |
             out/lntv-latest.apk
             out/lntv-legacy.apk
+            out/lntv-slim.apk
             out/version.json
+
           make_latest: "true"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
