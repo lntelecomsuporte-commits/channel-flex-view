@@ -256,11 +256,19 @@ public class NativePlayerPlugin extends Plugin {
                 JSObject data = new JSObject();
                 data.put("state", state);
                 if (state == Player.STATE_READY) {
+                    autoRetryCount = 0;
+                    cancelStallCheck();
                     notifyListeners("playing", data);
                 } else if (state == Player.STATE_BUFFERING) {
+                    scheduleStallCheck();
                     notifyListeners("buffering", data);
                 } else if (state == Player.STATE_ENDED) {
+                    cancelStallCheck();
+                    // Live travou no fim — re-prepara em vez de parar.
+                    attemptAutoRetry("ended");
                     notifyListeners("ended", data);
+                } else if (state == Player.STATE_IDLE) {
+                    cancelStallCheck();
                 }
             }
 
@@ -274,9 +282,89 @@ public class NativePlayerPlugin extends Plugin {
                 if (cause != null) {
                     data.put("cause", cause.getClass().getSimpleName() + ": " + cause.getMessage());
                 }
+                // Tenta re-preparar silenciosamente antes de notificar JS.
+                // JS só recebe 'error' depois que o auto-retry esgotar.
+                if (attemptAutoRetry("error:" + error.getErrorCodeName())) {
+                    return;
+                }
                 notifyListeners("error", data);
             }
         });
+    }
+
+    /** Agenda verificação de stall — se continuar em BUFFERING após N ms, retry. */
+    private void scheduleStallCheck() {
+        cancelStallCheck();
+        stallCheck = () -> {
+            if (player == null) return;
+            int s = player.getPlaybackState();
+            if (s == Player.STATE_BUFFERING) {
+                attemptAutoRetry("stall");
+            }
+        };
+        stallHandler.postDelayed(stallCheck, STALL_TIMEOUT_MS);
+    }
+
+    private void cancelStallCheck() {
+        if (stallCheck != null) {
+            stallHandler.removeCallbacks(stallCheck);
+            stallCheck = null;
+        }
+    }
+
+    /**
+     * Re-prepara o último source. Backoff exponencial até MAX_AUTO_RETRIES.
+     * Retorna false se esgotou — caller deve propagar erro pro JS.
+     */
+    private boolean attemptAutoRetry(String reason) {
+        if (player == null || lastSource == null) return false;
+        if (autoRetryCount >= MAX_AUTO_RETRIES) {
+            android.util.Log.w("NativePlayer", "auto-retry esgotado (" + reason + ")");
+            return false;
+        }
+        autoRetryCount++;
+        long delay = Math.min(1000L * (1L << Math.min(autoRetryCount - 1, 3)), 8000L);
+        android.util.Log.w("NativePlayer", "auto-retry #" + autoRetryCount + " em " + delay + "ms (" + reason + ")");
+        cancelStallCheck();
+        stallHandler.postDelayed(() -> {
+            if (player == null || lastSource == null) return;
+            try {
+                // Rebuild source (alguns ExoPlayer internals ficam em estado ruim
+                // após erro — rebuildar é mais seguro do que reusar a instância).
+                MediaSource fresh = rebuildLastSource();
+                if (fresh != null) lastSource = fresh;
+                player.setMediaSource(lastSource);
+                player.prepare();
+                player.setPlayWhenReady(true);
+            } catch (Exception e) {
+                android.util.Log.e("NativePlayer", "auto-retry falhou: " + e.getMessage());
+            }
+        }, delay);
+        return true;
+    }
+
+    private MediaSource rebuildLastSource() {
+        if (lastUrl == null) return null;
+        try {
+            DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
+                    .setAllowCrossProtocolRedirects(true)
+                    .setUserAgent(lastHeaders != null ? lastHeaders.getOrDefault("User-Agent", "LNTV/1.0") : "LNTV/1.0");
+            if (lastHeaders != null && !lastHeaders.isEmpty()) httpFactory.setDefaultRequestProperties(lastHeaders);
+            MediaItem item = MediaItem.fromUri(lastUrl);
+            LoadErrorHandlingPolicy retryPolicy = new DefaultLoadErrorHandlingPolicy() {
+                @Override public int getMinimumLoadableRetryCount(int dataType) { return Integer.MAX_VALUE; }
+                @Override public long getRetryDelayMsFor(LoadErrorHandlingPolicy.LoadErrorInfo info) {
+                    long d = 1000L * (1L << Math.min(info.errorCount - 1, 3));
+                    return Math.min(d, 8000L);
+                }
+            };
+            if ("hls".equalsIgnoreCase(lastType)) {
+                return new HlsMediaSource.Factory(httpFactory).setLoadErrorHandlingPolicy(retryPolicy).createMediaSource(item);
+            }
+            return new ProgressiveMediaSource.Factory(httpFactory).setLoadErrorHandlingPolicy(retryPolicy).createMediaSource(item);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private void releasePlayer() {
