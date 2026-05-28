@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LN TV</string>
+    <string name="login_title">Entrar</string>
+    <string name="login_email_hint">E-mail ou CPF</string>
+    <string name="login_password_hint">Senha</string>
+    <string name="login_button">Entrar</string>
+    <string name="login_error">Usuário ou senha inválidos</string>
+    <string name="login_loading">Entrando…</string>
+    <string name="channels_empty">Nenhum canal disponível</string>
+    <string name="channels_loading">Carregando canais…</string>
+    <string name="player_loading">Carregando…</string>
+    <string name="player_error">Falha na reprodução</string>
+</resources>

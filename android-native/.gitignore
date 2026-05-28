@@ -1,0 +1,12 @@
+.gradle/
+build/
+local.properties
+keystore.properties
+*.keystore
+*.jks
+.idea/
+.DS_Store
+captures/
+gradle/wrapper/gradle-wrapper.jar
+gradlew
+gradlew.bat

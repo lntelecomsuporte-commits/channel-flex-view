@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#0A0A0A</color>
+    <color name="bg_elevated">#171717</color>
+    <color name="bg_card">#1F1F1F</color>
+    <color name="fg">#FAFAFA</color>
+    <color name="fg_muted">#A1A1AA</color>
+    <color name="primary">#DC2626</color>
+    <color name="primary_dark">#991B1B</color>
+    <color name="divider">#2A2A2A</color>
+    <color name="focus">#DC2626</color>
+</resources>

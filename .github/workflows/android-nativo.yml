@@ -1,0 +1,103 @@
+name: Build APK Nativo (Kotlin)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android-native/**'
+      - '.github/workflows/android-nativo.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Release APK Nativo
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    defaults:
+      run:
+        working-directory: android-native
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Set version
+        run: |
+          echo "VERSION_CODE=${{ github.run_number }}" >> $GITHUB_ENV
+          echo "VERSION_NAME=1.0.${{ github.run_number }}" >> $GITHUB_ENV
+
+      - name: Decode release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 missing"; exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > app/lntv-release.keystore
+          cat > keystore.properties <<EOF
+          storeFile=app/lntv-release.keystore
+          storePassword=${KEYSTORE_PASSWORD}
+          keyAlias=${KEY_ALIAS}
+          keyPassword=${KEY_PASSWORD}
+          EOF
+
+      - name: Generate Gradle wrapper
+        run: gradle wrapper --gradle-version 8.9
+
+      - name: Build Release APK
+        env:
+          VERSION_CODE: ${{ env.VERSION_CODE }}
+          VERSION_NAME: ${{ env.VERSION_NAME }}
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Stage APK + show size
+        run: |
+          mkdir -p ../out
+          cp app/build/outputs/apk/release/app-release.apk "../out/lntv-nativo-${VERSION_CODE}.apk"
+          cp app/build/outputs/apk/release/app-release.apk ../out/lntv-nativo.apk
+          ls -lh ../out/
+
+      - name: Cleanup keystore
+        if: always()
+        run: rm -f app/lntv-release.keystore keystore.properties
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lntv-nativo-apk
+          path: out/*.apk
+          retention-days: 30
+
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nativo-v${{ env.VERSION_NAME }}
+          name: LN TV Nativo v${{ env.VERSION_NAME }}
+          body: |
+            APK Kotlin nativo experimental — instala lado-a-lado dos APKs atuais
+            (package distinto: `tv.lntelecom.nativo`).
+
+            - minSdk 21 (Android 5.0+)
+            - XML Views + ExoPlayer/Media3
+            - Auto-update **não** acionado pelos clientes (não mexe em `version.json`)
+          files: |
+            out/lntv-nativo.apk
+            out/lntv-nativo-${{ env.VERSION_CODE }}.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
