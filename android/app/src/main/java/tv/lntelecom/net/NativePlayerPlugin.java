@@ -123,6 +123,14 @@ public class NativePlayerPlugin extends Plugin {
                 player.prepare();
                 player.setPlayWhenReady(true);
 
+                // Memoriza pra auto-retry em caso de stall/erro.
+                lastSource = source;
+                lastUrl = url;
+                lastType = type;
+                lastHeaders = new HashMap<>(headers);
+                autoRetryCount = 0;
+                cancelStallCheck();
+
                 setWebViewTransparent(true);
                 call.resolve();
             } catch (Exception e) {
