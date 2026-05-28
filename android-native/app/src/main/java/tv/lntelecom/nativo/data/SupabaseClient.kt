@@ -49,7 +49,7 @@ class SupabaseClient(
         if (obj != null) {
             val parts = mutableListOf(prefix)
             listOf("success", "registered", "is_active", "code", "error", "detail", "msg", "message", "limit").forEach { key ->
-                if (obj.has(key)) parts.add("$key=${compact(String.valueOf(obj.opt(key))).take(120)}")
+                if (obj.has(key)) parts.add("$key=${compact(obj.opt(key)?.toString() ?: "null").take(120)}")
             }
             if (obj.has("access_token")) parts.add("access_token=OK")
             if (obj.has("refresh_token")) parts.add("refresh_token=OK")
