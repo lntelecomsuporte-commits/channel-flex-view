@@ -120,5 +120,21 @@
             android:fontFamily="monospace"
             android:letterSpacing="0.1"
             android:gravity="center"/>
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="220dp"
+            android:layout_marginTop="16dp"
+            android:background="#11FFFFFF"
+            android:padding="8dp">
+            <TextView
+                android:id="@+id/debugLog"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/fg_muted"
+                android:textSize="10sp"
+                android:fontFamily="monospace"
+                android:textIsSelectable="true"/>
+        </ScrollView>
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>
