@@ -112,7 +112,7 @@ class SupabaseClient(
         } catch (_: Exception) { false }
     }
 
-    fun deviceLogin(
+    private fun deviceLoginOnce(
         email: String, password: String,
         deviceId: String, deviceName: String, appVersion: String,
     ): Pair<Boolean, String?> {
@@ -140,6 +140,23 @@ class SupabaseClient(
             ?: return false to "Resposta sem access_token"
         saveSession(tok, obj.optString("refresh_token").takeIf { it.isNotEmpty() }, obj.optJSONObject("user")?.optString("id"))
         return true to null
+    }
+
+    fun deviceLogin(
+        login: String, password: String,
+        deviceId: String, deviceName: String, appVersion: String,
+    ): Pair<Boolean, String?> {
+        var lastResult: Pair<Boolean, String?> = false to "Login vazio"
+        for ((idx, candidate) in loginCandidates(login).withIndex()) {
+            val label = if (candidate == login.trim().lowercase()) candidate else "$candidate (CPF→email)"
+            lastDebug = HttpDebug(false, 0, "[login] tentativa ${idx + 1}: $label")
+            val result = deviceLoginOnce(candidate, password, deviceId, deviceName, appVersion)
+            if (result.first) return result
+            lastResult = result
+            val msg = result.second.orEmpty().lowercase()
+            if (!msg.contains("invalid login") && !msg.contains("credenciais inválidas")) break
+        }
+        return lastResult
     }
 
     fun deviceAnnounce(deviceId: String, deviceName: String, appVersion: String): Boolean {
