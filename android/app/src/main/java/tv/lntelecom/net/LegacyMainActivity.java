@@ -1,11 +1,17 @@
 package tv.lntelecom.net;
 
 import android.app.Activity;
+import android.app.DownloadManager;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.database.Cursor;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.view.KeyEvent;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -16,10 +22,16 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Toast;
 import android.content.pm.PackageInfo;
+import androidx.core.content.FileProvider;
+
+import java.io.File;
 
 public class LegacyMainActivity extends Activity {
     private WebView webView;
+    private Long currentDownloadId = null;
+    private BroadcastReceiver downloadReceiver = null;
 
     /** Bridge JS exposto como window.LntvLegacy — usado pelo auto-update do APK no legacy. */
     private class LegacyUpdateBridge {
@@ -44,12 +56,106 @@ public class LegacyMainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void downloadApk(String url) {
+        public void downloadApk(final String url) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    startApkDownload(url);
+                }
+            });
+        }
+    }
+
+    private void startApkDownload(String url) {
+        try {
+            Toast.makeText(this, "Baixando atualização...", Toast.LENGTH_LONG).show();
+
+            // Apaga qualquer APK anterior pra não dar erro de "file already exists"
+            File outFile = new File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "lntv-update.apk");
+            if (outFile.exists()) outFile.delete();
+
+            DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+            DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
+            req.setTitle("LN TV — Atualização");
+            req.setDescription("Baixando nova versão");
+            req.setMimeType("application/vnd.android.package-archive");
+            req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+            req.setDestinationUri(Uri.fromFile(outFile));
+            req.setAllowedOverRoaming(true);
+            req.setAllowedOverMetered(true);
+
+            currentDownloadId = dm.enqueue(req);
+
+            if (downloadReceiver != null) {
+                try { unregisterReceiver(downloadReceiver); } catch (Exception ignored) {}
+            }
+            downloadReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
+                    if (currentDownloadId == null || id != currentDownloadId) return;
+                    handleDownloadComplete(id);
+                }
+            };
+            registerReceiver(downloadReceiver, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+        } catch (Exception e) {
+            Toast.makeText(this, "Falha ao baixar: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            // Fallback: abre no navegador
             try {
                 Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                 i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 startActivity(i);
             } catch (Exception ignored) {}
+        }
+    }
+
+    private void handleDownloadComplete(long id) {
+        DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+        DownloadManager.Query q = new DownloadManager.Query();
+        q.setFilterById(id);
+        Cursor c = null;
+        try {
+            c = dm.query(q);
+            if (c == null || !c.moveToFirst()) return;
+            int status = c.getInt(c.getColumnIndex(DownloadManager.COLUMN_STATUS));
+            if (status != DownloadManager.STATUS_SUCCESSFUL) {
+                int reason = c.getInt(c.getColumnIndex(DownloadManager.COLUMN_REASON));
+                Toast.makeText(this, "Download falhou (cod " + reason + ")", Toast.LENGTH_LONG).show();
+                return;
+            }
+            String localUri = c.getString(c.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI));
+            if (localUri == null) return;
+            File apk = new File(Uri.parse(localUri).getPath());
+            if (!apk.exists()) {
+                Toast.makeText(this, "APK não encontrado após download", Toast.LENGTH_LONG).show();
+                return;
+            }
+            launchInstaller(apk);
+        } catch (Exception e) {
+            Toast.makeText(this, "Erro: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        } finally {
+            if (c != null) try { c.close(); } catch (Exception ignored) {}
+        }
+    }
+
+    private void launchInstaller(File apk) {
+        try {
+            Intent install = new Intent(Intent.ACTION_VIEW);
+            install.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                Uri uri = FileProvider.getUriForFile(
+                    this,
+                    getPackageName() + ".fileprovider",
+                    apk
+                );
+                install.setDataAndType(uri, "application/vnd.android.package-archive");
+                install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } else {
+                install.setDataAndType(Uri.fromFile(apk), "application/vnd.android.package-archive");
+            }
+            startActivity(install);
+        } catch (Exception e) {
+            Toast.makeText(this, "Não foi possível abrir o instalador: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
@@ -162,6 +268,10 @@ public class LegacyMainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (downloadReceiver != null) {
+            try { unregisterReceiver(downloadReceiver); } catch (Exception ignored) {}
+            downloadReceiver = null;
+        }
         if (webView != null) {
             // Garante flush antes de destruir
             try {
