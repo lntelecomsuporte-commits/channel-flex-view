@@ -157,7 +157,7 @@ class PlayerActivity : AppCompatActivity() {
         b.osdEpg.text = ""
         val logo = StreamUrl.resolveLogo(logos.getOrNull(index)?.takeIf { it.isNotEmpty() })
         if (logo != null) b.osdLogo.load(logo) { crossfade(false) }
-        else b.osdLogo.setImageResource(R.drawable.ic_launcher_foreground)
+        else b.osdLogo.setImageResource(R.mipmap.ic_launcher)
         b.osd.visibility = View.VISIBLE
         osdHandler.removeCallbacks(hideOsd)
         osdHandler.postDelayed(hideOsd, 4000)
