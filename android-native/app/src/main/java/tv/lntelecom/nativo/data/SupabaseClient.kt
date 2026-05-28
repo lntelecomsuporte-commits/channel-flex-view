@@ -171,6 +171,10 @@ class SupabaseClient(
         login: String, password: String,
         deviceId: String, deviceName: String, appVersion: String,
     ): Pair<Boolean, String?> {
+        // Se o aparelho já está vinculado no painel, não depende mais da senha digitada.
+        // Isso evita ficar preso em "Resposta sem access_token" quando o backend confirma vínculo.
+        if (deviceAutoLogin(deviceId, deviceName, appVersion)) return true to null
+
         var lastResult: Pair<Boolean, String?> = false to "Login vazio"
         for ((idx, candidate) in loginCandidates(login).withIndex()) {
             val label = if (candidate == login.trim().lowercase()) candidate else "$candidate (CPF→email)"
