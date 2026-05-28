@@ -6,21 +6,36 @@ import android.os.Looper
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import coil.load
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import tv.lntelecom.nativo.App
 import tv.lntelecom.nativo.R
+import tv.lntelecom.nativo.data.EpgRepository
+import tv.lntelecom.nativo.data.FavoritesRepository
+import tv.lntelecom.nativo.data.Prefs
 import tv.lntelecom.nativo.data.StreamUrl
+import tv.lntelecom.nativo.data.SupabaseClient
 import tv.lntelecom.nativo.databinding.ActivityPlayerBinding
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class PlayerActivity : AppCompatActivity() {
 
     private lateinit var b: ActivityPlayerBinding
     private var player: ExoPlayer? = null
+    private lateinit var epg: EpgRepository
+    private lateinit var favorites: FavoritesRepository
 
     private lateinit var ids: Array<String>
     private lateinit var numbers: IntArray
@@ -28,10 +43,13 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var types: Array<String>
     private lateinit var names: Array<String>
     private lateinit var logos: Array<String>
+    private lateinit var epgIds: Array<String>
 
     private var index = 0
     private var retries = 0
     private val maxRetries = 6
+
+    private val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
 
     private val osdHandler = Handler(Looper.getMainLooper())
     private val hideOsd = Runnable { b.osd.visibility = View.GONE }
@@ -46,18 +64,34 @@ class PlayerActivity : AppCompatActivity() {
         setContentView(b.root)
         hideSystemUI()
 
+        val app = application as App
+        val prefs = Prefs(this)
+        val sb = SupabaseClient(app.http, App.BACKEND, App.ANON_KEY, prefs)
+        epg = EpgRepository(app.http)
+        favorites = FavoritesRepository(sb, prefs)
+
         ids = intent.getStringArrayExtra("ids") ?: emptyArray()
         numbers = intent.getIntArrayExtra("numbers") ?: IntArray(0)
         urls = intent.getStringArrayExtra("urls") ?: emptyArray()
         types = intent.getStringArrayExtra("types") ?: emptyArray()
         names = intent.getStringArrayExtra("names") ?: emptyArray()
         logos = intent.getStringArrayExtra("logos") ?: emptyArray()
+        epgIds = intent.getStringArrayExtra("epgIds") ?: emptyArray()
         index = intent.getIntExtra("startIndex", 0).coerceIn(0, (ids.size - 1).coerceAtLeast(0))
 
         if (ids.isEmpty()) { finish(); return }
 
         initPlayer()
         loadCurrent()
+
+        // Pré-carrega EPG + favoritos em background
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                epg.ensureLoaded()
+                runCatching { favorites.load() }
+            }
+            refreshOsdEpg()
+        }
     }
 
     private fun initPlayer() {
@@ -127,6 +161,29 @@ class PlayerActivity : AppCompatActivity() {
         b.osd.visibility = View.VISIBLE
         osdHandler.removeCallbacks(hideOsd)
         osdHandler.postDelayed(hideOsd, 4000)
+        refreshOsdEpg()
+    }
+
+    private fun refreshOsdEpg() {
+        val epgId = epgIds.getOrNull(index)?.takeIf { it.isNotEmpty() } ?: return
+        val now = epg.currentProgram(epgId) ?: return
+        val nxt = epg.nextProgram(epgId)
+        val nowLine = "${timeFmt.format(Date(now.startMs))}  ${now.title}"
+        b.osdEpg.text = if (nxt != null)
+            "$nowLine\n${timeFmt.format(Date(nxt.startMs))}  ${nxt.title}"
+        else nowLine
+    }
+
+    private fun toggleFavorite() {
+        val cid = ids.getOrNull(index) ?: return
+        lifecycleScope.launch {
+            val nowFav = withContext(Dispatchers.IO) { favorites.toggle(cid) }
+            Toast.makeText(
+                this@PlayerActivity,
+                if (nowFav) "Favorito adicionado" else "Favorito removido",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
@@ -134,6 +191,8 @@ class PlayerActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> { changeChannel(-1); true }
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> { changeChannel(1); true }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { showOsd(); true }
+            KeyEvent.KEYCODE_STAR, KeyEvent.KEYCODE_BOOKMARK,
+            KeyEvent.KEYCODE_BUTTON_Y -> { toggleFavorite(); true }
             KeyEvent.KEYCODE_BACK -> { finish(); true }
             else -> super.onKeyDown(keyCode, event)
         }
