@@ -16,6 +16,17 @@ const json = (data: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+function loginCandidates(login: string): string[] {
+  const raw = String(login || "").trim().toLowerCase();
+  const out = new Set<string>();
+  const digits = raw.replace(/\D/g, "");
+  if (!raw.includes("@") && (digits.length === 11 || digits.length === 14)) {
+    out.add(`${digits}@tvln.local`);
+  }
+  if (raw) out.add(raw);
+  return [...out];
+}
+
 async function getClientIp(req: Request): Promise<string> {
   const xf = req.headers.get("x-forwarded-for");
   if (xf) return xf.split(",")[0].trim();
@@ -48,20 +59,71 @@ Deno.serve(async (req) => {
       return json({ error: "platform deve ser android ou roku" }, 400);
     }
 
-    // 1) Login via SDK Auth para evitar erro upstream no ambiente self-hosted.
+    // 1) Login via SDK Auth; se falhar, aceita também credencial de playlist
+    // (profiles.username + profiles.playlist_password), que é o "usuário/senha"
+    // mostrado no painel para clientes Hubsoft/IPTV.
     const authClient = createClient(supabaseUrl, anonKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    const { data: authData, error: authError } = await authClient.auth.signInWithPassword({
-      email: String(email).trim().toLowerCase(),
-      password,
-    });
-    if (authError || !authData?.session?.access_token || !authData?.user?.id) {
-      return json({ error: authError?.message || "Credenciais inválidas" }, 401);
+
+    let userId = "";
+    let accessToken = "";
+    let refreshToken = "";
+    let authUser: unknown = null;
+    let lastAuthError = "Credenciais inválidas";
+
+    const candidates = loginCandidates(email);
+    for (const candidate of candidates) {
+      const { data, error } = await authClient.auth.signInWithPassword({ email: candidate, password });
+      if (data?.session?.access_token && data?.user?.id) {
+        userId = data.user.id;
+        accessToken = data.session.access_token;
+        refreshToken = data.session.refresh_token;
+        authUser = data.user;
+        break;
+      }
+      if (error?.message) lastAuthError = error.message;
     }
-    const userId: string = authData.user.id;
-    const accessToken: string = authData.session.access_token;
-    const refreshToken: string = authData.session.refresh_token;
+
+    if (!accessToken) {
+      const loginValues = candidates.length ? candidates : [String(email).trim().toLowerCase()];
+      const { data: profileLogin } = await adminClient
+        .from("profiles")
+        .select("user_id,username,is_blocked,is_active")
+        .in("username", loginValues)
+        .eq("playlist_password", password)
+        .maybeSingle();
+
+      if (profileLogin?.user_id) {
+        const { data: userData, error: userErr } = await adminClient.auth.admin.getUserById(profileLogin.user_id);
+        if (userErr || !userData?.user?.email) {
+          return json({ error: "Usuário não encontrado" }, 404);
+        }
+        const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
+          type: "magiclink",
+          email: userData.user.email,
+        });
+        if (linkErr || !linkData?.properties?.hashed_token) {
+          return json({ error: "Falha ao gerar sessão: " + (linkErr?.message || "no token") }, 500);
+        }
+        const { data: otpData, error: otpErr } = await authClient.auth.verifyOtp({
+          token_hash: linkData.properties.hashed_token,
+          type: "magiclink",
+        });
+        if (otpErr || !otpData?.session?.access_token || !otpData?.user?.id) {
+          return json({ error: "Falha ao validar sessão: " + (otpErr?.message || "no session") }, 500);
+        }
+        userId = otpData.user.id;
+        accessToken = otpData.session.access_token;
+        refreshToken = otpData.session.refresh_token;
+        authUser = otpData.user;
+      }
+    }
+
+    if (!accessToken || !userId) {
+      return json({ error: lastAuthError }, 401);
+    }
+
     const clientIp = await getClientIp(req);
 
     // 2) Verifica se o profile está bloqueado/inativo
@@ -104,7 +166,7 @@ Deno.serve(async (req) => {
         success: true,
         access_token: accessToken,
         refresh_token: refreshToken,
-        user: authData.user,
+        user: authUser,
         device: { ...existing, last_seen_at: lastSeenAt },
       });
     }
@@ -154,7 +216,7 @@ Deno.serve(async (req) => {
       success: true,
       access_token: accessToken,
       refresh_token: refreshToken,
-      user: authData.user,
+      user: authUser,
       device: inserted,
     });
   } catch (error) {

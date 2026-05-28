@@ -41,6 +41,37 @@ class SupabaseClient(
         return b
     }
 
+    private fun compact(value: String): String = value.replace(Regex("\\s+"), " ").trim()
+
+    private fun responsePreview(label: String, status: Int, body: String): String {
+        val prefix = "[$label] HTTP $status"
+        val obj = try { JSONObject(body) } catch (_: Exception) { null }
+        if (obj != null) {
+            val parts = mutableListOf(prefix)
+            listOf("success", "registered", "is_active", "code", "error", "detail", "msg", "message", "limit").forEach { key ->
+                if (obj.has(key)) parts.add("$key=${compact(obj.opt(key)?.toString() ?: "null").take(120)}")
+            }
+            if (obj.has("access_token")) parts.add("access_token=OK")
+            if (obj.has("refresh_token")) parts.add("refresh_token=OK")
+            obj.optJSONObject("user")?.optString("id")?.takeIf { it.isNotEmpty() }?.let { parts.add("user_id=$it") }
+            obj.optJSONObject("device")?.optString("id")?.takeIf { it.isNotEmpty() }?.let { parts.add("device_id_db=$it") }
+            return parts.joinToString(" | ")
+        }
+        return "$prefix ${compact(body).take(220)}"
+    }
+
+    private fun loginCandidates(login: String): List<String> {
+        val raw = login.trim().lowercase()
+        if (raw.isEmpty()) return emptyList()
+        val out = linkedSetOf<String>()
+        val digits = raw.filter { it.isDigit() }
+        if (!raw.contains("@") && (digits.length == 11 || digits.length == 14)) {
+            out.add("$digits@tvln.local")
+        }
+        out.add(raw)
+        return out.toList()
+    }
+
     private fun saveSession(accessToken: String, refreshToken: String?, userId: String?, expiresIn: Long = 3600) {
         prefs.accessToken = accessToken
         prefs.refreshToken = refreshToken
@@ -54,8 +85,7 @@ class SupabaseClient(
                 val body = res.body?.string().orEmpty()
                 // Mantém body COMPLETO em `d.body` pro parser; só trunca pro display.
                 val d = HttpDebug(res.isSuccessful, res.code, body)
-                val preview = body.take(300).replace("\n", " ")
-                lastDebug = HttpDebug(res.isSuccessful, res.code, "[$label] HTTP ${res.code} $preview")
+                lastDebug = HttpDebug(res.isSuccessful, res.code, responsePreview(label, res.code, body))
                 d
             }
         } catch (e: Exception) {
@@ -82,7 +112,7 @@ class SupabaseClient(
         } catch (_: Exception) { false }
     }
 
-    fun deviceLogin(
+    private fun deviceLoginOnce(
         email: String, password: String,
         deviceId: String, deviceName: String, appVersion: String,
     ): Pair<Boolean, String?> {
@@ -110,6 +140,23 @@ class SupabaseClient(
             ?: return false to "Resposta sem access_token"
         saveSession(tok, obj.optString("refresh_token").takeIf { it.isNotEmpty() }, obj.optJSONObject("user")?.optString("id"))
         return true to null
+    }
+
+    fun deviceLogin(
+        login: String, password: String,
+        deviceId: String, deviceName: String, appVersion: String,
+    ): Pair<Boolean, String?> {
+        var lastResult: Pair<Boolean, String?> = false to "Login vazio"
+        for ((idx, candidate) in loginCandidates(login).withIndex()) {
+            val label = if (candidate == login.trim().lowercase()) candidate else "$candidate (CPF→email)"
+            lastDebug = HttpDebug(false, 0, "[login] tentativa ${idx + 1}: $label")
+            val result = deviceLoginOnce(candidate, password, deviceId, deviceName, appVersion)
+            if (result.first) return result
+            lastResult = result
+            val msg = result.second.orEmpty().lowercase()
+            if (!msg.contains("invalid login") && !msg.contains("credenciais inválidas")) break
+        }
+        return lastResult
     }
 
     fun deviceAnnounce(deviceId: String, deviceName: String, appVersion: String): Boolean {
