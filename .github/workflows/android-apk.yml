@@ -184,6 +184,68 @@ jobs:
           EOF
           cat out/version.json
 
+      - name: Build SLIM APK (experimental — sem assets web + R8/minify)
+        run: |
+          # SLIM: mesmo projeto Android, mas:
+          #  1) Apaga assets/public/ (~3-5MB de bundle web que o WebView nunca usa,
+          #     já que capacitor.config.ts tem server.url apontando pro site).
+          #     Deixa um index.html placeholder mínimo só pra não quebrar o
+          #     bootstrap do Capacitor.
+          #  2) Liga minifyEnabled + shrinkResources (R8) com regras em
+          #     proguard-rules.pro pra preservar Capacitor/Media3/plugins.
+          # NÃO altera versionCode/versionName — auto-update continua apontando
+          # pro lntv-latest.apk via version.json.
+          PUBLIC_DIR="android/app/src/main/assets/public"
+          if [ -d "$PUBLIC_DIR" ]; then
+            echo "Tamanho original de assets/public/:"
+            du -sh "$PUBLIC_DIR"
+            rm -rf "$PUBLIC_DIR"
+          fi
+          mkdir -p "$PUBLIC_DIR"
+          cat > "$PUBLIC_DIR/index.html" <<'HTML'
+          <!doctype html><html><head><meta charset="utf-8"><title>LN TV</title></head>
+          <body><script>location.href='https://tv2.lntelecom.net/';</script></body></html>
+          HTML
+
+          # Habilita R8/minify só pra esse build
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/build.gradle')
+          t = p.read_text()
+          t = t.replace('minifyEnabled false',
+                        "minifyEnabled true\n            shrinkResources true")
+          t = t.replace("getDefaultProguardFile('proguard-android.txt')",
+                        "getDefaultProguardFile('proguard-android-optimize.txt')")
+          p.write_text(t)
+          PY
+          grep -E "minifyEnabled|shrinkResources|proguard-android" android/app/build.gradle
+
+          cd android && ./gradlew clean assembleRelease --no-daemon
+
+      - name: Copy SLIM APK to out/
+        run: |
+          SLIM_NAME="lntv-slim-${{ github.run_number }}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "out/${SLIM_NAME}"
+          cp "out/${SLIM_NAME}" out/lntv-slim.apk
+          echo "=== Comparação de tamanhos ==="
+          ls -lh out/lntv-latest.apk out/lntv-slim.apk
+
+      - name: Reverter build.gradle pra build legacy (volta minify off)
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/build.gradle')
+          t = p.read_text()
+          t = t.replace("minifyEnabled true\n            shrinkResources true",
+                        "minifyEnabled false")
+          t = t.replace("getDefaultProguardFile('proguard-android-optimize.txt')",
+                        "getDefaultProguardFile('proguard-android.txt')")
+          p.write_text(t)
+          PY
+          grep -E "minifyEnabled" android/app/build.gradle
+
+
+
       - name: Remove plugins incompatíveis com Android 5.x
         run: |
           # @capacitor/filesystem e @capacitor-community/file-opener exigem APIs SDK 23+
@@ -254,13 +316,16 @@ jobs:
             APKs gerados:
             - **lntv-latest.apk** — Android 6.0+ (minSdk 23) — recomendado, com auto-update
             - **lntv-legacy.apk** — Android 5.0+ (minSdk 21) — TV boxes/dispositivos antigos
+            - **lntv-slim.apk** — EXPERIMENTAL — Android 6+ sem assets web bundled + R8/minify (auto-update NÃO aponta pra ele, instalar manualmente pra testar tamanho/performance)
 
             versionCode: ${{ env.VERSION_CODE }}
             versionName: ${{ env.VERSION_NAME }}
           files: |
             out/lntv-latest.apk
             out/lntv-legacy.apk
+            out/lntv-slim.apk
             out/version.json
+
           make_latest: "true"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
