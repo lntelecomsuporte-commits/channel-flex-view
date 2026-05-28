@@ -158,6 +158,9 @@ public class NativePlayerPlugin extends Plugin {
     @PluginMethod
     public void stop(PluginCall call) {
         getActivity().runOnUiThread(() -> {
+            cancelStallCheck();
+            lastSource = null;
+            lastUrl = null;
             if (player != null) {
                 player.stop();
                 player.clearMediaItems();
