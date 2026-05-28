@@ -61,7 +61,22 @@ public class MainActivity extends BridgeActivity {
 
             WebSettings settings = webView.getSettings();
             settings.setMediaPlaybackRequiresUserGesture(false);
+
+            // Bridge pra suprimir shutdown quando o instalador do APK abrir
+            webView.addJavascriptInterface(new LntvNativeBridge(), "LntvNative");
         }
+
+        // Detecta Power do controle (Android TV / Fire TV) — quando a tela
+        // apaga / entra em stand-by, encerramos o app e liberamos RAM.
+        // ACTION_SCREEN_OFF SÓ funciona com receiver dinâmico (não no manifest).
+        screenOffReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
+                    shutdownAndRelease("screen_off");
+                }
+            }
+        };
 
         // Detecta Power do controle (Android TV / Fire TV) — quando a tela
         // apaga / entra em stand-by, encerramos o app e liberamos RAM.
