@@ -333,15 +333,47 @@ const ChannelList = ({ channels, currentIndex, visible, preloadEpg = false, onSe
     if (!visible) return;
     const el = containerRef.current;
     if (!el) return;
-    const update = () => setListSize({ width: el.clientWidth, height: el.clientHeight });
+
+    let attempts = 0;
+    let forceFallback = false;
+    const HEADER_FALLBACK_PX = 64; // altura aproximada do header "Canais"
+
+    const update = () => {
+      const w = el.clientWidth || window.innerWidth;
+      let h = el.clientHeight;
+      if (h <= 0 || forceFallback) {
+        // Fallback pra WebView antiga onde flex-1 + min-h-0 retorna 0
+        h = Math.max(0, window.innerHeight - HEADER_FALLBACK_PX);
+      }
+      setListSize({ width: w, height: h });
+      if (el.clientHeight <= 0) {
+        attempts += 1;
+        if (attempts >= 3) forceFallback = true;
+      }
+    };
+
     update();
-    if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", update);
-      return () => window.removeEventListener("resize", update);
+    const raf = requestAnimationFrame(update);
+    const t1 = setTimeout(update, 100);
+    const t2 = setTimeout(update, 350);
+
+    let ro: ResizeObserver | null = null;
+    const onResize = () => update();
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(update);
+      ro.observe(el);
     }
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      ro?.disconnect();
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
   }, [visible]);
 
   useEffect(() => {
