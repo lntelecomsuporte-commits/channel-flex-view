@@ -88,6 +88,10 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onUserLeaveHint() {
         super.onUserLeaveHint();
+        if (isInstallingUpdate()) {
+            android.util.Log.i("LNTV", "onUserLeaveHint ignorado: instalando update");
+            return;
+        }
         shutdownAndRelease("user_leave_hint");
     }
 
