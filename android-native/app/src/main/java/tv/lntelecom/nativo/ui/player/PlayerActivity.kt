@@ -349,16 +349,40 @@ class PlayerActivity : AppCompatActivity() {
         if (total == 0) return
         val target = if (direction > 0) (last + pageSize).coerceAtMost(total - 1)
                      else (first - pageSize).coerceAtLeast(0)
-        b.listRecycler.smoothScrollToPosition(target)
+        // scrollToPositionWithOffset é síncrono — assim conseguimos focar
+        // o item depois sem race com smoothScroll.
+        lm.scrollToPositionWithOffset(target, 0)
+        b.listRecycler.post { focusListItem(target) }
+    }
+
+    /** Põe foco D-pad no item da posição, pra o cursor vermelho aparecer já. */
+    private fun focusListItem(position: Int) {
+        val lm = b.listRecycler.layoutManager as? LinearLayoutManager ?: return
+        val vh = b.listRecycler.findViewHolderForAdapterPosition(position)
+        val view = vh?.itemView ?: run {
+            // Item ainda não inflado — tenta de novo no próximo frame
+            b.listRecycler.post {
+                b.listRecycler.findViewHolderForAdapterPosition(position)?.itemView?.requestFocus()
+            }
+            return
+        }
+        view.requestFocus()
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        // Stats overlay: qualquer tecla relevante fecha
+        // Stats overlay: deixa trocar canal com cima/baixo mantendo overlay aberto
         if (b.statsOverlay.visibility == View.VISIBLE) {
             return when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
+                    changeChannel(1); renderStats(); true
+                }
+                KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
+                    changeChannel(-1); renderStats(); true
+                }
                 KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_CENTER,
                 KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MENU -> { hideStats(); true }
-                else -> true
+                // Qualquer outra tecla fecha o overlay e processa normalmente
+                else -> { hideStats(); super.onKeyDown(keyCode, event) }
             }
         }
         // Menu overlay tem prioridade
@@ -374,6 +398,15 @@ class PlayerActivity : AppCompatActivity() {
                     { pageScrollList(1); true }
                 KeyEvent.KEYCODE_DPAD_LEFT -> { pageScrollList(-1); true }
                 KeyEvent.KEYCODE_DPAD_RIGHT -> { pageScrollList(1); true }
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    // Se nada está focado (pós page-scroll), foca o primeiro visível
+                    if (b.listRecycler.findFocus() == null) {
+                        val lm = b.listRecycler.layoutManager as? LinearLayoutManager
+                        val pos = lm?.findFirstVisibleItemPosition() ?: 0
+                        focusListItem(pos)
+                        true
+                    } else super.onKeyDown(keyCode, event)
+                }
                 else -> super.onKeyDown(keyCode, event)
             }
         }
