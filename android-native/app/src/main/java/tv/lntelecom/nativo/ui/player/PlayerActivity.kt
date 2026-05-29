@@ -1,12 +1,17 @@
 package tv.lntelecom.nativo.ui.player
 
+import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.text.InputType
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -20,6 +25,10 @@ import coil.load
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 import tv.lntelecom.nativo.App
 import tv.lntelecom.nativo.BuildConfig
 import tv.lntelecom.nativo.R
@@ -32,6 +41,7 @@ import tv.lntelecom.nativo.data.SupabaseClient
 import tv.lntelecom.nativo.data.model.Channel
 import tv.lntelecom.nativo.databinding.ActivityPlayerBinding
 import tv.lntelecom.nativo.ui.channels.ChannelAdapter
+import tv.lntelecom.nativo.ui.login.LoginActivity
 import tv.lntelecom.nativo.update.UpdateChecker
 import tv.lntelecom.nativo.update.UpdateInstallActivity
 import java.text.SimpleDateFormat
