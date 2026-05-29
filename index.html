@@ -69,12 +69,23 @@
         var verEl = document.getElementById('lntv-boot-ver');
         var errEl = document.getElementById('lntv-err');
         var bootEl = document.getElementById('lntv-boot');
+        var bootDone = false;
         try { verEl.textContent = (navigator.userAgent || '').slice(0, 80); } catch (e) {}
         window.__LNTV_BOOT__ = function (label) {
           try { stepEl.textContent = 'boot: ' + label; } catch (e) {}
-          if (label === 'ready') { try { bootEl.style.display = 'none'; } catch (e) {} }
+          if (label === 'ready') {
+            bootDone = true;
+            try { bootEl.style.display = 'none'; } catch (e) {}
+          }
         };
         function show(title, detail) {
+          // Depois do boot, NÃO derruba a tela com overlay vermelho —
+          // erros runtime do app são tratados pelo ErrorBoundary do React.
+          // Aqui o overlay só serve pra debugar tela preta no boot.
+          if (bootDone) {
+            try { console.error('[LNTV runtime]', title, detail); } catch (e) {}
+            return;
+          }
           try {
             errEl.style.display = 'block';
             errEl.textContent =
