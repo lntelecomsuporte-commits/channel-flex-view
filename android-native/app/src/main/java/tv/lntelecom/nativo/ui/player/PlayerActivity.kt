@@ -226,7 +226,10 @@ class PlayerActivity : AppCompatActivity() {
             val c = channels.getOrNull(index) ?: return@postDelayed
             val resolved = StreamUrl.resolve(c.streamUrl, c.streamType)
             val ib = MediaItem.Builder().setUri(resolved)
-            if (c.streamType == "hls") ib.setMimeType(MimeTypes.APPLICATION_M3U8)
+            when (c.streamType) {
+                "hls" -> ib.setMimeType(MimeTypes.APPLICATION_M3U8)
+                "mp4" -> ib.setMimeType(MimeTypes.VIDEO_MP4)
+            }
             p.setMediaItem(ib.build())
             p.prepare()
             p.playWhenReady = true
