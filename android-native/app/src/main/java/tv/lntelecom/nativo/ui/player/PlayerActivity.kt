@@ -204,8 +204,12 @@ class PlayerActivity : AppCompatActivity() {
         val p = player ?: return
         val c = channels.getOrNull(index) ?: return
         val resolved = StreamUrl.resolve(c.streamUrl, c.streamType)
+        android.util.Log.i("LNTV", "loadCurrent #${c.channelNumber} type=${c.streamType} raw=${c.streamUrl} resolved=$resolved")
         val ib = MediaItem.Builder().setUri(resolved)
-        if (c.streamType == "hls") ib.setMimeType(MimeTypes.APPLICATION_M3U8)
+        when (c.streamType) {
+            "hls" -> ib.setMimeType(MimeTypes.APPLICATION_M3U8)
+            "mp4" -> ib.setMimeType(MimeTypes.VIDEO_MP4)
+        }
         p.setMediaItem(ib.build())
         p.prepare()
         p.playWhenReady = true
