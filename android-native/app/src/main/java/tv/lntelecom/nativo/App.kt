@@ -3,6 +3,7 @@ package tv.lntelecom.nativo
 import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
+import coil.decode.SvgDecoder
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import okhttp3.OkHttpClient
@@ -21,6 +22,7 @@ class App : Application(), ImageLoaderFactory {
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
         .crossfade(true)
+        .components { add(SvgDecoder.Factory()) }
         .memoryCache { MemoryCache.Builder(this).maxSizePercent(0.20).build() }
         .diskCache {
             DiskCache.Builder()
