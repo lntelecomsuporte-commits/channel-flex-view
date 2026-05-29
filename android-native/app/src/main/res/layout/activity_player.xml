@@ -70,4 +70,40 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:visibility="gone"/>
+
+    <!-- Overlay da lista de canais (sobre o player; vídeo continua tocando) -->
+    <FrameLayout
+        android:id="@+id/listOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#CC000000"
+        android:visibility="gone"
+        android:focusable="true"
+        android:clickable="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/listTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Canais"
+                android:textColor="@color/fg"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:paddingBottom="12dp"/>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/listRecycler"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:scrollbars="vertical"
+                android:focusable="true"/>
+        </LinearLayout>
+    </FrameLayout>
 </FrameLayout>
