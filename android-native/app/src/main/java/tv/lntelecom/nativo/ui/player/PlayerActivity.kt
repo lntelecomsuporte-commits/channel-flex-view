@@ -1,5 +1,6 @@
 package tv.lntelecom.nativo.ui.player
 
+import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -14,18 +15,25 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.recyclerview.widget.LinearLayoutManager
 import coil.load
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tv.lntelecom.nativo.App
+import tv.lntelecom.nativo.BuildConfig
 import tv.lntelecom.nativo.R
+import tv.lntelecom.nativo.data.ChannelStore
 import tv.lntelecom.nativo.data.EpgRepository
 import tv.lntelecom.nativo.data.FavoritesRepository
 import tv.lntelecom.nativo.data.Prefs
 import tv.lntelecom.nativo.data.StreamUrl
 import tv.lntelecom.nativo.data.SupabaseClient
+import tv.lntelecom.nativo.data.model.Channel
 import tv.lntelecom.nativo.databinding.ActivityPlayerBinding
+import tv.lntelecom.nativo.ui.channels.ChannelAdapter
+import tv.lntelecom.nativo.update.UpdateChecker
+import tv.lntelecom.nativo.update.UpdateInstallActivity
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -36,17 +44,12 @@ class PlayerActivity : AppCompatActivity() {
     private var player: ExoPlayer? = null
     private lateinit var epg: EpgRepository
     private lateinit var favorites: FavoritesRepository
+    private lateinit var updater: UpdateChecker
+    private lateinit var listAdapter: ChannelAdapter
 
-    private lateinit var ids: Array<String>
-    private lateinit var numbers: IntArray
-    private lateinit var urls: Array<String>
-    private lateinit var types: Array<String>
-    private lateinit var names: Array<String>
-    private lateinit var logos: Array<String>
-    private lateinit var logoSources: Array<String>
-    private lateinit var epgIds: Array<String>
-
+    private var channels: List<Channel> = emptyList()
     private var index = 0
+    private var pendingIndex = -1
     private var retries = 0
     private val maxRetries = 6
 
@@ -57,6 +60,18 @@ class PlayerActivity : AppCompatActivity() {
 
     private val stallHandler = Handler(Looper.getMainLooper())
     private val stallCheck = Runnable { checkStall() }
+
+    private val previewHandler = Handler(Looper.getMainLooper())
+    private val tunePending = Runnable { commitPending() }
+    private val previewDelay = 1500L
+
+    // Double-OK detection
+    private var lastOkTime = 0L
+    private val doubleTapWindow = 400L
+
+    // Triple-BACK detection (only when overlay hidden)
+    private var backTimes = ArrayDeque<Long>()
+    private val backWindow = 1800L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,31 +85,57 @@ class PlayerActivity : AppCompatActivity() {
         val sb = SupabaseClient(app.http, App.BACKEND, App.ANON_KEY, prefs)
         epg = EpgRepository(app.http)
         favorites = FavoritesRepository(sb, prefs)
+        updater = UpdateChecker(this, app.http)
 
-        ids = intent.getStringArrayExtra("ids") ?: emptyArray()
-        numbers = intent.getIntArrayExtra("numbers") ?: IntArray(0)
-        urls = intent.getStringArrayExtra("urls") ?: emptyArray()
-        types = intent.getStringArrayExtra("types") ?: emptyArray()
-        names = intent.getStringArrayExtra("names") ?: emptyArray()
-        logos = intent.getStringArrayExtra("logos") ?: emptyArray()
-        logoSources = intent.getStringArrayExtra("logoSources") ?: Array(logos.size) { "" }
-        epgIds = intent.getStringArrayExtra("epgIds") ?: emptyArray()
-        index = intent.getIntExtra("startIndex", 0).coerceIn(0, (ids.size - 1).coerceAtLeast(0))
+        channels = ChannelStore.channels
+        if (channels.isEmpty()) { finish(); return }
 
-        if (ids.isEmpty()) { finish(); return }
+        index = intent.getIntExtra("startIndex", 0).coerceIn(0, channels.size - 1)
 
         initPlayer()
+        setupListOverlay()
         loadCurrent()
 
-        // Pré-carrega EPG + favoritos em background
         lifecycleScope.launch {
             withContext(Dispatchers.IO) {
                 epg.ensureLoaded()
                 runCatching { favorites.load() }
             }
             refreshOsdEpg()
+            listAdapter.notifyDataSetChanged()
+        }
+
+        checkUpdate()
+    }
+
+    private fun setupListOverlay() {
+        listAdapter = ChannelAdapter(epg = epg) { c ->
+            val idx = channels.indexOfFirst { it.id == c.id }
+            if (idx >= 0) {
+                index = idx
+                hideListOverlay()
+                loadCurrent()
+            }
+        }
+        b.listRecycler.layoutManager = LinearLayoutManager(this)
+        b.listRecycler.adapter = listAdapter
+        listAdapter.submit(channels)
+        b.listTitle.text = "Canais — ${channels.size}"
+    }
+
+    private fun showListOverlay() {
+        b.listOverlay.visibility = View.VISIBLE
+        b.listRecycler.post {
+            b.listRecycler.scrollToPosition(index.coerceAtLeast(0))
+            b.listRecycler.requestFocus()
         }
     }
+
+    private fun hideListOverlay() {
+        b.listOverlay.visibility = View.GONE
+    }
+
+    private val isListOpen: Boolean get() = b.listOverlay.visibility == View.VISIBLE
 
     private fun initPlayer() {
         val p = ExoPlayer.Builder(this).build()
@@ -117,14 +158,15 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun loadCurrent() {
         val p = player ?: return
-        val resolved = StreamUrl.resolve(urls[index], types[index])
-        val itemBuilder = MediaItem.Builder().setUri(resolved)
-        if (types[index] == "hls") itemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
-        p.setMediaItem(itemBuilder.build())
+        val c = channels.getOrNull(index) ?: return
+        val resolved = StreamUrl.resolve(c.streamUrl, c.streamType)
+        val ib = MediaItem.Builder().setUri(resolved)
+        if (c.streamType == "hls") ib.setMimeType(MimeTypes.APPLICATION_M3U8)
+        p.setMediaItem(ib.build())
         p.prepare()
         p.playWhenReady = true
         retries = 0
-        showOsd()
+        showOsd(index)
     }
 
     private fun attemptRetry(reason: String) {
@@ -133,9 +175,10 @@ class PlayerActivity : AppCompatActivity() {
         val delay = (1000L * (1 shl (retries - 1))).coerceAtMost(8000L)
         b.playerView.postDelayed({
             val p = player ?: return@postDelayed
-            val resolved = StreamUrl.resolve(urls[index], types[index])
+            val c = channels.getOrNull(index) ?: return@postDelayed
+            val resolved = StreamUrl.resolve(c.streamUrl, c.streamType)
             val ib = MediaItem.Builder().setUri(resolved)
-            if (types[index] == "hls") ib.setMimeType(MimeTypes.APPLICATION_M3U8)
+            if (c.streamType == "hls") ib.setMimeType(MimeTypes.APPLICATION_M3U8)
             p.setMediaItem(ib.build())
             p.prepare()
             p.playWhenReady = true
@@ -147,30 +190,54 @@ class PlayerActivity : AppCompatActivity() {
         if (p.playbackState == Player.STATE_BUFFERING) attemptRetry("stall")
     }
 
+    /** Troca imediata (UP/DOWN/CH_UP/CH_DOWN). */
     private fun changeChannel(delta: Int) {
-        if (ids.isEmpty()) return
-        index = ((index + delta) % ids.size + ids.size) % ids.size
+        if (channels.isEmpty()) return
+        cancelPending()
+        index = ((index + delta) % channels.size + channels.size) % channels.size
         loadCurrent()
     }
 
-    private fun showOsd() {
-        b.osdNumber.text = numbers.getOrNull(index)?.toString() ?: ""
-        b.osdName.text = names.getOrNull(index) ?: ""
+    /** Preview com LEFT/RIGHT: só atualiza OSD, sintoniza após delay. */
+    private fun previewChannel(delta: Int) {
+        if (channels.isEmpty()) return
+        val base = if (pendingIndex >= 0) pendingIndex else index
+        pendingIndex = ((base + delta) % channels.size + channels.size) % channels.size
+        showOsd(pendingIndex)
+        previewHandler.removeCallbacks(tunePending)
+        previewHandler.postDelayed(tunePending, previewDelay)
+    }
+
+    private fun commitPending() {
+        if (pendingIndex < 0 || pendingIndex == index) { pendingIndex = -1; return }
+        index = pendingIndex
+        pendingIndex = -1
+        loadCurrent()
+    }
+
+    private fun cancelPending() {
+        previewHandler.removeCallbacks(tunePending)
+        pendingIndex = -1
+    }
+
+    private fun showOsd(showIndex: Int) {
+        val c = channels.getOrNull(showIndex) ?: return
+        b.osdNumber.text = c.channelNumber.toString()
+        b.osdName.text = c.name
         b.osdEpg.text = ""
-        val logo = StreamUrl.resolveLogo(
-            logos.getOrNull(index)?.takeIf { it.isNotEmpty() },
-            logoSources.getOrNull(index)?.takeIf { it.isNotEmpty() }
-        )
+        val logo = StreamUrl.resolveLogo(c.logoUrl, c.logoSourceUrl)
         if (logo != null) b.osdLogo.load(logo) { crossfade(false) }
         else b.osdLogo.setImageResource(R.mipmap.ic_launcher)
         b.osd.visibility = View.VISIBLE
         osdHandler.removeCallbacks(hideOsd)
         osdHandler.postDelayed(hideOsd, 4000)
-        refreshOsdEpg()
+        refreshOsdEpgFor(showIndex)
     }
 
-    private fun refreshOsdEpg() {
-        val epgId = epgIds.getOrNull(index)?.takeIf { it.isNotEmpty() } ?: return
+    private fun refreshOsdEpg() = refreshOsdEpgFor(if (pendingIndex >= 0) pendingIndex else index)
+
+    private fun refreshOsdEpgFor(i: Int) {
+        val epgId = channels.getOrNull(i)?.epgChannelId?.takeIf { it.isNotEmpty() } ?: return
         val now = epg.currentProgram(epgId) ?: return
         val nxt = epg.nextProgram(epgId)
         val nowLine = "${timeFmt.format(Date(now.startMs))}  ${now.title}"
@@ -180,7 +247,7 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun toggleFavorite() {
-        val cid = ids.getOrNull(index) ?: return
+        val cid = channels.getOrNull(index)?.id ?: return
         lifecycleScope.launch {
             val nowFav = withContext(Dispatchers.IO) { favorites.toggle(cid) }
             Toast.makeText(
@@ -191,21 +258,90 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
+    private fun handleOkPress(): Boolean {
+        // Se tem preview pendente, OK confirma imediatamente.
+        if (pendingIndex >= 0) {
+            previewHandler.removeCallbacks(tunePending)
+            commitPending()
+            return true
+        }
+        val now = System.currentTimeMillis()
+        if (now - lastOkTime <= doubleTapWindow) {
+            lastOkTime = 0L
+            showListOverlay()
+        } else {
+            lastOkTime = now
+            showOsd(index)
+        }
+        return true
+    }
+
+    private fun handleBackPress(): Boolean {
+        val now = System.currentTimeMillis()
+        backTimes.addLast(now)
+        while (backTimes.isNotEmpty() && now - backTimes.first() > backWindow) backTimes.removeFirst()
+        if (backTimes.size >= 3) {
+            backTimes.clear()
+            finishAffinity()
+            return true
+        }
+        // 1 ou 2 toques: ignora (não fecha o player sozinho)
+        return true
+    }
+
+    private fun pageScrollList(direction: Int) {
+        val lm = b.listRecycler.layoutManager as? LinearLayoutManager ?: return
+        val first = lm.findFirstVisibleItemPosition()
+        val last = lm.findLastVisibleItemPosition()
+        val pageSize = (last - first).coerceAtLeast(1)
+        val total = listAdapter.itemCount
+        if (total == 0) return
+        val target = if (direction > 0) (last + pageSize).coerceAtMost(total - 1)
+                     else (first - pageSize).coerceAtLeast(0)
+        b.listRecycler.smoothScrollToPosition(target)
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (isListOpen) {
+            return when (keyCode) {
+                KeyEvent.KEYCODE_BACK -> { hideListOverlay(); backTimes.clear(); true }
+                KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_MEDIA_REWIND ->
+                    { pageScrollList(-1); true }
+                KeyEvent.KEYCODE_PAGE_DOWN, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ->
+                    { pageScrollList(1); true }
+                KeyEvent.KEYCODE_DPAD_LEFT -> { pageScrollList(-1); true }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> { pageScrollList(1); true }
+                else -> super.onKeyDown(keyCode, event)
+            }
+        }
         return when (keyCode) {
-            // UP aumenta canal (vai para o próximo), DOWN diminui (vai para o anterior)
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> { changeChannel(1); true }
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> { changeChannel(-1); true }
-            // LEFT/RIGHT também navegam (como no release antigo)
             KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_NEXT,
-            KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { changeChannel(1); true }
+            KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { previewChannel(1); true }
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_PREVIOUS,
-            KeyEvent.KEYCODE_MEDIA_REWIND -> { changeChannel(-1); true }
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { showOsd(); true }
+            KeyEvent.KEYCODE_MEDIA_REWIND -> { previewChannel(-1); true }
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> handleOkPress()
             KeyEvent.KEYCODE_STAR, KeyEvent.KEYCODE_BOOKMARK,
             KeyEvent.KEYCODE_BUTTON_Y -> { toggleFavorite(); true }
-            KeyEvent.KEYCODE_BACK -> { finish(); true }
+            KeyEvent.KEYCODE_BACK -> handleBackPress()
             else -> super.onKeyDown(keyCode, event)
+        }
+    }
+
+    private fun checkUpdate() {
+        lifecycleScope.launch {
+            val current = BuildConfig.VERSION_CODE
+            val update = withContext(Dispatchers.IO) { updater.check(current) } ?: return@launch
+            Toast.makeText(
+                this@PlayerActivity,
+                "Atualização ${update.versionName} disponível — baixando…",
+                Toast.LENGTH_LONG
+            ).show()
+            val file = withContext(Dispatchers.IO) { updater.download(update) } ?: return@launch
+            startActivity(Intent(this@PlayerActivity, UpdateInstallActivity::class.java).apply {
+                putExtra("apkPath", file.absolutePath)
+            })
         }
     }
 
@@ -223,6 +359,7 @@ class PlayerActivity : AppCompatActivity() {
         super.onDestroy()
         stallHandler.removeCallbacksAndMessages(null)
         osdHandler.removeCallbacksAndMessages(null)
+        previewHandler.removeCallbacksAndMessages(null)
         player?.release()
         player = null
     }
