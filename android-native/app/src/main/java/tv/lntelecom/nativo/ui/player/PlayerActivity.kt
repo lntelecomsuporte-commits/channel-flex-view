@@ -599,6 +599,7 @@ class PlayerActivity : AppCompatActivity() {
         stallHandler.removeCallbacksAndMessages(null)
         osdHandler.removeCallbacksAndMessages(null)
         previewHandler.removeCallbacksAndMessages(null)
+        statsHandler.removeCallbacksAndMessages(null)
         player?.release()
         player = null
     }
