@@ -449,14 +449,54 @@ class PlayerActivity : AppCompatActivity() {
         cancelPending()
         osdHandler.removeCallbacks(hideOsd)
         b.osd.visibility = View.GONE
-        b.menuUserInfo.text = prefs.userId?.let { "ID: ${it.take(8)}…" } ?: ""
+        b.menuAboutInfo.visibility = View.GONE
+        b.menuUserInfo.text = buildUserHeader()
         menuFocus = 0
         renderMenu()
         b.menuOverlay.visibility = View.VISIBLE
         b.menuOverlay.requestFocus()
+        // Carrega perfil + PIN do usuário em background pra exibir nome e ter PIN atual
+        fetchUserProfile()
     }
 
-    private fun hideMenu() { b.menuOverlay.visibility = View.GONE }
+    private fun hideMenu() {
+        b.menuOverlay.visibility = View.GONE
+        b.menuAboutInfo.visibility = View.GONE
+    }
+
+    private fun buildUserHeader(): String {
+        val name = userFullName?.takeIf { it.isNotBlank() }
+        val email = userEmailCached?.takeIf { it.isNotBlank() }
+        return when {
+            name != null && email != null -> "$name • $email"
+            name != null -> name
+            email != null -> email
+            else -> prefs.userId?.let { "ID: ${it.take(8)}…" } ?: ""
+        }
+    }
+
+    private fun fetchUserProfile() {
+        val uid = prefs.userId ?: return
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    sb.get("profiles?select=full_name,email,adult_pin&user_id=eq.$uid").use { res ->
+                        if (res.isSuccessful) {
+                            val arr = org.json.JSONArray(res.body?.string() ?: "[]")
+                            arr.optJSONObject(0)?.let { o ->
+                                userFullName = o.optString("full_name").takeIf { it.isNotEmpty() }
+                                userEmailCached = o.optString("email").takeIf { it.isNotEmpty() }
+                                o.optString("adult_pin").takeIf { it.isNotEmpty() }?.let { currentAdultPin = it }
+                            }
+                        }
+                    }
+                }
+            }
+            if (b.menuOverlay.visibility == View.VISIBLE) {
+                b.menuUserInfo.text = buildUserHeader()
+            }
+        }
+    }
 
     private fun renderMenu() {
         val container = b.menuItems
@@ -497,32 +537,37 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun onMenuSelect(id: String) {
         when (id) {
-            "logout" -> doLogout()
             "about" -> showAbout()
             "change-password" -> showChangePassword()
+            "change-pin" -> showChangePin()
         }
     }
 
-    private fun doLogout() {
-        sb.signOut()
-        startActivity(Intent(this, LoginActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-        })
-        finish()
-    }
-
     private fun showAbout() {
-        AlertDialog.Builder(this)
-            .setTitle("Sobre")
-            .setMessage(
-                "LN TV\nVersão: ${BuildConfig.VERSION_NAME}\n" +
-                "Build: ${BuildConfig.VERSION_CODE}\nServidor: ${App.BACKEND}"
-            )
-            .setPositiveButton("OK", null)
-            .show()
+        val androidVer = android.os.Build.VERSION.RELEASE
+        val sdk = android.os.Build.VERSION.SDK_INT
+        val device = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
+        val name = userFullName?.takeIf { it.isNotBlank() } ?: "—"
+        val email = userEmailCached?.takeIf { it.isNotBlank() } ?: "—"
+        val info = """
+            App         : LN TV
+            Versão APK  : ${BuildConfig.VERSION_NAME}
+            Build       : ${BuildConfig.VERSION_CODE}
+            Servidor    : ${App.BACKEND}
+
+            Usuário     : $name
+            Login       : $email
+
+            Aparelho    : $device
+            Android     : $androidVer  (SDK $sdk)
+        """.trimIndent()
+        b.menuAboutInfo.text = info
+        b.menuAboutInfo.visibility = View.VISIBLE
     }
 
     private fun showChangePassword() {
+        // ESCONDE o menu antes — senão o handleMenuKey come as teclas do dialog
+        hideMenu()
         val input = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             hint = "Nova senha (mín. 6)"
@@ -538,6 +583,70 @@ class PlayerActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancelar", null)
             .show()
+    }
+
+    private fun showChangePin() {
+        hideMenu()
+        // 1) Confirma PIN atual
+        val cur = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            hint = "PIN atual (4 dígitos)"
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Confirme o PIN atual")
+            .setView(cur)
+            .setPositiveButton("Avançar") { _, _ ->
+                if (cur.text.toString() != currentAdultPin) {
+                    Toast.makeText(this, "PIN incorreto", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                // 2) Pede novo PIN
+                val novo = EditText(this).apply {
+                    inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+                    hint = "Novo PIN (4 dígitos)"
+                }
+                AlertDialog.Builder(this)
+                    .setTitle("Novo PIN parental")
+                    .setView(novo)
+                    .setPositiveButton("Salvar") { _, _ ->
+                        val pin = novo.text.toString()
+                        if (pin.length != 4 || !pin.all { it.isDigit() }) {
+                            Toast.makeText(this, "O PIN precisa ter 4 dígitos", Toast.LENGTH_SHORT).show()
+                        } else updateAdultPin(pin)
+                    }
+                    .setNegativeButton("Cancelar", null)
+                    .show()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun updateAdultPin(pin: String) {
+        val uid = prefs.userId ?: return
+        lifecycleScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                runCatching {
+                    sb.ensureFreshSession()
+                    val tok = prefs.accessToken ?: return@runCatching false
+                    val body = JSONObject().put("adult_pin", pin).toString()
+                        .toRequestBody("application/json".toMediaType())
+                    val req = Request.Builder()
+                        .url("${sb.restUrl}/profiles?user_id=eq.$uid")
+                        .header("apikey", App.ANON_KEY)
+                        .header("Authorization", "Bearer $tok")
+                        .header("Content-Type", "application/json")
+                        .header("Prefer", "return=minimal")
+                        .patch(body).build()
+                    (application as App).http.newCall(req).execute().use { it.isSuccessful }
+                }.getOrDefault(false)
+            }
+            Toast.makeText(
+                this@PlayerActivity,
+                if (ok) "PIN atualizado!" else "Falha ao atualizar PIN",
+                Toast.LENGTH_SHORT
+            ).show()
+            if (ok) currentAdultPin = pin
+        }
     }
 
     private fun updatePassword(pwd: String) {
