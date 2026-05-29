@@ -8,14 +8,14 @@
     </item>
     <item android:state_selected="true">
         <shape android:shape="rectangle">
-            <solid android:color="@color/bg_elevated" />
+            <solid android:color="#CC171717" />
             <stroke android:width="2dp" android:color="@color/primary" />
             <corners android:radius="6dp" />
         </shape>
     </item>
     <item>
         <shape android:shape="rectangle">
-            <solid android:color="@color/bg_card" />
+            <solid android:color="#B31F1F1F" />
             <corners android:radius="6dp" />
         </shape>
     </item>

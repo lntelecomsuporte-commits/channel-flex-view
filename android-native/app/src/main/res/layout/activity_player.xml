@@ -76,7 +76,7 @@
         android:id="@+id/listOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#CC000000"
+        android:background="#80000000"
         android:visibility="gone"
         android:focusable="true"
         android:clickable="true">
@@ -144,6 +144,16 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"/>
+            <TextView
+                android:id="@+id/menuAboutInfo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/fg_muted"
+                android:textSize="13sp"
+                android:gravity="start"
+                android:fontFamily="monospace"
+                android:paddingTop="16dp"
+                android:visibility="gone"/>
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
