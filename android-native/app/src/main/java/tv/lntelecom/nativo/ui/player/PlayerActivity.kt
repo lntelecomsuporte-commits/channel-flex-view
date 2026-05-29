@@ -52,6 +52,8 @@ class PlayerActivity : AppCompatActivity() {
 
     private lateinit var b: ActivityPlayerBinding
     private var player: ExoPlayer? = null
+    private lateinit var sb: SupabaseClient
+    private lateinit var prefs: Prefs
     private lateinit var epg: EpgRepository
     private lateinit var favorites: FavoritesRepository
     private lateinit var updater: UpdateChecker
@@ -83,6 +85,35 @@ class PlayerActivity : AppCompatActivity() {
     private var backTimes = ArrayDeque<Long>()
     private val backWindow = 1800L
 
+    // Settings menu
+    private var menuFocus = 0
+    private val menuItems = listOf(
+        "🔑 Trocar senha de login" to "change-password",
+        "ℹ️ Sobre o aplicativo" to "about",
+        "🚪 Sair da conta" to "logout",
+    )
+
+    // Stats overlay live updater
+    private val statsHandler = Handler(Looper.getMainLooper())
+    private val statsTick = object : Runnable {
+        override fun run() {
+            if (b.statsOverlay.visibility == View.VISIBLE) {
+                renderStats()
+                statsHandler.postDelayed(this, 1000)
+            }
+        }
+    }
+
+    // Konami sequence: RIGHT x3, LEFT x2, RIGHT, OK
+    private val konamiPattern = listOf(
+        KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_RIGHT,
+        KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_LEFT,
+        KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_CENTER,
+    )
+    private val konamiBuffer = ArrayDeque<Int>()
+    private var konamiLastTs = 0L
+    private val konamiWindow = 4000L
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -91,8 +122,8 @@ class PlayerActivity : AppCompatActivity() {
         hideSystemUI()
 
         val app = application as App
-        val prefs = Prefs(this)
-        val sb = SupabaseClient(app.http, App.BACKEND, App.ANON_KEY, prefs)
+        prefs = Prefs(this)
+        sb = SupabaseClient(app.http, App.BACKEND, App.ANON_KEY, prefs)
         epg = EpgRepository(app.http)
         favorites = FavoritesRepository(sb, prefs)
         updater = UpdateChecker(this, app.http)
