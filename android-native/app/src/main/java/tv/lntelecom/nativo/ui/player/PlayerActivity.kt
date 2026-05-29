@@ -43,6 +43,7 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var types: Array<String>
     private lateinit var names: Array<String>
     private lateinit var logos: Array<String>
+    private lateinit var logoSources: Array<String>
     private lateinit var epgIds: Array<String>
 
     private var index = 0
@@ -76,6 +77,7 @@ class PlayerActivity : AppCompatActivity() {
         types = intent.getStringArrayExtra("types") ?: emptyArray()
         names = intent.getStringArrayExtra("names") ?: emptyArray()
         logos = intent.getStringArrayExtra("logos") ?: emptyArray()
+        logoSources = intent.getStringArrayExtra("logoSources") ?: Array(logos.size) { "" }
         epgIds = intent.getStringArrayExtra("epgIds") ?: emptyArray()
         index = intent.getIntExtra("startIndex", 0).coerceIn(0, (ids.size - 1).coerceAtLeast(0))
 
@@ -155,7 +157,10 @@ class PlayerActivity : AppCompatActivity() {
         b.osdNumber.text = numbers.getOrNull(index)?.toString() ?: ""
         b.osdName.text = names.getOrNull(index) ?: ""
         b.osdEpg.text = ""
-        val logo = StreamUrl.resolveLogo(logos.getOrNull(index)?.takeIf { it.isNotEmpty() })
+        val logo = StreamUrl.resolveLogo(
+            logos.getOrNull(index)?.takeIf { it.isNotEmpty() },
+            logoSources.getOrNull(index)?.takeIf { it.isNotEmpty() }
+        )
         if (logo != null) b.osdLogo.load(logo) { crossfade(false) }
         else b.osdLogo.setImageResource(R.mipmap.ic_launcher)
         b.osd.visibility = View.VISIBLE
@@ -188,8 +193,14 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         return when (keyCode) {
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> { changeChannel(-1); true }
-            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> { changeChannel(1); true }
+            // UP aumenta canal (vai para o próximo), DOWN diminui (vai para o anterior)
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> { changeChannel(1); true }
+            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> { changeChannel(-1); true }
+            // LEFT/RIGHT também navegam (como no release antigo)
+            KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_NEXT,
+            KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { changeChannel(1); true }
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_PREVIOUS,
+            KeyEvent.KEYCODE_MEDIA_REWIND -> { changeChannel(-1); true }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { showOsd(); true }
             KeyEvent.KEYCODE_STAR, KeyEvent.KEYCODE_BOOKMARK,
             KeyEvent.KEYCODE_BUTTON_Y -> { toggleFavorite(); true }

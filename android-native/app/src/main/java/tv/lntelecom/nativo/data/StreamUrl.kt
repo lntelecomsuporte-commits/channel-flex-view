@@ -9,9 +9,7 @@ object StreamUrl {
 
     fun resolve(raw: String, type: String): String {
         if (raw.isBlank()) return raw
-        // HTTPS direto: usa como veio
         if (raw.startsWith("https://")) return raw
-        // HTTP plano: força proxy pra evitar cleartext bloqueado em Android 9+
         if (raw.startsWith("http://")) {
             return "$BACKEND/functions/v1/hls-proxy?url=" +
                 java.net.URLEncoder.encode(raw, "UTF-8")
@@ -19,10 +17,15 @@ object StreamUrl {
         return raw
     }
 
-    fun resolveLogo(raw: String?): String? {
-        if (raw.isNullOrBlank()) return null
-        if (raw.startsWith("http")) return raw
-        // logos locais nginx /logos/...
-        return if (raw.startsWith("/")) "$BACKEND$raw" else "$BACKEND/$raw"
+    /** Logo principal: usa logo_url (local /logos/) com fallback pra logo_source_url (URL externa). */
+    fun resolveLogo(logoUrl: String?, sourceUrl: String? = null): String? {
+        val primary = logoUrl?.takeIf { it.isNotBlank() }
+        if (primary != null) {
+            if (primary.startsWith("http")) return primary
+            return if (primary.startsWith("/")) "$BACKEND$primary" else "$BACKEND/$primary"
+        }
+        val src = sourceUrl?.takeIf { it.isNotBlank() } ?: return null
+        if (src.startsWith("http")) return src
+        return if (src.startsWith("/")) "$BACKEND$src" else "$BACKEND/$src"
     }
 }

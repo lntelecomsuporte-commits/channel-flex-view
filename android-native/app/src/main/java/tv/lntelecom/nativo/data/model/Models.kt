@@ -7,6 +7,7 @@ data class Channel(
     val streamUrl: String,
     val streamType: String, // "hls" | "mp4"
     val logoUrl: String?,
+    val logoSourceUrl: String?,
     val categoryId: String?,
     val categoryName: String?,
     val epgChannelId: String?,

@@ -14,12 +14,12 @@
         app:use_controller="false"
         app:surface_type="surface_view"/>
 
-    <!-- OSD: número + logo + nome + EPG -->
+    <!-- OSD: número + logo + nome + EPG (parte de baixo) -->
     <LinearLayout
         android:id="@+id/osd"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="top"
+        android:layout_gravity="bottom"
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:padding="16dp"
