@@ -106,4 +106,90 @@
                 android:focusable="true"/>
         </LinearLayout>
     </FrameLayout>
+
+    <!-- Menu de Configurações (tecla MENU) -->
+    <FrameLayout
+        android:id="@+id/menuOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#E6000000"
+        android:visibility="gone"
+        android:focusable="true"
+        android:clickable="true">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:orientation="vertical"
+            android:padding="32dp">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="⚙️ Configurações"
+                android:textColor="@color/fg"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:paddingBottom="16dp"/>
+            <TextView
+                android:id="@+id/menuUserInfo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/fg_muted"
+                android:textSize="14sp"
+                android:gravity="center"
+                android:paddingBottom="20dp"/>
+            <LinearLayout
+                android:id="@+id/menuItems"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"/>
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="↑↓ navegar • OK selecionar • Voltar fechar"
+                android:textColor="@color/fg_muted"
+                android:textSize="13sp"
+                android:gravity="center"
+                android:paddingTop="20dp"/>
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- Overlay de Estatísticas (sequência secreta) -->
+    <LinearLayout
+        android:id="@+id/statsOverlay"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_margin="16dp"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="#D0000000"
+        android:minWidth="320dp"
+        android:visibility="gone">
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="📊 Estatísticas"
+            android:textColor="#dc2626"
+            android:textStyle="bold"
+            android:textSize="16sp"
+            android:paddingBottom="8dp"/>
+        <TextView
+            android:id="@+id/statsBody"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/fg"
+            android:textSize="13sp"
+            android:fontFamily="monospace"
+            android:lineSpacingExtra="3dp"/>
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="OK ou Voltar fecha"
+            android:textColor="@color/fg_muted"
+            android:textSize="11sp"
+            android:paddingTop="8dp"
+            android:gravity="end"/>
+    </LinearLayout>
 </FrameLayout>
