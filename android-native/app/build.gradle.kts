@@ -90,6 +90,8 @@ dependencies {
 
     // Coil pra logos (carrega + cache em disco, leve)
     implementation("io.coil-kt:coil:2.7.0")
+    // Decoders extras: SVG e WebP animado (vários canais têm logo .svg/.webp)
+    implementation("io.coil-kt:coil-svg:2.7.0")
 
     // ExoPlayer/Media3 — HLS + MP4
     val media3 = "1.4.1"
