@@ -89,9 +89,12 @@ class PlayerActivity : AppCompatActivity() {
     private var menuFocus = 0
     private val menuItems = listOf(
         "🔑 Trocar senha de login" to "change-password",
+        "🔞 Trocar PIN dos canais adultos" to "change-pin",
         "ℹ️ Sobre o aplicativo" to "about",
-        "🚪 Sair da conta" to "logout",
     )
+    private var userFullName: String? = null
+    private var userEmailCached: String? = null
+    private var currentAdultPin: String = "1234"
 
     // Stats overlay live updater
     private val statsHandler = Handler(Looper.getMainLooper())
