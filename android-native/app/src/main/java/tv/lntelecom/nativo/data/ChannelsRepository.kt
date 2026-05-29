@@ -66,6 +66,7 @@ class ChannelsRepository(private val sb: SupabaseClient) {
                             streamUrl = o.optString("stream_url"),
                             streamType = o.optString("stream_type", "hls"),
                             logoUrl = o.optString("logo_url").takeIf { it.isNotEmpty() },
+                            logoSourceUrl = o.optString("logo_source_url").takeIf { it.isNotEmpty() },
                             categoryId = catId,
                             categoryName = catId?.let { catMap[it] },
                             epgChannelId = o.optString("epg_channel_id").takeIf { it.isNotEmpty() },
