@@ -109,7 +109,23 @@ function kickWorkers() {
   }
 }
 
+function isSameOriginOrBackend(url: string): boolean {
+  try {
+    const u = new URL(url, window.location.origin);
+    if (u.origin === window.location.origin) return true;
+    // backend self-hosted
+    if (/(^|\.)lntelecom\.net$/i.test(u.hostname)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 async function downloadOne(url: string, version: string) {
+  // Pula fetch() em URLs cross-origin: CORS bloqueia e gera unhandledrejection
+  // (que aparece como tela vermelha de erro). A <img> tag renderiza essas URLs
+  // normalmente sem CORS — só não temos o data URL cacheado, e tudo bem.
+  if (!isSameOriginOrBackend(url)) return;
   try {
     const res = await fetch(url);
     if (!res.ok) return;
