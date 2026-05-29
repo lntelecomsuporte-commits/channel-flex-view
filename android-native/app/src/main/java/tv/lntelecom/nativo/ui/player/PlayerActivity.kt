@@ -343,6 +343,18 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        // Stats overlay: qualquer tecla relevante fecha
+        if (b.statsOverlay.visibility == View.VISIBLE) {
+            return when (keyCode) {
+                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_CENTER,
+                KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MENU -> { hideStats(); true }
+                else -> true
+            }
+        }
+        // Menu overlay tem prioridade
+        if (b.menuOverlay.visibility == View.VISIBLE) {
+            return handleMenuKey(keyCode)
+        }
         if (isListOpen) {
             return when (keyCode) {
                 KeyEvent.KEYCODE_BACK -> { hideListOverlay(); backTimes.clear(); true }
@@ -354,6 +366,11 @@ class PlayerActivity : AppCompatActivity() {
                 KeyEvent.KEYCODE_DPAD_RIGHT -> { pageScrollList(1); true }
                 else -> super.onKeyDown(keyCode, event)
             }
+        }
+        // Konami: registra tecla antes de processar
+        trackKonami(keyCode)
+        if (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_BUTTON_START) {
+            showMenu(); return true
         }
         return when (keyCode) {
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> { changeChannel(1); true }
@@ -369,6 +386,187 @@ class PlayerActivity : AppCompatActivity() {
             else -> super.onKeyDown(keyCode, event)
         }
     }
+
+    // ====== Konami: D D D E E D OK ======
+    private fun trackKonami(keyCode: Int) {
+        val now = System.currentTimeMillis()
+        if (now - konamiLastTs > konamiWindow) konamiBuffer.clear()
+        konamiLastTs = now
+        konamiBuffer.addLast(keyCode)
+        while (konamiBuffer.size > konamiPattern.size) konamiBuffer.removeFirst()
+        if (konamiBuffer.size == konamiPattern.size &&
+            konamiBuffer.toList() == konamiPattern) {
+            konamiBuffer.clear()
+            showStats()
+        }
+    }
+
+    // ====== Menu ======
+    private fun showMenu() {
+        cancelPending()
+        osdHandler.removeCallbacks(hideOsd)
+        b.osd.visibility = View.GONE
+        b.menuUserInfo.text = prefs.userId?.let { "ID: ${it.take(8)}…" } ?: ""
+        menuFocus = 0
+        renderMenu()
+        b.menuOverlay.visibility = View.VISIBLE
+        b.menuOverlay.requestFocus()
+    }
+
+    private fun hideMenu() { b.menuOverlay.visibility = View.GONE }
+
+    private fun renderMenu() {
+        val container = b.menuItems
+        container.removeAllViews()
+        menuItems.forEachIndexed { i, (label, _) ->
+            val tv = TextView(this).apply {
+                text = label
+                textSize = 18f
+                setPadding(28, 20, 28, 20)
+                setTextColor(getColor(R.color.fg))
+                setBackgroundColor(
+                    if (i == menuFocus) 0xFFDC2626.toInt() else 0x33FFFFFF
+                )
+            }
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 8 }
+            container.addView(tv, lp)
+        }
+    }
+
+    private fun handleMenuKey(keyCode: Int): Boolean {
+        return when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                menuFocus = (menuFocus + 1) % menuItems.size; renderMenu(); true
+            }
+            KeyEvent.KEYCODE_DPAD_UP -> {
+                menuFocus = (menuFocus - 1 + menuItems.size) % menuItems.size; renderMenu(); true
+            }
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                onMenuSelect(menuItems[menuFocus].second); true
+            }
+            KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_MENU -> { hideMenu(); true }
+            else -> true
+        }
+    }
+
+    private fun onMenuSelect(id: String) {
+        when (id) {
+            "logout" -> doLogout()
+            "about" -> showAbout()
+            "change-password" -> showChangePassword()
+        }
+    }
+
+    private fun doLogout() {
+        sb.signOut()
+        startActivity(Intent(this, LoginActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        })
+        finish()
+    }
+
+    private fun showAbout() {
+        AlertDialog.Builder(this)
+            .setTitle("Sobre")
+            .setMessage(
+                "LN TV\nVersão: ${BuildConfig.VERSION_NAME}\n" +
+                "Build: ${BuildConfig.VERSION_CODE}\nServidor: ${App.BACKEND}"
+            )
+            .setPositiveButton("OK", null)
+            .show()
+    }
+
+    private fun showChangePassword() {
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            hint = "Nova senha (mín. 6)"
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Trocar senha de login")
+            .setView(input)
+            .setPositiveButton("Salvar") { _, _ ->
+                val pwd = input.text.toString()
+                if (pwd.length < 6) {
+                    Toast.makeText(this, "Senha precisa ter no mínimo 6 caracteres", Toast.LENGTH_SHORT).show()
+                } else updatePassword(pwd)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun updatePassword(pwd: String) {
+        lifecycleScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                runCatching {
+                    sb.ensureFreshSession()
+                    val tok = prefs.accessToken ?: return@runCatching false
+                    val body = JSONObject().put("password", pwd).toString()
+                        .toRequestBody("application/json".toMediaType())
+                    val req = Request.Builder()
+                        .url("${sb.authUrl}/user")
+                        .header("apikey", App.ANON_KEY)
+                        .header("Authorization", "Bearer $tok")
+                        .header("Content-Type", "application/json")
+                        .put(body).build()
+                    (application as App).http.newCall(req).execute().use { it.isSuccessful }
+                }.getOrDefault(false)
+            }
+            Toast.makeText(
+                this@PlayerActivity,
+                if (ok) "Senha atualizada!" else "Falha ao atualizar senha",
+                Toast.LENGTH_SHORT
+            ).show()
+            if (ok) hideMenu()
+        }
+    }
+
+    // ====== Stats overlay ======
+    private fun showStats() {
+        renderStats()
+        b.statsOverlay.visibility = View.VISIBLE
+        statsHandler.removeCallbacks(statsTick)
+        statsHandler.postDelayed(statsTick, 1000)
+    }
+
+    private fun hideStats() {
+        b.statsOverlay.visibility = View.GONE
+        statsHandler.removeCallbacks(statsTick)
+    }
+
+    private fun renderStats() {
+        val p = player ?: return
+        val c = channels.getOrNull(index)
+        val fmt = p.videoFormat
+        val res = if (fmt != null && fmt.width > 0) "${fmt.width}x${fmt.height} (${fmt.height}p)" else "—"
+        val fps = if (fmt?.frameRate != null && fmt.frameRate > 0) "${fmt.frameRate.toInt()}" else "—"
+        val codec = fmt?.sampleMimeType ?: fmt?.codecs ?: "—"
+        val bitrate = fmt?.bitrate?.takeIf { it > 0 }?.let { "${it / 1000} kbps" } ?: "—"
+        val bufferAhead = ((p.totalBufferedDuration) / 1000.0).let { "%.1fs".format(it) }
+        val state = when (p.playbackState) {
+            Player.STATE_IDLE -> "IDLE"
+            Player.STATE_BUFFERING -> "BUFFERING"
+            Player.STATE_READY -> "READY"
+            Player.STATE_ENDED -> "ENDED"
+            else -> "—"
+        }
+        val host = runCatching { java.net.URI(c?.streamUrl ?: "").host ?: "—" }.getOrDefault("—")
+        b.statsBody.text = """
+            Canal       : ${c?.channelNumber ?: "—"} ${c?.name ?: ""}
+            Resolução  : $res
+            FPS         : $fps
+            Bitrate     : $bitrate
+            Codec       : $codec
+            Buffer      : $bufferAhead
+            Estado      : $state
+            Tipo        : ${c?.streamType ?: "—"}
+            Host        : $host
+            App         : ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})
+        """.trimIndent()
+    }
+
 
     private fun checkUpdate() {
         lifecycleScope.launch {
