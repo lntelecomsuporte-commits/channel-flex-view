@@ -95,6 +95,7 @@ class PlayerActivity : AppCompatActivity() {
     private var userFullName: String? = null
     private var userEmailCached: String? = null
     private var currentAdultPin: String = "1234"
+    private val retryingProxyChannels = mutableSetOf<String>()
 
     // Stats overlay live updater
     private val statsHandler = Handler(Looper.getMainLooper())
@@ -203,7 +204,7 @@ class PlayerActivity : AppCompatActivity() {
     private fun loadCurrent() {
         val p = player ?: return
         val c = channels.getOrNull(index) ?: return
-        val resolved = StreamUrl.resolve(c.streamUrl, c.streamType)
+        val resolved = resolveStreamForChannel(c)
         android.util.Log.i("LNTV", "loadCurrent #${c.channelNumber} type=${c.streamType} raw=${c.streamUrl} resolved=$resolved")
         val ib = MediaItem.Builder().setUri(resolved)
         when (c.streamType) {
@@ -218,13 +219,31 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun attemptRetry(reason: String) {
-        if (retries >= maxRetries) return
+        val current = channels.getOrNull(index) ?: return
+        if (retries >= maxRetries) {
+            if (current.streamUrl.startsWith("http://", ignoreCase = true) && retryingProxyChannels.add(current.id)) {
+                android.util.Log.w("LNTV", "HTTP direto falhou; tentando proxy HTTPS no canal ${current.channelNumber} ($reason)")
+                retries = 0
+                player?.let { p ->
+                    val resolved = resolveStreamForChannel(current)
+                    val ib = MediaItem.Builder().setUri(resolved)
+                    when (current.streamType) {
+                        "hls" -> ib.setMimeType(MimeTypes.APPLICATION_M3U8)
+                        "mp4" -> ib.setMimeType(MimeTypes.VIDEO_MP4)
+                    }
+                    p.setMediaItem(ib.build())
+                    p.prepare()
+                    p.playWhenReady = true
+                }
+            }
+            return
+        }
         retries++
         val delay = (1000L * (1 shl (retries - 1))).coerceAtMost(8000L)
         b.playerView.postDelayed({
             val p = player ?: return@postDelayed
             val c = channels.getOrNull(index) ?: return@postDelayed
-            val resolved = StreamUrl.resolve(c.streamUrl, c.streamType)
+            val resolved = resolveStreamForChannel(c)
             val ib = MediaItem.Builder().setUri(resolved)
             when (c.streamType) {
                 "hls" -> ib.setMimeType(MimeTypes.APPLICATION_M3U8)
@@ -234,6 +253,14 @@ class PlayerActivity : AppCompatActivity() {
             p.prepare()
             p.playWhenReady = true
         }, delay)
+    }
+
+    private fun resolveStreamForChannel(c: Channel): String {
+        return if (retryingProxyChannels.contains(c.id)) {
+            StreamUrl.resolveViaProxy(c.streamUrl, prefs.accessToken)
+        } else {
+            StreamUrl.resolve(c.streamUrl, c.streamType)
+        }
     }
 
     private fun checkStall() {
@@ -246,6 +273,7 @@ class PlayerActivity : AppCompatActivity() {
         if (channels.isEmpty()) return
         cancelPending()
         index = ((index + delta) % channels.size + channels.size) % channels.size
+        retries = 0
         loadCurrent()
     }
 
@@ -263,6 +291,7 @@ class PlayerActivity : AppCompatActivity() {
         if (pendingIndex < 0 || pendingIndex == index) { pendingIndex = -1; return }
         index = pendingIndex
         pendingIndex = -1
+        retries = 0
         loadCurrent()
     }
 
