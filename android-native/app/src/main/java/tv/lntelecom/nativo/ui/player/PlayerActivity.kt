@@ -265,7 +265,7 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun safeStreamLog(url: String): String {
-        return url.replace(Regex("([?&](token|st)=)[^&]+"), "$1***")
+        return Regex("([?&](token|st)=)[^&]+").replace(url) { "${it.groupValues[1]}***" }
     }
 
     private fun checkStall() {
