@@ -537,9 +537,16 @@ class PlayerActivity : AppCompatActivity() {
                 textSize = 18f
                 setPadding(28, 20, 28, 20)
                 setTextColor(getColor(R.color.fg))
+                isFocusable = true
+                isClickable = true
                 setBackgroundColor(
                     if (i == menuFocus) 0xFFDC2626.toInt() else 0x33FFFFFF
                 )
+                setOnClickListener {
+                    menuFocus = i
+                    renderMenu()
+                    onMenuSelect(menuItems[i].second)
+                }
             }
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
