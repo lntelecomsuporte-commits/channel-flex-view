@@ -24,7 +24,7 @@
         android:supportsRtl="true"
         android:appCategory="video"
         android:largeHeap="true"
-        android:usesCleartextTraffic="false"
+        android:usesCleartextTraffic="true"
         tools:targetApi="21">
 
         <activity
