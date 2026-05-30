@@ -577,11 +577,12 @@ class PlayerActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_DPAD_UP -> {
                 menuFocus = (menuFocus - 1 + menuItems.size) % menuItems.size; renderMenu(); true
             }
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                onMenuSelect(menuItems[menuFocus].second); true
+            KeyEvent.KEYCODE_BACK -> { hideMenu(); true }
+            else -> when {
+                isOkKey(keyCode) -> { onMenuSelect(menuItems[menuFocus].second); true }
+                isMenuKey(keyCode) -> { hideMenu(); true }
+                else -> true
             }
-            KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_MENU -> { hideMenu(); true }
-            else -> true
         }
     }
 
