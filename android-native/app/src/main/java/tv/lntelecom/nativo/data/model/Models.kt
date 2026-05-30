@@ -12,7 +12,8 @@ data class Channel(
     val categoryName: String?,
     val epgChannelId: String?,
     val isActive: Boolean,
-    val updatedAt: String?
+    val updatedAt: String?,
+    val forceProxyNative: Boolean = false
 )
 
 data class Category(
