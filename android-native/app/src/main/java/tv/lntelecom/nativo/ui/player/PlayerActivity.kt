@@ -272,10 +272,22 @@ class PlayerActivity : AppCompatActivity() {
         keyCode == KeyEvent.KEYCODE_ENTER ||
         keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER ||
         keyCode == KeyEvent.KEYCODE_BUTTON_A ||
-        keyCode == KeyEvent.KEYCODE_BUTTON_SELECT
+        keyCode == KeyEvent.KEYCODE_BUTTON_B ||
+        keyCode == KeyEvent.KEYCODE_BUTTON_SELECT ||
+        keyCode == KeyEvent.KEYCODE_SPACE ||
+        keyCode == KeyEvent.KEYCODE_MEDIA_PLAY ||
+        keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ||
+        keyCode == KeyEvent.KEYCODE_NAVIGATE_IN
 
     private fun isMenuKey(keyCode: Int): Boolean = keyCode == KeyEvent.KEYCODE_MENU ||
         keyCode == KeyEvent.KEYCODE_BUTTON_START
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (::b.isInitialized && b.menuOverlay.visibility == View.VISIBLE && event.action == KeyEvent.ACTION_DOWN) {
+            return handleMenuKey(event.keyCode, event)
+        }
+        return super.dispatchKeyEvent(event)
+    }
 
 
     private fun checkStall() {
