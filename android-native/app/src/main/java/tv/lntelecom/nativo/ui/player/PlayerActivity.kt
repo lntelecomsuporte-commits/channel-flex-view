@@ -220,22 +220,23 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun attemptRetry(reason: String) {
         val current = channels.getOrNull(index) ?: return
-        if (retries >= maxRetries) {
-            if (current.streamUrl.startsWith("http://", ignoreCase = true) && retryingProxyChannels.add(current.id)) {
-                android.util.Log.w("LNTV", "HTTP direto falhou; tentando proxy HTTPS no canal ${current.channelNumber} ($reason)")
-                retries = 0
-                player?.let { p ->
-                    val resolved = resolveStreamForChannel(current)
-                    val ib = MediaItem.Builder().setUri(resolved)
-                    when (current.streamType) {
-                        "hls" -> ib.setMimeType(MimeTypes.APPLICATION_M3U8)
-                        "mp4" -> ib.setMimeType(MimeTypes.VIDEO_MP4)
-                    }
-                    p.setMediaItem(ib.build())
-                    p.prepare()
-                    p.playWhenReady = true
+        if (current.streamUrl.startsWith("http://", ignoreCase = true) && retryingProxyChannels.add(current.id)) {
+            android.util.Log.w("LNTV", "HTTP direto falhou; tentando proxy HTTPS no canal ${current.channelNumber} ($reason)")
+            retries = 0
+            player?.let { p ->
+                val resolved = resolveStreamForChannel(current)
+                val ib = MediaItem.Builder().setUri(resolved)
+                when (current.streamType) {
+                    "hls" -> ib.setMimeType(MimeTypes.APPLICATION_M3U8)
+                    "mp4" -> ib.setMimeType(MimeTypes.VIDEO_MP4)
                 }
+                p.setMediaItem(ib.build())
+                p.prepare()
+                p.playWhenReady = true
             }
+            return
+        }
+        if (retries >= maxRetries) {
             return
         }
         retries++
