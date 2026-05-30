@@ -13,13 +13,41 @@ const adminClient = createClient(supabaseUrl, serviceRoleKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
+const isPrivateIp = (ip: string): boolean => {
+  // Filtra loopback, link-local, docker/k8s/RFC1918 e IPv6 locais
+  if (!ip) return true;
+  if (ip === "::1" || ip === "127.0.0.1") return true;
+  if (ip.startsWith("10.")) return true;
+  if (ip.startsWith("192.168.")) return true;
+  if (ip.startsWith("169.254.")) return true;
+  if (ip.startsWith("fc") || ip.startsWith("fd") || ip.startsWith("fe80:")) return true;
+  // 172.16.0.0/12
+  const m = ip.match(/^172\.(\d+)\./);
+  if (m) {
+    const n = parseInt(m[1], 10);
+    if (n >= 16 && n <= 31) return true;
+  }
+  return false;
+};
+
 const getClientIp = (request: Request): string | null => {
-  return (
-    request.headers.get("cf-connecting-ip") ||
-    request.headers.get("x-real-ip") ||
-    request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
-    null
-  );
+  // Em self-hosted (nginx -> kong -> edge runtime), o x-real-ip vira o IP
+  // interno do docker (172.18.0.1). O IP real do cliente está no x-forwarded-for
+  // mais à esquerda, setado pelo nginx do tv2.lntelecom.net.
+  const xff = request.headers.get("x-forwarded-for");
+  if (xff) {
+    const chain = xff.split(",").map((s) => s.trim()).filter(Boolean);
+    // Pega o primeiro IP público da cadeia (da esquerda pra direita)
+    for (const ip of chain) {
+      if (!isPrivateIp(ip)) return ip;
+    }
+    if (chain[0]) return chain[0];
+  }
+  const cf = request.headers.get("cf-connecting-ip");
+  if (cf && !isPrivateIp(cf)) return cf;
+  const xr = request.headers.get("x-real-ip");
+  if (xr && !isPrivateIp(xr)) return xr;
+  return cf || xr || null;
 };
 
 const sanitizeIp = (v: unknown): string | null => {
