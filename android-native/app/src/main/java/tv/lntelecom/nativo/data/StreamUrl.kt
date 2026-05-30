@@ -9,12 +9,17 @@ object StreamUrl {
 
     fun resolve(raw: String, type: String): String {
         if (raw.isBlank()) return raw
-        if (raw.startsWith("https://")) return raw
-        if (raw.startsWith("http://")) {
-            return "$BACKEND/functions/v1/hls-proxy?url=" +
-                java.net.URLEncoder.encode(raw, "UTF-8")
-        }
+        if (raw.startsWith("https://", ignoreCase = true)) return raw
+        if (raw.startsWith("http://", ignoreCase = true)) return raw
         return raw
+    }
+
+    fun resolveViaProxy(raw: String, accessToken: String?): String {
+        if (raw.isBlank()) return raw
+        val encodedUrl = java.net.URLEncoder.encode(raw, "UTF-8")
+        val token = accessToken?.takeIf { it.isNotBlank() } ?: return raw
+        val encodedToken = java.net.URLEncoder.encode(token, "UTF-8")
+        return "$BACKEND/functions/v1/hls-proxy?url=$encodedUrl&token=$encodedToken"
     }
 
     /** Logo principal: usa logo_url (local /logos/) com fallback pra logo_source_url (URL externa). */

@@ -95,6 +95,7 @@ class PlayerActivity : AppCompatActivity() {
     private var userFullName: String? = null
     private var userEmailCached: String? = null
     private var currentAdultPin: String = "1234"
+    private val retryingProxyChannels = mutableSetOf<String>()
 
     // Stats overlay live updater
     private val statsHandler = Handler(Looper.getMainLooper())
@@ -203,8 +204,8 @@ class PlayerActivity : AppCompatActivity() {
     private fun loadCurrent() {
         val p = player ?: return
         val c = channels.getOrNull(index) ?: return
-        val resolved = StreamUrl.resolve(c.streamUrl, c.streamType)
-        android.util.Log.i("LNTV", "loadCurrent #${c.channelNumber} type=${c.streamType} raw=${c.streamUrl} resolved=$resolved")
+        val resolved = resolveStreamForChannel(c)
+        android.util.Log.i("LNTV", "loadCurrent #${c.channelNumber} type=${c.streamType} raw=${c.streamUrl} resolved=${safeStreamLog(resolved)}")
         val ib = MediaItem.Builder().setUri(resolved)
         when (c.streamType) {
             "hls" -> ib.setMimeType(MimeTypes.APPLICATION_M3U8)
@@ -218,13 +219,32 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun attemptRetry(reason: String) {
-        if (retries >= maxRetries) return
+        val current = channels.getOrNull(index) ?: return
+        if (current.streamUrl.startsWith("http://", ignoreCase = true) && retryingProxyChannels.add(current.id)) {
+            android.util.Log.w("LNTV", "HTTP direto falhou; tentando proxy HTTPS no canal ${current.channelNumber} ($reason)")
+            retries = 0
+            player?.let { p ->
+                val resolved = resolveStreamForChannel(current)
+                val ib = MediaItem.Builder().setUri(resolved)
+                when (current.streamType) {
+                    "hls" -> ib.setMimeType(MimeTypes.APPLICATION_M3U8)
+                    "mp4" -> ib.setMimeType(MimeTypes.VIDEO_MP4)
+                }
+                p.setMediaItem(ib.build())
+                p.prepare()
+                p.playWhenReady = true
+            }
+            return
+        }
+        if (retries >= maxRetries) {
+            return
+        }
         retries++
         val delay = (1000L * (1 shl (retries - 1))).coerceAtMost(8000L)
         b.playerView.postDelayed({
             val p = player ?: return@postDelayed
             val c = channels.getOrNull(index) ?: return@postDelayed
-            val resolved = StreamUrl.resolve(c.streamUrl, c.streamType)
+            val resolved = resolveStreamForChannel(c)
             val ib = MediaItem.Builder().setUri(resolved)
             when (c.streamType) {
                 "hls" -> ib.setMimeType(MimeTypes.APPLICATION_M3U8)
@@ -236,6 +256,28 @@ class PlayerActivity : AppCompatActivity() {
         }, delay)
     }
 
+    private fun resolveStreamForChannel(c: Channel): String {
+        return if (retryingProxyChannels.contains(c.id)) {
+            StreamUrl.resolveViaProxy(c.streamUrl, prefs.accessToken)
+        } else {
+            StreamUrl.resolve(c.streamUrl, c.streamType)
+        }
+    }
+
+    private fun safeStreamLog(url: String): String {
+        return Regex("([?&](token|st)=)[^&]+").replace(url) { "${it.groupValues[1]}***" }
+    }
+
+    private fun isOkKey(keyCode: Int): Boolean = keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+        keyCode == KeyEvent.KEYCODE_ENTER ||
+        keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER ||
+        keyCode == KeyEvent.KEYCODE_BUTTON_A ||
+        keyCode == KeyEvent.KEYCODE_BUTTON_SELECT
+
+    private fun isMenuKey(keyCode: Int): Boolean = keyCode == KeyEvent.KEYCODE_MENU ||
+        keyCode == KeyEvent.KEYCODE_BUTTON_START
+
+
     private fun checkStall() {
         val p = player ?: return
         if (p.playbackState == Player.STATE_BUFFERING) attemptRetry("stall")
@@ -246,6 +288,7 @@ class PlayerActivity : AppCompatActivity() {
         if (channels.isEmpty()) return
         cancelPending()
         index = ((index + delta) % channels.size + channels.size) % channels.size
+        retries = 0
         loadCurrent()
     }
 
@@ -263,6 +306,7 @@ class PlayerActivity : AppCompatActivity() {
         if (pendingIndex < 0 || pendingIndex == index) { pendingIndex = -1; return }
         index = pendingIndex
         pendingIndex = -1
+        retries = 0
         loadCurrent()
     }
 
@@ -379,10 +423,10 @@ class PlayerActivity : AppCompatActivity() {
                 KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
                     changeChannel(-1); renderStats(); true
                 }
-                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_CENTER,
-                KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MENU -> { hideStats(); true }
+                KeyEvent.KEYCODE_BACK -> { hideStats(); true }
                 // Qualquer outra tecla fecha o overlay e processa normalmente
-                else -> { hideStats(); super.onKeyDown(keyCode, event) }
+                else -> if (isOkKey(keyCode) || isMenuKey(keyCode)) { hideStats(); true }
+                    else { hideStats(); super.onKeyDown(keyCode, event) }
             }
         }
         // Menu overlay tem prioridade
@@ -412,7 +456,7 @@ class PlayerActivity : AppCompatActivity() {
         }
         // Konami: registra tecla antes de processar
         trackKonami(keyCode)
-        if (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_BUTTON_START) {
+        if (isMenuKey(keyCode)) {
             showMenu(); return true
         }
         return when (keyCode) {
@@ -422,11 +466,10 @@ class PlayerActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { previewChannel(1); true }
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_PREVIOUS,
             KeyEvent.KEYCODE_MEDIA_REWIND -> { previewChannel(-1); true }
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> handleOkPress()
             KeyEvent.KEYCODE_STAR, KeyEvent.KEYCODE_BOOKMARK,
             KeyEvent.KEYCODE_BUTTON_Y -> { toggleFavorite(); true }
             KeyEvent.KEYCODE_BACK -> handleBackPress()
-            else -> super.onKeyDown(keyCode, event)
+            else -> if (isOkKey(keyCode)) handleOkPress() else super.onKeyDown(keyCode, event)
         }
     }
 
@@ -507,9 +550,16 @@ class PlayerActivity : AppCompatActivity() {
                 textSize = 18f
                 setPadding(28, 20, 28, 20)
                 setTextColor(getColor(R.color.fg))
+                isFocusable = true
+                isClickable = true
                 setBackgroundColor(
                     if (i == menuFocus) 0xFFDC2626.toInt() else 0x33FFFFFF
                 )
+                setOnClickListener {
+                    menuFocus = i
+                    renderMenu()
+                    onMenuSelect(menuItems[i].second)
+                }
             }
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -527,11 +577,12 @@ class PlayerActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_DPAD_UP -> {
                 menuFocus = (menuFocus - 1 + menuItems.size) % menuItems.size; renderMenu(); true
             }
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                onMenuSelect(menuItems[menuFocus].second); true
+            KeyEvent.KEYCODE_BACK -> { hideMenu(); true }
+            else -> when {
+                isOkKey(keyCode) -> { onMenuSelect(menuItems[menuFocus].second); true }
+                isMenuKey(keyCode) -> { hideMenu(); true }
+                else -> true
             }
-            KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_MENU -> { hideMenu(); true }
-            else -> true
         }
     }
 
