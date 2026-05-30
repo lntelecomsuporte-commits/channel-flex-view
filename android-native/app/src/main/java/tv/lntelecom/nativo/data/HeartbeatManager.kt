@@ -139,8 +139,5 @@ class HeartbeatManager(
         sb.http.newCall(req).execute().use { it.body?.string() }
     }
 
-    private fun anonKey(): String =
-        // anonKey vive no SupabaseClient mas é privado — replicamos pelo BuildConfig se existir,
-        // senão extraímos via header já presente nas requisições. Usa o mesmo que o App injeta.
-        tv.lntelecom.nativo.App.anonKey
+    private fun anonKey(): String = tv.lntelecom.nativo.App.ANON_KEY
 }
