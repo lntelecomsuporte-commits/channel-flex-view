@@ -262,6 +262,11 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun resolveStreamForChannel(c: Channel): String {
+        // Admin marcou "forçar proxy nativo" → sempre via hls-proxy (mesmo HTTPS).
+        // Útil pra canais com cert ruim, HTTP cleartext bloqueado em rota, etc.
+        if (c.forceProxyNative) {
+            return StreamUrl.resolveViaProxy(c.streamUrl, prefs.accessToken)
+        }
         return if (retryingProxyChannels.contains(c.id)) {
             StreamUrl.resolveViaProxy(c.streamUrl, prefs.accessToken)
         } else {
