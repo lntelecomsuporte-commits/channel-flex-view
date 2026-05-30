@@ -31,24 +31,25 @@ const isPrivateIp = (ip: string): boolean => {
 };
 
 const getClientIp = (request: Request): string | null => {
-  // Em self-hosted (nginx -> kong -> edge runtime), o x-real-ip vira o IP
-  // interno do docker (172.18.0.1). O IP real do cliente está no x-forwarded-for
-  // mais à esquerda, setado pelo nginx do tv2.lntelecom.net.
   const xff = request.headers.get("x-forwarded-for");
+  const xr = request.headers.get("x-real-ip");
+  const cf = request.headers.get("cf-connecting-ip");
+
+  // DEBUG temporário: loga todos os headers de IP que chegam ao edge
+  console.log(`[ip-debug] xff="${xff}" xr="${xr}" cf="${cf}"`);
+
   if (xff) {
     const chain = xff.split(",").map((s) => s.trim()).filter(Boolean);
-    // Pega o primeiro IP público da cadeia (da esquerda pra direita)
     for (const ip of chain) {
       if (!isPrivateIp(ip)) return ip;
     }
     if (chain[0]) return chain[0];
   }
-  const cf = request.headers.get("cf-connecting-ip");
   if (cf && !isPrivateIp(cf)) return cf;
-  const xr = request.headers.get("x-real-ip");
   if (xr && !isPrivateIp(xr)) return xr;
   return cf || xr || null;
 };
+
 
 const sanitizeIp = (v: unknown): string | null => {
   if (typeof v !== "string") return null;
