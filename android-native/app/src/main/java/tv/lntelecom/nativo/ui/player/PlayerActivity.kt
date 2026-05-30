@@ -443,7 +443,7 @@ class PlayerActivity : AppCompatActivity() {
         }
         // Menu overlay tem prioridade
         if (b.menuOverlay.visibility == View.VISIBLE) {
-            return handleMenuKey(keyCode)
+            return handleMenuKey(keyCode, event)
         }
         if (isListOpen) {
             return when (keyCode) {
@@ -581,7 +581,8 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
-    private fun handleMenuKey(keyCode: Int): Boolean {
+    private fun handleMenuKey(keyCode: Int, event: KeyEvent? = null): Boolean {
+        android.util.Log.i("LNTV", "menu key code=$keyCode action=${event?.action} scan=${event?.scanCode} name=${KeyEvent.keyCodeToString(keyCode)}")
         return when (keyCode) {
             KeyEvent.KEYCODE_DPAD_DOWN -> {
                 menuFocus = (menuFocus + 1) % menuItems.size; renderMenu(); true
@@ -591,11 +592,16 @@ class PlayerActivity : AppCompatActivity() {
             }
             KeyEvent.KEYCODE_BACK -> { hideMenu(); true }
             else -> when {
-                isOkKey(keyCode) -> { onMenuSelect(menuItems[menuFocus].second); true }
+                isOkKey(keyCode) -> { selectFocusedMenuItem(); true }
                 isMenuKey(keyCode) -> { hideMenu(); true }
                 else -> true
             }
         }
+    }
+
+    private fun selectFocusedMenuItem() {
+        b.menuItems.getChildAt(menuFocus)?.performClick()
+            ?: onMenuSelect(menuItems[menuFocus].second)
     }
 
     private fun onMenuSelect(id: String) {
