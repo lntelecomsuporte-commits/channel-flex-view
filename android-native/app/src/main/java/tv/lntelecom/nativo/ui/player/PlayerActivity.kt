@@ -268,6 +268,16 @@ class PlayerActivity : AppCompatActivity() {
         return Regex("([?&](token|st)=)[^&]+").replace(url) { "${it.groupValues[1]}***" }
     }
 
+    private fun isOkKey(keyCode: Int): Boolean = keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+        keyCode == KeyEvent.KEYCODE_ENTER ||
+        keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER ||
+        keyCode == KeyEvent.KEYCODE_BUTTON_A ||
+        keyCode == KeyEvent.KEYCODE_BUTTON_SELECT
+
+    private fun isMenuKey(keyCode: Int): Boolean = keyCode == KeyEvent.KEYCODE_MENU ||
+        keyCode == KeyEvent.KEYCODE_BUTTON_START
+
+
     private fun checkStall() {
         val p = player ?: return
         if (p.playbackState == Player.STATE_BUFFERING) attemptRetry("stall")
@@ -413,10 +423,10 @@ class PlayerActivity : AppCompatActivity() {
                 KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
                     changeChannel(-1); renderStats(); true
                 }
-                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_CENTER,
-                KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MENU -> { hideStats(); true }
+                KeyEvent.KEYCODE_BACK -> { hideStats(); true }
                 // Qualquer outra tecla fecha o overlay e processa normalmente
-                else -> { hideStats(); super.onKeyDown(keyCode, event) }
+                else -> if (isOkKey(keyCode) || isMenuKey(keyCode)) { hideStats(); true }
+                    else { hideStats(); super.onKeyDown(keyCode, event) }
             }
         }
         // Menu overlay tem prioridade
@@ -446,7 +456,7 @@ class PlayerActivity : AppCompatActivity() {
         }
         // Konami: registra tecla antes de processar
         trackKonami(keyCode)
-        if (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_BUTTON_START) {
+        if (isMenuKey(keyCode)) {
             showMenu(); return true
         }
         return when (keyCode) {
@@ -456,11 +466,10 @@ class PlayerActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { previewChannel(1); true }
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_PREVIOUS,
             KeyEvent.KEYCODE_MEDIA_REWIND -> { previewChannel(-1); true }
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> handleOkPress()
             KeyEvent.KEYCODE_STAR, KeyEvent.KEYCODE_BOOKMARK,
             KeyEvent.KEYCODE_BUTTON_Y -> { toggleFavorite(); true }
             KeyEvent.KEYCODE_BACK -> handleBackPress()
-            else -> super.onKeyDown(keyCode, event)
+            else -> if (isOkKey(keyCode)) handleOkPress() else super.onKeyDown(keyCode, event)
         }
     }
 
