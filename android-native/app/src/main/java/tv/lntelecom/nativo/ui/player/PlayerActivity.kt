@@ -58,6 +58,7 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var favorites: FavoritesRepository
     private lateinit var updater: UpdateChecker
     private lateinit var listAdapter: ChannelAdapter
+    private var heartbeat: tv.lntelecom.nativo.data.HeartbeatManager? = null
 
     private var channels: List<Channel> = emptyList()
     private var index = 0
@@ -141,6 +142,9 @@ class PlayerActivity : AppCompatActivity() {
         setupListOverlay()
         loadCurrent()
 
+        heartbeat = tv.lntelecom.nativo.data.HeartbeatManager(applicationContext, sb).also { it.start() }
+
+
         lifecycleScope.launch {
             withContext(Dispatchers.IO) {
                 epg.ensureLoaded()
@@ -216,6 +220,7 @@ class PlayerActivity : AppCompatActivity() {
         p.playWhenReady = true
         retries = 0
         showOsd(index)
+        heartbeat?.updateChannel(c.id, c.name, true)
     }
 
     private fun attemptRetry(reason: String) {
@@ -821,6 +826,8 @@ class PlayerActivity : AppCompatActivity() {
         osdHandler.removeCallbacksAndMessages(null)
         previewHandler.removeCallbacksAndMessages(null)
         statsHandler.removeCallbacksAndMessages(null)
+        heartbeat?.stop()
+        heartbeat = null
         player?.release()
         player = null
     }
