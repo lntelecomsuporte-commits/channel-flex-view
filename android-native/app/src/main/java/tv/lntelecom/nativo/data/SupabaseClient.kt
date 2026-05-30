@@ -16,7 +16,7 @@ class SupabaseClient(
     val http: OkHttpClient,
     private val baseUrl: String,
     private val anonKey: String,
-    private val prefs: Prefs
+    val prefs: Prefs
 ) {
     val authUrl = "$baseUrl/auth/v1"
     val restUrl = "$baseUrl/rest/v1"
