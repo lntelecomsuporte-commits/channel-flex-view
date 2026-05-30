@@ -35,9 +35,6 @@ const getClientIp = (request: Request): string | null => {
   const xr = request.headers.get("x-real-ip");
   const cf = request.headers.get("cf-connecting-ip");
 
-  // DEBUG temporário: loga todos os headers de IP que chegam ao edge
-  console.log(`[ip-debug] xff="${xff}" xr="${xr}" cf="${cf}"`);
-
   if (xff) {
     const chain = xff.split(",").map((s) => s.trim()).filter(Boolean);
     for (const ip of chain) {
