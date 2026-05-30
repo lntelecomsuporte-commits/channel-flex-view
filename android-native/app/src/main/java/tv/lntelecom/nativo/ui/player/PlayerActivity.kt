@@ -205,7 +205,7 @@ class PlayerActivity : AppCompatActivity() {
         val p = player ?: return
         val c = channels.getOrNull(index) ?: return
         val resolved = resolveStreamForChannel(c)
-        android.util.Log.i("LNTV", "loadCurrent #${c.channelNumber} type=${c.streamType} raw=${c.streamUrl} resolved=$resolved")
+        android.util.Log.i("LNTV", "loadCurrent #${c.channelNumber} type=${c.streamType} raw=${c.streamUrl} resolved=${safeStreamLog(resolved)}")
         val ib = MediaItem.Builder().setUri(resolved)
         when (c.streamType) {
             "hls" -> ib.setMimeType(MimeTypes.APPLICATION_M3U8)
@@ -262,6 +262,10 @@ class PlayerActivity : AppCompatActivity() {
         } else {
             StreamUrl.resolve(c.streamUrl, c.streamType)
         }
+    }
+
+    private fun safeStreamLog(url: String): String {
+        return url.replace(Regex("([?&](token|st)=)[^&]+"), "$1***")
     }
 
     private fun checkStall() {
