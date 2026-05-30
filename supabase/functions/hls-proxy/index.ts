@@ -324,13 +324,34 @@ const rewritePlaylist = async (playlist: string, baseUrl: string, proxyEndpoint:
   return out.join("\n");
 };
 
+const isPrivateIp = (ip: string): boolean => {
+  if (!ip) return true;
+  if (ip === "::1" || ip === "127.0.0.1") return true;
+  if (ip.startsWith("10.") || ip.startsWith("192.168.") || ip.startsWith("169.254.")) return true;
+  if (ip.startsWith("fc") || ip.startsWith("fd") || ip.startsWith("fe80:")) return true;
+  const m = ip.match(/^172\.(\d+)\./);
+  if (m) {
+    const n = parseInt(m[1], 10);
+    if (n >= 16 && n <= 31) return true;
+  }
+  return false;
+};
+
 const getClientIp = (request: Request): string => {
-  return (
-    request.headers.get("cf-connecting-ip") ||
-    request.headers.get("x-real-ip") ||
-    request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
-    "unknown"
-  );
+  // Self-hosted: x-real-ip vira IP interno do docker. Pega o 1º público do XFF.
+  const xff = request.headers.get("x-forwarded-for");
+  if (xff) {
+    const chain = xff.split(",").map((s) => s.trim()).filter(Boolean);
+    for (const ip of chain) {
+      if (!isPrivateIp(ip)) return ip;
+    }
+    if (chain[0]) return chain[0];
+  }
+  const cf = request.headers.get("cf-connecting-ip");
+  if (cf && !isPrivateIp(cf)) return cf;
+  const xr = request.headers.get("x-real-ip");
+  if (xr && !isPrivateIp(xr)) return xr;
+  return cf || xr || "unknown";
 };
 
 // Cache de validação de token (60s) para reduzir hits no auth
