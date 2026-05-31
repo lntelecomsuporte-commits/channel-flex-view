@@ -244,6 +244,7 @@ interface AuthCtx {
     uid: string;
     ch: string;
   };
+  channelName?: string | null; // nome do canal (modo playlist) p/ monitoramento
   signed?: {             // Token assinado (modo "Ocultar URL")
     st: string;          // signature
     uid: string;
