@@ -503,7 +503,7 @@ Deno.serve(async (request) => {
 
       const { data: channel } = await adminClient
         .from("channels")
-        .select("stream_url,is_active")
+        .select("stream_url,is_active,name")
         .eq("id", ch)
         .maybeSingle();
       if (!channel?.stream_url || channel.is_active === false) {
@@ -511,7 +511,7 @@ Deno.serve(async (request) => {
       }
 
       userId = profile.user_id;
-      authCtx = { playlist: { pt: playlistToken, uid: profile.user_id, ch } };
+      authCtx = { playlist: { pt: playlistToken, uid: profile.user_id, ch }, channelName: channel.name ?? null };
       if (uCipher) {
         const decrypted = await decryptUrl(uCipher);
         if (!decrypted) return new Response("Invalid encrypted url", { status: 400, headers: corsHeaders });
