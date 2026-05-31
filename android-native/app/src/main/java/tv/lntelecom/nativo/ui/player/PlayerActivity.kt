@@ -78,6 +78,13 @@ class PlayerActivity : AppCompatActivity() {
     private val tunePending = Runnable { commitPending() }
     private val previewDelay = 1500L
 
+    // Numeric channel entry (digits typed on the remote)
+    private val digitBuffer = StringBuilder()
+    private val digitHandler = Handler(Looper.getMainLooper())
+    private val digitCommit = Runnable { commitDigitBuffer() }
+    private val digitWindow = 2000L
+    private val maxDigits = 4
+
     // Double-OK detection
     private var lastOkTime = 0L
     private val doubleTapWindow = 400L
