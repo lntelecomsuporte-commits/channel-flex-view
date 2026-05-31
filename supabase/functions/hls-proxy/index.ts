@@ -244,6 +244,7 @@ interface AuthCtx {
     uid: string;
     ch: string;
   };
+  channelName?: string | null; // nome do canal (modo playlist) p/ monitoramento
   signed?: {             // Token assinado (modo "Ocultar URL")
     st: string;          // signature
     uid: string;
@@ -469,6 +470,67 @@ const logProxyAccess = async (
   }
 };
 
+// Mantém uma user_session ativa para clientes externos (VLC/IPTV) que consomem
+// a playlist M3U. Cada reload do manifest (live ~6s) age como heartbeat natural.
+// Chave: (user_id, device_id="m3u-<ip>"). Janela de "vivo": 5 min.
+const upsertM3uSession = async (
+  userId: string,
+  ip: string,
+  userAgent: string,
+  channelId: string,
+  channelName: string | null,
+): Promise<void> => {
+  try {
+    const deviceId = `m3u-${ip || "unknown"}`;
+    const ipv4 = ip && /^(\d{1,3}\.){3}\d{1,3}$/.test(ip) ? ip : null;
+    const ipv6 = ip && ip.includes(":") ? ip : null;
+    const nowIso = new Date().toISOString();
+    const cutoff = new Date(Date.now() - 5 * 60_000).toISOString();
+
+    const { data: existing } = await adminClient
+      .from("user_sessions")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("device_id", deviceId)
+      .is("ended_at", null)
+      .gte("last_heartbeat_at", cutoff)
+      .order("last_heartbeat_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      await adminClient
+        .from("user_sessions")
+        .update({
+          last_heartbeat_at: nowIso,
+          current_channel_id: channelId,
+          current_channel_name: channelName,
+          is_watching: true,
+          ip_address: ip || null,
+          client_ipv4: ipv4,
+          client_ipv6: ipv6,
+        })
+        .eq("id", existing.id);
+    } else {
+      await adminClient.from("user_sessions").insert({
+        user_id: userId,
+        session_token: `m3u-${userId}-${deviceId}-${Date.now()}`,
+        ip_address: ip || null,
+        client_ipv4: ipv4,
+        client_ipv6: ipv6,
+        user_agent: userAgent.slice(0, 500) || null,
+        current_channel_id: channelId,
+        current_channel_name: channelName,
+        is_watching: true,
+        device_id: deviceId,
+        platform: "m3u",
+      });
+    }
+  } catch (e) {
+    console.error("[hls-proxy] upsertM3uSession error", e);
+  }
+};
+
 Deno.serve(async (request) => {
   try {
     if (request.method === "OPTIONS") {
@@ -503,7 +565,7 @@ Deno.serve(async (request) => {
 
       const { data: channel } = await adminClient
         .from("channels")
-        .select("stream_url,is_active")
+        .select("stream_url,is_active,name")
         .eq("id", ch)
         .maybeSingle();
       if (!channel?.stream_url || channel.is_active === false) {
@@ -511,7 +573,7 @@ Deno.serve(async (request) => {
       }
 
       userId = profile.user_id;
-      authCtx = { playlist: { pt: playlistToken, uid: profile.user_id, ch } };
+      authCtx = { playlist: { pt: playlistToken, uid: profile.user_id, ch }, channelName: channel.name ?? null };
       if (uCipher) {
         const decrypted = await decryptUrl(uCipher);
         if (!decrypted) return new Response("Invalid encrypted url", { status: 400, headers: corsHeaders });
@@ -604,6 +666,15 @@ Deno.serve(async (request) => {
 
   const upstreamHeaders = new Headers();
   const isLikelyManifestRequest = upstreamUrl.pathname.toLowerCase().endsWith(".m3u8");
+
+  // Monitoramento de clientes M3U/IPTV externos: cada reload de manifest
+  // (live ~6s) renova a user_session. Fire-and-forget para não atrasar o stream.
+  if (authCtx.playlist && isLikelyManifestRequest && userId) {
+    const ipNow = getClientIp(request);
+    const uaNow = request.headers.get("user-agent") ?? "";
+    upsertM3uSession(userId, ipNow, uaNow, authCtx.playlist.ch, authCtx.channelName ?? null)
+      .catch(() => {});
+  }
   const range = isLikelyManifestRequest ? null : request.headers.get("range");
   const accept = request.headers.get("accept");
   if (range) upstreamHeaders.set("range", range);
