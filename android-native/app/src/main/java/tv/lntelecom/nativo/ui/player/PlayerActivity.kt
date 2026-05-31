@@ -498,8 +498,54 @@ class PlayerActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_STAR, KeyEvent.KEYCODE_BOOKMARK,
             KeyEvent.KEYCODE_BUTTON_Y -> { toggleFavorite(); true }
             KeyEvent.KEYCODE_BACK -> handleBackPress()
-            else -> if (isOkKey(keyCode)) handleOkPress() else super.onKeyDown(keyCode, event)
+            in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> {
+                appendDigit(keyCode - KeyEvent.KEYCODE_0); true
+            }
+            in KeyEvent.KEYCODE_NUMPAD_0..KeyEvent.KEYCODE_NUMPAD_9 -> {
+                appendDigit(keyCode - KeyEvent.KEYCODE_NUMPAD_0); true
+            }
+            else -> if (isOkKey(keyCode)) {
+                if (digitBuffer.isNotEmpty()) { commitDigitBuffer(); true } else handleOkPress()
+            } else super.onKeyDown(keyCode, event)
         }
+    }
+
+    // ====== Numeric channel entry ======
+    private fun appendDigit(d: Int) {
+        if (channels.isEmpty()) return
+        cancelPending()
+        if (digitBuffer.length >= maxDigits) digitBuffer.clear()
+        digitBuffer.append(d)
+        showDigitOsd()
+        digitHandler.removeCallbacks(digitCommit)
+        digitHandler.postDelayed(digitCommit, digitWindow)
+    }
+
+    private fun showDigitOsd() {
+        b.osdNumber.text = digitBuffer.toString()
+        b.osdName.text = "Digitando..."
+        b.osdEpg.text = ""
+        b.osdLogo.setImageResource(R.mipmap.ic_launcher)
+        b.osd.visibility = View.VISIBLE
+        osdHandler.removeCallbacks(hideOsd)
+    }
+
+    private fun commitDigitBuffer() {
+        digitHandler.removeCallbacks(digitCommit)
+        if (digitBuffer.isEmpty()) return
+        val num = digitBuffer.toString().toIntOrNull()
+        digitBuffer.clear()
+        if (num == null) return
+        val idx = channels.indexOfFirst { it.channelNumber == num }
+        if (idx < 0) {
+            b.osdName.text = "Canal $num não encontrado"
+            osdHandler.removeCallbacks(hideOsd)
+            osdHandler.postDelayed(hideOsd, 2000)
+            return
+        }
+        index = idx
+        retries = 0
+        loadCurrent()
     }
 
     // ====== Konami: D D D E E D OK ======
