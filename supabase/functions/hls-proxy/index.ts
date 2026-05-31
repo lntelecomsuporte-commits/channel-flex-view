@@ -470,6 +470,67 @@ const logProxyAccess = async (
   }
 };
 
+// Mantém uma user_session ativa para clientes externos (VLC/IPTV) que consomem
+// a playlist M3U. Cada reload do manifest (live ~6s) age como heartbeat natural.
+// Chave: (user_id, device_id="m3u-<ip>"). Janela de "vivo": 5 min.
+const upsertM3uSession = async (
+  userId: string,
+  ip: string,
+  userAgent: string,
+  channelId: string,
+  channelName: string | null,
+): Promise<void> => {
+  try {
+    const deviceId = `m3u-${ip || "unknown"}`;
+    const ipv4 = ip && /^(\d{1,3}\.){3}\d{1,3}$/.test(ip) ? ip : null;
+    const ipv6 = ip && ip.includes(":") ? ip : null;
+    const nowIso = new Date().toISOString();
+    const cutoff = new Date(Date.now() - 5 * 60_000).toISOString();
+
+    const { data: existing } = await adminClient
+      .from("user_sessions")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("device_id", deviceId)
+      .is("ended_at", null)
+      .gte("last_heartbeat_at", cutoff)
+      .order("last_heartbeat_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      await adminClient
+        .from("user_sessions")
+        .update({
+          last_heartbeat_at: nowIso,
+          current_channel_id: channelId,
+          current_channel_name: channelName,
+          is_watching: true,
+          ip_address: ip || null,
+          client_ipv4: ipv4,
+          client_ipv6: ipv6,
+        })
+        .eq("id", existing.id);
+    } else {
+      await adminClient.from("user_sessions").insert({
+        user_id: userId,
+        session_token: `m3u-${userId}-${deviceId}-${Date.now()}`,
+        ip_address: ip || null,
+        client_ipv4: ipv4,
+        client_ipv6: ipv6,
+        user_agent: userAgent.slice(0, 500) || null,
+        current_channel_id: channelId,
+        current_channel_name: channelName,
+        is_watching: true,
+        device_id: deviceId,
+        platform: "m3u",
+      });
+    }
+  } catch (e) {
+    console.error("[hls-proxy] upsertM3uSession error", e);
+  }
+};
+
 Deno.serve(async (request) => {
   try {
     if (request.method === "OPTIONS") {
