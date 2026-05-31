@@ -666,6 +666,15 @@ Deno.serve(async (request) => {
 
   const upstreamHeaders = new Headers();
   const isLikelyManifestRequest = upstreamUrl.pathname.toLowerCase().endsWith(".m3u8");
+
+  // Monitoramento de clientes M3U/IPTV externos: cada reload de manifest
+  // (live ~6s) renova a user_session. Fire-and-forget para não atrasar o stream.
+  if (authCtx.playlist && isLikelyManifestRequest && userId) {
+    const ipNow = getClientIp(request);
+    const uaNow = request.headers.get("user-agent") ?? "";
+    upsertM3uSession(userId, ipNow, uaNow, authCtx.playlist.ch, authCtx.channelName ?? null)
+      .catch(() => {});
+  }
   const range = isLikelyManifestRequest ? null : request.headers.get("range");
   const accept = request.headers.get("accept");
   if (range) upstreamHeaders.set("range", range);
