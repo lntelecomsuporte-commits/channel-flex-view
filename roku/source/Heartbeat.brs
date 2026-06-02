@@ -17,10 +17,16 @@ function HbInvoke(action as String, payload as Object) as Object
 end function
 
 function HbStart(channelId as Dynamic, channelName as Dynamic, isWatching as Boolean) as Object
+    di = CreateObject("roDeviceInfo")
+    ai = CreateObject("roAppInfo")
     payload = {
         sessionToken: NewSessionToken()
         userAgent: "Roku/" + GetRokuModel()
         isWatching: isWatching
+        platform: "roku"
+        deviceId: di.GetChannelClientId()
+        deviceName: di.GetModelDisplayName()
+        appVersion: ai.GetVersion()
     }
     if channelId <> invalid then payload.channelId = channelId
     if channelName <> invalid then payload.channelName = channelName
@@ -34,7 +40,8 @@ end function
 
 function HbBeat(sessionId as String, channelId as Dynamic, channelName as Dynamic, isWatching as Boolean) as Object
     if sessionId = invalid or sessionId = "" then return { ok: false }
-    payload = { sessionId: sessionId, isWatching: isWatching }
+    di = CreateObject("roDeviceInfo")
+    payload = { sessionId: sessionId, isWatching: isWatching, platform: "roku", deviceId: di.GetChannelClientId() }
     if channelId <> invalid then payload.channelId = channelId
     if channelName <> invalid then payload.channelName = channelName
     res = HbInvoke("heartbeat", payload)
