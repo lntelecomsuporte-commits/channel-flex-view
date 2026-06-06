@@ -75,7 +75,9 @@ class ChannelsRepository(private val sb: SupabaseClient) {
                             epgChannelId = o.optString("epg_channel_id").takeIf { it.isNotEmpty() },
                             isActive = o.optBoolean("is_active", true),
                             updatedAt = o.optString("updated_at"),
-                            forceProxyNative = o.optBoolean("force_proxy_native", false)
+                            forceProxyNative = o.optBoolean("force_proxy_native", false),
+                            isAdult = o.optBoolean("is_adult", false),
+                            categoryRequiresPin = catId?.let { catRequiresPin[it] } ?: false
                         )
                     )
                 }
