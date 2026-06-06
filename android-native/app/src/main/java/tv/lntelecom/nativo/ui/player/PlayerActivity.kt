@@ -105,6 +105,11 @@ class PlayerActivity : AppCompatActivity() {
     private var currentAdultPin: String = "1234"
     private val retryingProxyChannels = mutableSetOf<String>()
 
+    // Parental PIN gate
+    private val unlockedAdult = mutableSetOf<String>()
+    private var lastSafeIndex = 0
+    private var pinDialogOpen = false
+
     // Stats overlay live updater
     private val statsHandler = Handler(Looper.getMainLooper())
     private val statsTick = object : Runnable {
