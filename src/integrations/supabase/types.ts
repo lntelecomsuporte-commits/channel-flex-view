@@ -712,6 +712,10 @@ export type Database = {
         Returns: boolean
       }
       resolve_device_limit: { Args: { _user_id: string }; Returns: number }
+      user_has_category_access: {
+        Args: { _category_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "admin" | "user"
