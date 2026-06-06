@@ -105,6 +105,11 @@ class PlayerActivity : AppCompatActivity() {
     private var currentAdultPin: String = "1234"
     private val retryingProxyChannels = mutableSetOf<String>()
 
+    // Parental PIN gate
+    private val unlockedAdult = mutableSetOf<String>()
+    private var lastSafeIndex = 0
+    private var pinDialogOpen = false
+
     // Stats overlay live updater
     private val statsHandler = Handler(Looper.getMainLooper())
     private val statsTick = object : Runnable {
@@ -150,6 +155,9 @@ class PlayerActivity : AppCompatActivity() {
         loadCurrent()
 
         heartbeat = tv.lntelecom.nativo.data.HeartbeatManager(applicationContext, sb).also { it.start() }
+
+        // Carrega PIN parental cedo (não só ao abrir menu) pra que o gate funcione
+        fetchUserProfile()
 
 
         lifecycleScope.launch {
@@ -215,6 +223,8 @@ class PlayerActivity : AppCompatActivity() {
     private fun loadCurrent() {
         val p = player ?: return
         val c = channels.getOrNull(index) ?: return
+        if (maybeRequestPin(c)) return
+        lastSafeIndex = index
         val resolved = resolveStreamForChannel(c)
         android.util.Log.i("LNTV", "loadCurrent #${c.channelNumber} type=${c.streamType} raw=${c.streamUrl} resolved=${safeStreamLog(resolved)}")
         val ib = MediaItem.Builder().setUri(resolved)
@@ -228,6 +238,50 @@ class PlayerActivity : AppCompatActivity() {
         retries = 0
         showOsd(index)
         heartbeat?.updateChannel(c.id, c.name, true)
+    }
+
+    /** Mostra dialog de PIN se canal é adulto e ainda não liberado. Retorna true se bloqueou. */
+    private fun maybeRequestPin(c: Channel): Boolean {
+        if (!c.isAdult || unlockedAdult.contains(c.id)) return false
+        if (pinDialogOpen) return true
+        pinDialogOpen = true
+        // Pausa qualquer mídia em curso enquanto o dialog está aberto
+        player?.playWhenReady = false
+        b.osd.visibility = View.GONE
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            hint = "PIN (4 dígitos)"
+        }
+        AlertDialog.Builder(this)
+            .setTitle("🔞 Canal adulto — digite o PIN")
+            .setMessage("Canal ${c.channelNumber} • ${c.name}")
+            .setView(input)
+            .setCancelable(false)
+            .setPositiveButton("OK") { _, _ ->
+                pinDialogOpen = false
+                if (input.text.toString() == currentAdultPin) {
+                    unlockedAdult.add(c.id)
+                    loadCurrent()
+                } else {
+                    Toast.makeText(this, "PIN incorreto", Toast.LENGTH_SHORT).show()
+                    revertToSafe()
+                }
+            }
+            .setNegativeButton("Cancelar") { _, _ ->
+                pinDialogOpen = false
+                revertToSafe()
+            }
+            .show()
+        return true
+    }
+
+    private fun revertToSafe() {
+        if (channels.isEmpty()) return
+        val safe = lastSafeIndex.coerceIn(0, channels.size - 1)
+        if (safe == index) return
+        index = safe
+        retries = 0
+        loadCurrent()
     }
 
     private fun attemptRetry(reason: String) {
