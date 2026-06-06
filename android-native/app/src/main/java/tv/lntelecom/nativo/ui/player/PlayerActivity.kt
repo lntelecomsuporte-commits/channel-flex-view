@@ -103,6 +103,7 @@ class PlayerActivity : AppCompatActivity() {
     private var userFullName: String? = null
     private var userEmailCached: String? = null
     private var currentAdultPin: String = "1234"
+    private val unlockedAdult = mutableSetOf<String>()
     private val retryingProxyChannels = mutableSetOf<String>()
 
     // Stats overlay live updater
