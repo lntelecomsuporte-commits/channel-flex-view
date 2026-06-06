@@ -156,6 +156,9 @@ class PlayerActivity : AppCompatActivity() {
 
         heartbeat = tv.lntelecom.nativo.data.HeartbeatManager(applicationContext, sb).also { it.start() }
 
+        // Carrega PIN parental cedo (não só ao abrir menu) pra que o gate funcione
+        fetchUserProfile()
+
 
         lifecycleScope.launch {
             withContext(Dispatchers.IO) {
