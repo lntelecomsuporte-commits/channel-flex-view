@@ -103,7 +103,6 @@ class PlayerActivity : AppCompatActivity() {
     private var userFullName: String? = null
     private var userEmailCached: String? = null
     private var currentAdultPin: String = "1234"
-    private val unlockedAdult = mutableSetOf<String>()
     private val retryingProxyChannels = mutableSetOf<String>()
 
     // Stats overlay live updater
@@ -216,10 +215,6 @@ class PlayerActivity : AppCompatActivity() {
     private fun loadCurrent() {
         val p = player ?: return
         val c = channels.getOrNull(index) ?: return
-        if ((c.isAdult || c.categoryRequiresPin) && !unlockedAdult.contains(c.id)) {
-            promptAdultPin(c)
-            return
-        }
         val resolved = resolveStreamForChannel(c)
         android.util.Log.i("LNTV", "loadCurrent #${c.channelNumber} type=${c.streamType} raw=${c.streamUrl} resolved=${safeStreamLog(resolved)}")
         val ib = MediaItem.Builder().setUri(resolved)
@@ -231,47 +226,9 @@ class PlayerActivity : AppCompatActivity() {
         p.prepare()
         p.playWhenReady = true
         retries = 0
-        lastPlayedIndex = index
         showOsd(index)
         heartbeat?.updateChannel(c.id, c.name, true)
     }
-
-    private var lastPlayedIndex: Int = -1
-
-    private fun promptAdultPin(c: Channel) {
-        // Pausa qualquer reprodução em curso enquanto pedimos o PIN
-        player?.playWhenReady = false
-        val input = EditText(this).apply {
-            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
-            hint = "PIN de 4 dígitos"
-        }
-        AlertDialog.Builder(this)
-            .setTitle("🔞 Canal restrito")
-            .setMessage("Digite o PIN parental para assistir ${c.name}.")
-            .setView(input)
-            .setCancelable(false)
-            .setPositiveButton("Entrar") { _, _ ->
-                if (input.text.toString() == currentAdultPin) {
-                    unlockedAdult.add(c.id)
-                    loadCurrent()
-                } else {
-                    Toast.makeText(this, "PIN incorreto", Toast.LENGTH_SHORT).show()
-                    revertFromRestricted()
-                }
-            }
-            .setNegativeButton("Cancelar") { _, _ -> revertFromRestricted() }
-            .show()
-    }
-
-    private fun revertFromRestricted() {
-        if (lastPlayedIndex >= 0 && lastPlayedIndex < channels.size && lastPlayedIndex != index) {
-            index = lastPlayedIndex
-            loadCurrent()
-        } else {
-            player?.playWhenReady = true
-        }
-    }
-
 
     private fun attemptRetry(reason: String) {
         val current = channels.getOrNull(index) ?: return

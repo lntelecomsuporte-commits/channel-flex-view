@@ -36,17 +36,14 @@ class ChannelsRepository(private val sb: SupabaseClient) {
             }
         }
 
-        // 3. Nome das categorias + flag requires_pin
+        // 3. Nome das categorias
         val catMap = mutableMapOf<String, String>()
-        val catRequiresPin = mutableMapOf<String, Boolean>()
-        sb.get("categories?select=id,name,requires_pin").use { res ->
+        sb.get("categories?select=id,name").use { res ->
             if (res.isSuccessful) {
                 val arr = JSONArray(res.body?.string() ?: "[]")
                 for (i in 0 until arr.length()) {
                     val o = arr.optJSONObject(i) ?: continue
-                    val id = o.optString("id")
-                    catMap[id] = o.optString("name")
-                    catRequiresPin[id] = o.optBoolean("requires_pin", false)
+                    catMap[o.optString("id")] = o.optString("name")
                 }
             }
         }
@@ -75,9 +72,7 @@ class ChannelsRepository(private val sb: SupabaseClient) {
                             epgChannelId = o.optString("epg_channel_id").takeIf { it.isNotEmpty() },
                             isActive = o.optBoolean("is_active", true),
                             updatedAt = o.optString("updated_at"),
-                            forceProxyNative = o.optBoolean("force_proxy_native", false),
-                            isAdult = o.optBoolean("is_adult", false),
-                            categoryRequiresPin = catId?.let { catRequiresPin[it] } ?: false
+                            forceProxyNative = o.optBoolean("force_proxy_native", false)
                         )
                     )
                 }
