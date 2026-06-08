@@ -74,7 +74,7 @@ class PlayerActivity : AppCompatActivity() {
     private val maxRetries = 6
     private var playerNeedsReset = false
     private var lastChannelChangeMs = 0L
-    private val channelChangeThrottleMs = 250L
+    private val channelChangeDedupMs = 40L
     private var screenOffReceiver: BroadcastReceiver? = null
     private var shuttingDown = false
 
