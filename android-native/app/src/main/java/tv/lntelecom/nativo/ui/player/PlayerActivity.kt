@@ -244,20 +244,7 @@ class PlayerActivity : AppCompatActivity() {
     private val isListOpen: Boolean get() = b.listOverlay.visibility == View.VISIBLE
 
     private fun initPlayer() {
-        // ABR: estimativa inicial alta pra começar em qualidade boa em vez de
-        // subir lentamente. Sem cap superior — pega o maior bitrate disponível.
-        val bandwidthMeter = DefaultBandwidthMeter.Builder(this)
-            .setInitialBitrateEstimate(6_000_000L)
-            .build()
-        val trackSelector = DefaultTrackSelector(this).apply {
-            setParameters(
-                buildUponParameters()
-                    .clearVideoSizeConstraints()
-                    .setForceHighestSupportedBitrate(false)
-                    .setMaxVideoBitrate(Int.MAX_VALUE)
-                    .build()
-            )
-        }
+        // ABR padrão do ExoPlayer: começa conservador e sobe conforme bandwidth medida.
         // Buffers maiores pra live HLS aguentar microcortes sem dropar
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(15_000, 60_000, 1_500, 3_000)
@@ -270,8 +257,6 @@ class PlayerActivity : AppCompatActivity() {
             .build()
 
         val p = ExoPlayer.Builder(this)
-            .setTrackSelector(trackSelector)
-            .setBandwidthMeter(bandwidthMeter)
             .setLoadControl(loadControl)
             .setLivePlaybackSpeedControl(liveSpeed)
             .build()
