@@ -244,7 +244,37 @@ class PlayerActivity : AppCompatActivity() {
     private val isListOpen: Boolean get() = b.listOverlay.visibility == View.VISIBLE
 
     private fun initPlayer() {
-        val p = ExoPlayer.Builder(this).build()
+        // ABR: estimativa inicial alta pra começar em qualidade boa em vez de
+        // subir lentamente. Sem cap superior — pega o maior bitrate disponível.
+        val bandwidthMeter = DefaultBandwidthMeter.Builder(this)
+            .setInitialBitrateEstimate(6_000_000L)
+            .build()
+        val trackSelector = DefaultTrackSelector(this).apply {
+            setParameters(
+                buildUponParameters()
+                    .clearVideoSizeConstraints()
+                    .setForceHighestSupportedBitrate(false)
+                    .setMaxVideoBitrate(Int.MAX_VALUE)
+                    .build()
+            )
+        }
+        // Buffers maiores pra live HLS aguentar microcortes sem dropar
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(15_000, 60_000, 1_500, 3_000)
+            .build()
+        // Permite o player acelerar/desacelerar levemente pra manter-se
+        // dentro da janela live (evita BehindLiveWindow).
+        val liveSpeed = DefaultLivePlaybackSpeedControl.Builder()
+            .setFallbackMinPlaybackSpeed(0.97f)
+            .setFallbackMaxPlaybackSpeed(1.03f)
+            .build()
+
+        val p = ExoPlayer.Builder(this)
+            .setTrackSelector(trackSelector)
+            .setBandwidthMeter(bandwidthMeter)
+            .setLoadControl(loadControl)
+            .setLivePlaybackSpeedControl(liveSpeed)
+            .build()
         p.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 b.buffering.visibility =
@@ -256,7 +286,17 @@ class PlayerActivity : AppCompatActivity() {
                     stallHandler.postDelayed(stallCheck, 8000)
                 }
             }
-            override fun onPlayerError(error: PlaybackException) { attemptRetry("error") }
+            override fun onPlayerError(error: PlaybackException) {
+                if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+                    android.util.Log.w("LNTV", "BehindLiveWindow — seek pro live e prepare")
+                    runCatching {
+                        player?.seekToDefaultPosition()
+                        player?.prepare()
+                    }
+                    return
+                }
+                attemptRetry("error code=${error.errorCode}")
+            }
         })
         b.playerView.player = p
         player = p
@@ -267,11 +307,31 @@ class PlayerActivity : AppCompatActivity() {
         val c = channels.getOrNull(index) ?: return
         if (maybeRequestPin(c)) return
         lastSafeIndex = index
+        // Reset duro do player se ficou em estado de erro / esgotou retries.
+        // Sem isso, depois de uma queda de internet ou canal off, NENHUM
+        // canal volta a abrir mesmo trocando.
+        if (playerNeedsReset || p.playerError != null) {
+            android.util.Log.i("LNTV", "loadCurrent: reset duro do player")
+            runCatching {
+                p.stop()
+                p.clearMediaItems()
+            }
+            playerNeedsReset = false
+        }
         val resolved = resolveStreamForChannel(c)
         android.util.Log.i("LNTV", "loadCurrent #${c.channelNumber} type=${c.streamType} raw=${c.streamUrl} resolved=${safeStreamLog(resolved)}")
         val ib = MediaItem.Builder().setUri(resolved)
         when (c.streamType) {
-            "hls" -> ib.setMimeType(MimeTypes.APPLICATION_M3U8)
+            "hls" -> {
+                ib.setMimeType(MimeTypes.APPLICATION_M3U8)
+                // Pede pro player ficar ~8s atrás do live edge — folga pra
+                // tolerar redes ruins sem cair fora da janela live.
+                ib.setLiveConfiguration(
+                    MediaItem.LiveConfiguration.Builder()
+                        .setTargetOffsetMs(8_000)
+                        .build()
+                )
+            }
             "mp4" -> ib.setMimeType(MimeTypes.VIDEO_MP4)
         }
         p.setMediaItem(ib.build())
