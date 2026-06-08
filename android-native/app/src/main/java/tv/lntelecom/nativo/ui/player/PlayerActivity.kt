@@ -618,6 +618,14 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        // Ignora auto-repeat de UP/DOWN/CH_UP/CH_DOWN — tecla segurada não
+        // deve pular vários canais; só conta novo pressionar.
+        if (event != null && event.repeatCount > 0) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN -> return true
+            }
+        }
         // Stats overlay: deixa trocar canal com cima/baixo mantendo overlay aberto
         if (b.statsOverlay.visibility == View.VISIBLE) {
             return when (keyCode) {
