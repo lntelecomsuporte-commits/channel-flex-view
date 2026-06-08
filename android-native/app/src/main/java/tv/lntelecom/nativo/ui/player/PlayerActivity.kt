@@ -992,11 +992,17 @@ class PlayerActivity : AppCompatActivity() {
 
     // ====== Stats overlay ======
     private fun showStats() {
+        // Fixa a largura do overlay em 1/3 da tela pra não cobrir metade do vídeo,
+        // independente do tamanho do texto.
+        val lp = b.statsOverlay.layoutParams
+        lp.width = resources.displayMetrics.widthPixels / 3
+        b.statsOverlay.layoutParams = lp
         renderStats()
         b.statsOverlay.visibility = View.VISIBLE
         statsHandler.removeCallbacks(statsTick)
         statsHandler.postDelayed(statsTick, 1000)
     }
+
 
     private fun hideStats() {
         b.statsOverlay.visibility = View.GONE
