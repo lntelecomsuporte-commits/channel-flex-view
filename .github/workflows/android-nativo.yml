@@ -69,6 +69,9 @@ jobs:
         run: ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Write native update metadata
+        env:
+          VERSION_CODE: ${{ env.VERSION_CODE }}
+          VERSION_NAME: ${{ env.VERSION_NAME }}
         run: |
           mkdir -p ../out
           cat > ../out/version-nativo.json <<EOF
