@@ -61,7 +61,7 @@ jobs:
           EOF
 
       - name: Generate Gradle wrapper
-        run: gradle wrapper --gradle-version 8.9
+        run: gradle wrapper --gradle-version 8.9 --distribution-type bin
 
       - name: Build Release APK
         env:
