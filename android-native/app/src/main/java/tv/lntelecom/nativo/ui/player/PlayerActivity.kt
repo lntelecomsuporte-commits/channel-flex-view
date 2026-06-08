@@ -484,11 +484,17 @@ class PlayerActivity : AppCompatActivity() {
     /** Troca imediata (UP/DOWN/CH_UP/CH_DOWN). */
     private fun changeChannel(delta: Int) {
         if (channels.isEmpty()) return
+        // Throttle: bloqueia trocas muito rápidas (key repeat, eventos
+        // duplicados do controle) que faziam pular vários canais de uma vez.
+        val now = System.currentTimeMillis()
+        if (now - lastChannelChangeMs < channelChangeThrottleMs) return
+        lastChannelChangeMs = now
         cancelPending()
         index = ((index + delta) % channels.size + channels.size) % channels.size
         retries = 0
         loadCurrent()
     }
+
 
     /** Preview com LEFT/RIGHT: só atualiza OSD, sintoniza após delay. */
     private fun previewChannel(delta: Int) {
