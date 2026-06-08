@@ -467,8 +467,19 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun checkStall() {
         val p = player ?: return
-        if (p.playbackState == Player.STATE_BUFFERING) attemptRetry("stall")
+        if (p.playbackState != Player.STATE_BUFFERING) return
+        // Travado bufferando: faz reset duro (stop+prepare) em vez de só retry,
+        // porque streams Amagi e similares ficam presos em buffering eterno.
+        android.util.Log.w("LNTV", "Stall detectado — reset duro do canal atual")
+        runCatching {
+            p.stop()
+            p.clearMediaItems()
+        }
+        playerNeedsReset = false
+        retries = 0
+        loadCurrent()
     }
+
 
     /** Troca imediata (UP/DOWN/CH_UP/CH_DOWN). */
     private fun changeChannel(delta: Int) {
