@@ -182,6 +182,36 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         checkUpdate()
+        registerScreenOffReceiver()
+    }
+
+    /**
+     * Quando o usuário aperta Power no controle (entra em stand-by) o sistema
+     * dispara ACTION_SCREEN_OFF. Encerramos o app pra liberar RAM (mesmo padrão
+     * do legacy `MainActivity.java`). ACTION_SCREEN_OFF SÓ funciona com receiver
+     * registrado dinamicamente (não no manifest).
+     */
+    private fun registerScreenOffReceiver() {
+        if (screenOffReceiver != null) return
+        screenOffReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                    shutdownAndRelease("screen_off")
+                }
+            }
+        }
+        registerReceiver(screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
+    }
+
+    private fun shutdownAndRelease(reason: String) {
+        if (shuttingDown) return
+        shuttingDown = true
+        android.util.Log.i("LNTV", "Shutting down ($reason)")
+        try { heartbeat?.stop() } catch (_: Exception) {}
+        try { player?.release() } catch (_: Exception) {}
+        player = null
+        try { finishAffinity() } catch (_: Exception) {}
+        Handler(Looper.getMainLooper()).postDelayed({ System.exit(0) }, 150)
     }
 
     private fun setupListOverlay() {
