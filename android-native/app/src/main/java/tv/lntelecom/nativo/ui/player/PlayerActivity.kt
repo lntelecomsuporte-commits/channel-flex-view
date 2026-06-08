@@ -1,7 +1,10 @@
 package tv.lntelecom.nativo.ui.player
 
 import android.app.AlertDialog
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -19,7 +22,11 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultLivePlaybackSpeedControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.recyclerview.widget.LinearLayoutManager
 import coil.load
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +72,11 @@ class PlayerActivity : AppCompatActivity() {
     private var pendingIndex = -1
     private var retries = 0
     private val maxRetries = 6
+    private var playerNeedsReset = false
+    private var lastChannelChangeMs = 0L
+    private val channelChangeThrottleMs = 250L
+    private var screenOffReceiver: BroadcastReceiver? = null
+    private var shuttingDown = false
 
     private val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
 
@@ -170,6 +182,36 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         checkUpdate()
+        registerScreenOffReceiver()
+    }
+
+    /**
+     * Quando o usuário aperta Power no controle (entra em stand-by) o sistema
+     * dispara ACTION_SCREEN_OFF. Encerramos o app pra liberar RAM (mesmo padrão
+     * do legacy `MainActivity.java`). ACTION_SCREEN_OFF SÓ funciona com receiver
+     * registrado dinamicamente (não no manifest).
+     */
+    private fun registerScreenOffReceiver() {
+        if (screenOffReceiver != null) return
+        screenOffReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                    shutdownAndRelease("screen_off")
+                }
+            }
+        }
+        registerReceiver(screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
+    }
+
+    private fun shutdownAndRelease(reason: String) {
+        if (shuttingDown) return
+        shuttingDown = true
+        android.util.Log.i("LNTV", "Shutting down ($reason)")
+        try { heartbeat?.stop() } catch (_: Exception) {}
+        try { player?.release() } catch (_: Exception) {}
+        player = null
+        try { finishAffinity() } catch (_: Exception) {}
+        Handler(Looper.getMainLooper()).postDelayed({ System.exit(0) }, 150)
     }
 
     private fun setupListOverlay() {
@@ -202,7 +244,37 @@ class PlayerActivity : AppCompatActivity() {
     private val isListOpen: Boolean get() = b.listOverlay.visibility == View.VISIBLE
 
     private fun initPlayer() {
-        val p = ExoPlayer.Builder(this).build()
+        // ABR: estimativa inicial alta pra começar em qualidade boa em vez de
+        // subir lentamente. Sem cap superior — pega o maior bitrate disponível.
+        val bandwidthMeter = DefaultBandwidthMeter.Builder(this)
+            .setInitialBitrateEstimate(6_000_000L)
+            .build()
+        val trackSelector = DefaultTrackSelector(this).apply {
+            setParameters(
+                buildUponParameters()
+                    .clearVideoSizeConstraints()
+                    .setForceHighestSupportedBitrate(false)
+                    .setMaxVideoBitrate(Int.MAX_VALUE)
+                    .build()
+            )
+        }
+        // Buffers maiores pra live HLS aguentar microcortes sem dropar
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(15_000, 60_000, 1_500, 3_000)
+            .build()
+        // Permite o player acelerar/desacelerar levemente pra manter-se
+        // dentro da janela live (evita BehindLiveWindow).
+        val liveSpeed = DefaultLivePlaybackSpeedControl.Builder()
+            .setFallbackMinPlaybackSpeed(0.97f)
+            .setFallbackMaxPlaybackSpeed(1.03f)
+            .build()
+
+        val p = ExoPlayer.Builder(this)
+            .setTrackSelector(trackSelector)
+            .setBandwidthMeter(bandwidthMeter)
+            .setLoadControl(loadControl)
+            .setLivePlaybackSpeedControl(liveSpeed)
+            .build()
         p.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 b.buffering.visibility =
@@ -214,7 +286,17 @@ class PlayerActivity : AppCompatActivity() {
                     stallHandler.postDelayed(stallCheck, 8000)
                 }
             }
-            override fun onPlayerError(error: PlaybackException) { attemptRetry("error") }
+            override fun onPlayerError(error: PlaybackException) {
+                if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+                    android.util.Log.w("LNTV", "BehindLiveWindow — seek pro live e prepare")
+                    runCatching {
+                        player?.seekToDefaultPosition()
+                        player?.prepare()
+                    }
+                    return
+                }
+                attemptRetry("error code=${error.errorCode}")
+            }
         })
         b.playerView.player = p
         player = p
@@ -225,11 +307,31 @@ class PlayerActivity : AppCompatActivity() {
         val c = channels.getOrNull(index) ?: return
         if (maybeRequestPin(c)) return
         lastSafeIndex = index
+        // Reset duro do player se ficou em estado de erro / esgotou retries.
+        // Sem isso, depois de uma queda de internet ou canal off, NENHUM
+        // canal volta a abrir mesmo trocando.
+        if (playerNeedsReset || p.playerError != null) {
+            android.util.Log.i("LNTV", "loadCurrent: reset duro do player")
+            runCatching {
+                p.stop()
+                p.clearMediaItems()
+            }
+            playerNeedsReset = false
+        }
         val resolved = resolveStreamForChannel(c)
         android.util.Log.i("LNTV", "loadCurrent #${c.channelNumber} type=${c.streamType} raw=${c.streamUrl} resolved=${safeStreamLog(resolved)}")
         val ib = MediaItem.Builder().setUri(resolved)
         when (c.streamType) {
-            "hls" -> ib.setMimeType(MimeTypes.APPLICATION_M3U8)
+            "hls" -> {
+                ib.setMimeType(MimeTypes.APPLICATION_M3U8)
+                // Pede pro player ficar ~8s atrás do live edge — folga pra
+                // tolerar redes ruins sem cair fora da janela live.
+                ib.setLiveConfiguration(
+                    MediaItem.LiveConfiguration.Builder()
+                        .setTargetOffsetMs(8_000)
+                        .build()
+                )
+            }
             "mp4" -> ib.setMimeType(MimeTypes.VIDEO_MP4)
         }
         p.setMediaItem(ib.build())
@@ -303,6 +405,8 @@ class PlayerActivity : AppCompatActivity() {
             return
         }
         if (retries >= maxRetries) {
+            android.util.Log.w("LNTV", "maxRetries atingido — marcando player pra reset duro na próxima troca")
+            playerNeedsReset = true
             return
         }
         retries++
@@ -363,17 +467,34 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun checkStall() {
         val p = player ?: return
-        if (p.playbackState == Player.STATE_BUFFERING) attemptRetry("stall")
+        if (p.playbackState != Player.STATE_BUFFERING) return
+        // Travado bufferando: faz reset duro (stop+prepare) em vez de só retry,
+        // porque streams Amagi e similares ficam presos em buffering eterno.
+        android.util.Log.w("LNTV", "Stall detectado — reset duro do canal atual")
+        runCatching {
+            p.stop()
+            p.clearMediaItems()
+        }
+        playerNeedsReset = false
+        retries = 0
+        loadCurrent()
     }
+
 
     /** Troca imediata (UP/DOWN/CH_UP/CH_DOWN). */
     private fun changeChannel(delta: Int) {
         if (channels.isEmpty()) return
+        // Throttle: bloqueia trocas muito rápidas (key repeat, eventos
+        // duplicados do controle) que faziam pular vários canais de uma vez.
+        val now = System.currentTimeMillis()
+        if (now - lastChannelChangeMs < channelChangeThrottleMs) return
+        lastChannelChangeMs = now
         cancelPending()
         index = ((index + delta) % channels.size + channels.size) % channels.size
         retries = 0
         loadCurrent()
     }
+
 
     /** Preview com LEFT/RIGHT: só atualiza OSD, sintoniza após delay. */
     private fun previewChannel(delta: Int) {
@@ -497,6 +618,14 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        // Ignora auto-repeat de UP/DOWN/CH_UP/CH_DOWN — tecla segurada não
+        // deve pular vários canais; só conta novo pressionar.
+        if (event != null && event.repeatCount > 0) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN -> return true
+            }
+        }
         // Stats overlay: deixa trocar canal com cima/baixo mantendo overlay aberto
         if (b.statsOverlay.visibility == View.VISIBLE) {
             return when (keyCode) {
@@ -863,11 +992,17 @@ class PlayerActivity : AppCompatActivity() {
 
     // ====== Stats overlay ======
     private fun showStats() {
+        // Fixa a largura do overlay em 1/3 da tela pra não cobrir metade do vídeo,
+        // independente do tamanho do texto.
+        val lp = b.statsOverlay.layoutParams
+        lp.width = resources.displayMetrics.widthPixels / 3
+        b.statsOverlay.layoutParams = lp
         renderStats()
         b.statsOverlay.visibility = View.VISIBLE
         statsHandler.removeCallbacks(statsTick)
         statsHandler.postDelayed(statsTick, 1000)
     }
+
 
     private fun hideStats() {
         b.statsOverlay.visibility = View.GONE
@@ -938,9 +1073,14 @@ class PlayerActivity : AppCompatActivity() {
         osdHandler.removeCallbacksAndMessages(null)
         previewHandler.removeCallbacksAndMessages(null)
         statsHandler.removeCallbacksAndMessages(null)
+        screenOffReceiver?.let {
+            runCatching { unregisterReceiver(it) }
+            screenOffReceiver = null
+        }
         heartbeat?.stop()
         heartbeat = null
         player?.release()
         player = null
     }
 }
+
