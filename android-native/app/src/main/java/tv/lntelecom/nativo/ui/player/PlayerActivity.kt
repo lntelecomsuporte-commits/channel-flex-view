@@ -405,6 +405,8 @@ class PlayerActivity : AppCompatActivity() {
             return
         }
         if (retries >= maxRetries) {
+            android.util.Log.w("LNTV", "maxRetries atingido — marcando player pra reset duro na próxima troca")
+            playerNeedsReset = true
             return
         }
         retries++
