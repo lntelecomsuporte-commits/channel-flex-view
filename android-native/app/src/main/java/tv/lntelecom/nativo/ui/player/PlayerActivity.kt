@@ -1073,9 +1073,14 @@ class PlayerActivity : AppCompatActivity() {
         osdHandler.removeCallbacksAndMessages(null)
         previewHandler.removeCallbacksAndMessages(null)
         statsHandler.removeCallbacksAndMessages(null)
+        screenOffReceiver?.let {
+            runCatching { unregisterReceiver(it) }
+            screenOffReceiver = null
+        }
         heartbeat?.stop()
         heartbeat = null
         player?.release()
         player = null
     }
 }
+
