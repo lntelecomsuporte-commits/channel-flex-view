@@ -74,7 +74,7 @@ class PlayerActivity : AppCompatActivity() {
     private val maxRetries = 6
     private var playerNeedsReset = false
     private var lastChannelChangeMs = 0L
-    private val channelChangeThrottleMs = 250L
+    private val channelChangeDedupMs = 40L
     private var screenOffReceiver: BroadcastReceiver? = null
     private var shuttingDown = false
 
@@ -484,10 +484,11 @@ class PlayerActivity : AppCompatActivity() {
     /** Troca imediata (UP/DOWN/CH_UP/CH_DOWN). */
     private fun changeChannel(delta: Int) {
         if (channels.isEmpty()) return
-        // Throttle: bloqueia trocas muito rápidas (key repeat, eventos
-        // duplicados do controle) que faziam pular vários canais de uma vez.
+        // Dedup curto (40ms): ignora eventos duplicados que alguns drivers
+        // de controle IR disparam pra mesma tecla. NÃO bloqueia auto-repeat
+        // do Android (que vem a cada ~50ms quando a tecla fica segurada).
         val now = System.currentTimeMillis()
-        if (now - lastChannelChangeMs < channelChangeThrottleMs) return
+        if (now - lastChannelChangeMs < channelChangeDedupMs) return
         lastChannelChangeMs = now
         cancelPending()
         index = ((index + delta) % channels.size + channels.size) % channels.size
@@ -618,14 +619,6 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        // Ignora auto-repeat de UP/DOWN/CH_UP/CH_DOWN — tecla segurada não
-        // deve pular vários canais; só conta novo pressionar.
-        if (event != null && event.repeatCount > 0) {
-            when (keyCode) {
-                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
-                KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN -> return true
-            }
-        }
         // Stats overlay: deixa trocar canal com cima/baixo mantendo overlay aberto
         if (b.statsOverlay.visibility == View.VISIBLE) {
             return when (keyCode) {
