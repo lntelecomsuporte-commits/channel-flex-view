@@ -21,7 +21,8 @@ class UpdateChecker(private val ctx: Context, private val http: OkHttpClient) {
 
     data class Update(val versionCode: Int, val versionName: String, val url: String)
 
-    fun check(currentVersionCode: Int): Update? {
+    fun check(currentVersionCode: Int, currentVersionName: String): Update? {
+        val currentName = normalizeVersionName(currentVersionName)
         for (path in listOf("version-nativo.json", "version.json")) {
             try {
                 val req = Request.Builder().url("${App.BACKEND}/$path").get().build()
@@ -31,6 +32,7 @@ class UpdateChecker(private val ctx: Context, private val http: OkHttpClient) {
                     val vc = obj.optInt("nativoVersionCode", -1)
                     val vn = obj.optString("nativoVersionName", "")
                     val url = obj.optString("nativoUrl", "")
+                    if (normalizeVersionName(vn) == currentName) return null
                     if (vc > currentVersionCode && url.isNotEmpty()) return Update(vc, vn, url)
                 }
             } catch (_: Exception) {
@@ -38,6 +40,12 @@ class UpdateChecker(private val ctx: Context, private val http: OkHttpClient) {
             }
         }
         return null
+    }
+
+    private fun normalizeVersionName(value: String): String {
+        return value.trim()
+            .removePrefix("nativo-v")
+            .removePrefix("v")
     }
 
     fun download(update: Update): File? {
