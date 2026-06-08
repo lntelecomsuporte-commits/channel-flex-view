@@ -484,10 +484,11 @@ class PlayerActivity : AppCompatActivity() {
     /** Troca imediata (UP/DOWN/CH_UP/CH_DOWN). */
     private fun changeChannel(delta: Int) {
         if (channels.isEmpty()) return
-        // Throttle: bloqueia trocas muito rápidas (key repeat, eventos
-        // duplicados do controle) que faziam pular vários canais de uma vez.
+        // Dedup curto (40ms): ignora eventos duplicados que alguns drivers
+        // de controle IR disparam pra mesma tecla. NÃO bloqueia auto-repeat
+        // do Android (que vem a cada ~50ms quando a tecla fica segurada).
         val now = System.currentTimeMillis()
-        if (now - lastChannelChangeMs < channelChangeThrottleMs) return
+        if (now - lastChannelChangeMs < channelChangeDedupMs) return
         lastChannelChangeMs = now
         cancelPending()
         index = ((index + delta) % channels.size + channels.size) % channels.size
