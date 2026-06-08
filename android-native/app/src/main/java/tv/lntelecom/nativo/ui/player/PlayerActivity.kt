@@ -242,20 +242,15 @@ class PlayerActivity : AppCompatActivity() {
     private val isListOpen: Boolean get() = b.listOverlay.visibility == View.VISIBLE
 
     private fun initPlayer() {
-        // ABR padrão do ExoPlayer: começa conservador e sobe conforme bandwidth medida.
-        // Buffers maiores pra live HLS aguentar microcortes sem dropar
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(15_000, 60_000, 1_500, 3_000)
-            .build()
-        // Permite o player acelerar/desacelerar levemente pra manter-se
-        // dentro da janela live (evita BehindLiveWindow).
+        // LoadControl/ABR padrão do ExoPlayer (buffer ~50s, mantém-se cheio
+        // automaticamente). Mantemos só o LivePlaybackSpeedControl pra ajustar
+        // velocidade levemente e evitar BehindLiveWindow.
         val liveSpeed = DefaultLivePlaybackSpeedControl.Builder()
             .setFallbackMinPlaybackSpeed(0.97f)
             .setFallbackMaxPlaybackSpeed(1.03f)
             .build()
 
         val p = ExoPlayer.Builder(this)
-            .setLoadControl(loadControl)
             .setLivePlaybackSpeedControl(liveSpeed)
             .build()
         p.addListener(object : Player.Listener {
