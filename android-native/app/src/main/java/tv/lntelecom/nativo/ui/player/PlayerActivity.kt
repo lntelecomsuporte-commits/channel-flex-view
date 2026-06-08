@@ -1015,7 +1015,8 @@ class PlayerActivity : AppCompatActivity() {
     private fun checkUpdate() {
         lifecycleScope.launch {
             val current = BuildConfig.VERSION_CODE
-            val update = withContext(Dispatchers.IO) { updater.check(current) } ?: return@launch
+            val currentName = BuildConfig.VERSION_NAME
+            val update = withContext(Dispatchers.IO) { updater.check(current, currentName) } ?: return@launch
             Toast.makeText(
                 this@PlayerActivity,
                 "Atualização ${update.versionName} disponível — baixando…",
