@@ -23,7 +23,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 
-import androidx.media3.exoplayer.DefaultLivePlaybackSpeedControl
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.recyclerview.widget.LinearLayoutManager
 import coil.load
@@ -242,16 +242,19 @@ class PlayerActivity : AppCompatActivity() {
     private val isListOpen: Boolean get() = b.listOverlay.visibility == View.VISIBLE
 
     private fun initPlayer() {
-        // LoadControl/ABR padrão do ExoPlayer (buffer ~50s, mantém-se cheio
-        // automaticamente). Mantemos só o LivePlaybackSpeedControl pra ajustar
-        // velocidade levemente e evitar BehindLiveWindow.
-        val liveSpeed = DefaultLivePlaybackSpeedControl.Builder()
-            .setFallbackMinPlaybackSpeed(0.97f)
-            .setFallbackMaxPlaybackSpeed(1.03f)
+        // Buffer mais conservador para TV ao vivo: não força ficar colado no
+        // live edge e tenta manter uma folga maior antes de tocar/rebufferizar.
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                30_000,  // mínimo em buffer
+                120_000, // máximo em buffer
+                3_000,   // antes de iniciar
+                8_000,   // depois de travar/rebufferizar
+            )
             .build()
 
         val p = ExoPlayer.Builder(this)
-            .setLivePlaybackSpeedControl(liveSpeed)
+            .setLoadControl(loadControl)
             .build()
         p.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
@@ -302,13 +305,6 @@ class PlayerActivity : AppCompatActivity() {
         when (c.streamType) {
             "hls" -> {
                 ib.setMimeType(MimeTypes.APPLICATION_M3U8)
-                // Pede pro player ficar ~8s atrás do live edge — folga pra
-                // tolerar redes ruins sem cair fora da janela live.
-                ib.setLiveConfiguration(
-                    MediaItem.LiveConfiguration.Builder()
-                        .setTargetOffsetMs(8_000)
-                        .build()
-                )
             }
             "mp4" -> ib.setMimeType(MimeTypes.VIDEO_MP4)
         }
