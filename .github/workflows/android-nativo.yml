@@ -34,8 +34,15 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.9"
           cache-disabled: true
+
+      - name: Install Gradle 8.9
+        run: |
+          curl -fL --retry 8 --retry-delay 5 --retry-all-errors \
+            "https://downloads.gradle.org/distributions/gradle-8.9-bin.zip" \
+            -o /tmp/gradle-8.9-bin.zip
+          unzip -q /tmp/gradle-8.9-bin.zip -d /tmp/gradle
+          echo "/tmp/gradle/gradle-8.9/bin" >> "$GITHUB_PATH"
 
       - name: Set version
         run: |
@@ -61,7 +68,7 @@ jobs:
           EOF
 
       - name: Generate Gradle wrapper
-        run: gradle wrapper --gradle-version 8.9 --distribution-type bin
+        run: gradle wrapper --gradle-version 8.9 --distribution-type bin --gradle-distribution-url https://downloads.gradle.org/distributions/gradle-8.9-bin.zip
 
       - name: Build Release APK
         env:
