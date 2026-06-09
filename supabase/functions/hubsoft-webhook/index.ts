@@ -322,6 +322,8 @@ Deno.serve(async (req) => {
           // 3b) profile exists but auth missing → delete orphan profile and CREATE the auth user
           if (!authUserId && profileUserId) {
             console.log("Orphan profile without auth.user — deleting orphan and recreating");
+            await supabaseAdmin.from("user_devices").delete().eq("user_id", profileUserId);
+            await supabaseAdmin.from("pending_devices").delete().eq("user_id", profileUserId);
             await supabaseAdmin.from("user_category_access").delete().eq("user_id", profileUserId);
             await supabaseAdmin.from("user_roles").delete().eq("user_id", profileUserId);
             await supabaseAdmin.from("user_favorites").delete().eq("user_id", profileUserId);
