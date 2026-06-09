@@ -290,14 +290,22 @@ class PlayerActivity : AppCompatActivity() {
         val c = channels.getOrNull(index) ?: return
         if (maybeRequestPin(c)) return
         lastSafeIndex = index
-        // Reset duro do player se ficou em estado de erro / esgotou retries.
-        // Sem isso, depois de uma queda de internet ou canal off, NENHUM
-        // canal volta a abrir mesmo trocando.
-        if (playerNeedsReset || p.playerError != null) {
-            android.util.Log.i("LNTV", "loadCurrent: reset duro do player")
-            runCatching {
+        // Reset duro do player só quando necessário:
+        // - flag explícita (maxRetries esgotado)
+        // - estado de erro fatal
+        // - troca durante ciclo de retry em curso (retries > 0)
+        // Em canal saudável (retries==0, sem erro) pulamos: setMediaItem
+        // já substitui a mídia anterior e mantém o zap rápido (~800ms).
+        if (playerNeedsReset || p.playerError != null || retries > 0) {
+            android.util.Log.i(
+                "LNTV",
+                "loadCurrent: reset duro (needsReset=$playerNeedsReset err=${p.playerError != null} retries=$retries)"
+            )
+            try {
                 p.stop()
                 p.clearMediaItems()
+            } catch (e: Exception) {
+                android.util.Log.w("LNTV", "Falha no reset duro: ${e.message}", e)
             }
             playerNeedsReset = false
         }
