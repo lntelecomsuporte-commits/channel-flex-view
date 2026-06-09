@@ -391,6 +391,7 @@ class PlayerActivity : AppCompatActivity() {
         if (current.streamUrl.startsWith("http://", ignoreCase = true) && retryingProxyChannels.add(current.id)) {
             android.util.Log.w("LNTV", "HTTP direto falhou; tentando proxy HTTPS no canal ${current.channelNumber} ($reason)")
             retries = 0
+            retryHandler.removeCallbacksAndMessages(null)
             player?.let { p ->
                 val resolved = resolveStreamForChannel(current)
                 val ib = MediaItem.Builder().setUri(resolved)
@@ -405,25 +406,52 @@ class PlayerActivity : AppCompatActivity() {
             return
         }
         if (retries >= maxRetries) {
-            android.util.Log.w("LNTV", "maxRetries atingido — marcando player pra reset duro na próxima troca")
+            android.util.Log.w("LNTV", "maxRetries atingido — agendando sonda lenta ($slowProbeInterval ms) pra recuperação automática")
             playerNeedsReset = true
+            // Reagenda só uma sonda lenta. Se o canal voltar, STATE_READY zera
+            // retries e tudo segue. Se falhar de novo, attemptRetry vai escalar
+            // até maxRetries e cair aqui de novo (loop infinito de recuperação,
+            // cancelado quando o usuário troca de canal).
+            retryHandler.removeCallbacks(slowProbe)
+            retryHandler.postDelayed(slowProbe, slowProbeInterval)
             return
         }
         retries++
         val delay = (1000L * (1 shl (retries - 1))).coerceAtMost(8000L)
-        b.playerView.postDelayed({
-            val p = player ?: return@postDelayed
-            val c = channels.getOrNull(index) ?: return@postDelayed
-            val resolved = resolveStreamForChannel(c)
-            val ib = MediaItem.Builder().setUri(resolved)
-            when (c.streamType) {
-                "hls" -> ib.setMimeType(MimeTypes.APPLICATION_M3U8)
-                "mp4" -> ib.setMimeType(MimeTypes.VIDEO_MP4)
-            }
-            p.setMediaItem(ib.build())
-            p.prepare()
-            p.playWhenReady = true
-        }, delay)
+        retryHandler.removeCallbacks(retryRunnable)
+        retryHandler.postDelayed(retryRunnable, delay)
+    }
+
+    /** Executa um retry agora (chamado pelo retryHandler). */
+    private fun doRetryNow() {
+        val p = player ?: return
+        val c = channels.getOrNull(index) ?: return
+        val resolved = resolveStreamForChannel(c)
+        val ib = MediaItem.Builder().setUri(resolved)
+        when (c.streamType) {
+            "hls" -> ib.setMimeType(MimeTypes.APPLICATION_M3U8)
+            "mp4" -> ib.setMimeType(MimeTypes.VIDEO_MP4)
+        }
+        p.setMediaItem(ib.build())
+        p.prepare()
+        p.playWhenReady = true
+    }
+
+    /** Sonda lenta após esgotar retries: força reset duro e tenta de novo.
+     *  Se a origem voltou, o canal recupera sozinho sem o usuário precisar zapar. */
+    private fun doSlowProbe() {
+        val p = player ?: return
+        if (channels.getOrNull(index) == null) return
+        android.util.Log.i("LNTV", "Sonda lenta: tentando reabrir canal #${channels[index].channelNumber}")
+        try {
+            p.stop()
+            p.clearMediaItems()
+        } catch (e: Exception) {
+            android.util.Log.w("LNTV", "Falha no reset da sonda lenta: ${e.message}", e)
+        }
+        playerNeedsReset = false
+        retries = 0
+        doRetryNow()
     }
 
     private fun resolveStreamForChannel(c: Channel): String {
