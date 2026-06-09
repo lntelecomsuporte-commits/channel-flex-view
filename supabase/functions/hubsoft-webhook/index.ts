@@ -322,6 +322,8 @@ Deno.serve(async (req) => {
           // 3b) profile exists but auth missing → delete orphan profile and CREATE the auth user
           if (!authUserId && profileUserId) {
             console.log("Orphan profile without auth.user — deleting orphan and recreating");
+            await supabaseAdmin.from("user_devices").delete().eq("user_id", profileUserId);
+            await supabaseAdmin.from("pending_devices").delete().eq("user_id", profileUserId);
             await supabaseAdmin.from("user_category_access").delete().eq("user_id", profileUserId);
             await supabaseAdmin.from("user_roles").delete().eq("user_id", profileUserId);
             await supabaseAdmin.from("user_favorites").delete().eq("user_id", profileUserId);
@@ -487,7 +489,7 @@ Deno.serve(async (req) => {
             .eq("user_id", profile.user_id);
 
           // Limpa todas as tabelas públicas relacionadas (não há FK cascade)
-          for (const table of ["user_category_access", "user_roles", "user_sessions", "user_favorites", "profiles"]) {
+          for (const table of ["user_devices", "pending_devices", "user_category_access", "user_roles", "user_sessions", "user_favorites", "profiles"]) {
             const { error: cleanupErr } = await supabaseAdmin.from(table).delete().eq("user_id", profile.user_id);
             if (cleanupErr) console.error(`cleanup ${table} failed:`, cleanupErr);
           }
