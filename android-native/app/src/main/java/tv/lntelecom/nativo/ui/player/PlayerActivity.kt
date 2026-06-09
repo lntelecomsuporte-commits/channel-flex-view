@@ -300,6 +300,12 @@ class PlayerActivity : AppCompatActivity() {
         val c = channels.getOrNull(index) ?: return
         if (maybeRequestPin(c)) return
         lastSafeIndex = index
+        // Cancela qualquer callback pendente do canal anterior:
+        // - retries agendados (podiam stompar a nova mídia 2-8s depois)
+        // - stall-check antigo (podia disparar reset duro no canal novo)
+        // - sonda lenta de recuperação (não vale pro canal novo)
+        retryHandler.removeCallbacksAndMessages(null)
+        stallHandler.removeCallbacks(stallCheck)
         // Reset duro do player só quando necessário:
         // - flag explícita (maxRetries esgotado)
         // - estado de erro fatal
