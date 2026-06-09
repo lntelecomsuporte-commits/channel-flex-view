@@ -35,7 +35,16 @@ async function serviceRestFetch(supabaseUrl: string, serviceRoleKey: string, pat
 }
 
 async function cleanupPublicUserData(supabaseUrl: string, serviceRoleKey: string, userId: string) {
-  const tables = ["user_category_access", "user_roles", "user_sessions", "user_favorites", "profiles"];
+  // user_devices e pending_devices ANTES de profiles, pra liberar o aparelho pra outro usuário
+  const tables = [
+    "user_devices",
+    "pending_devices",
+    "user_category_access",
+    "user_roles",
+    "user_sessions",
+    "user_favorites",
+    "profiles",
+  ];
   for (const table of tables) {
     const res = await serviceRestFetch(supabaseUrl, serviceRoleKey, `${table}?user_id=eq.${encodeURIComponent(userId)}`, "DELETE");
     if (!res.ok) console.error(`cleanup ${table} failed:`, res.status, res.data);
