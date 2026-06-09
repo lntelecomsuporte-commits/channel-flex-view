@@ -86,6 +86,16 @@ class PlayerActivity : AppCompatActivity() {
     private val stallHandler = Handler(Looper.getMainLooper())
     private val stallCheck = Runnable { checkStall() }
 
+    // Handler dedicado pros retries de erro — permite cancelar callbacks pendentes
+    // quando o usuário troca de canal (senão um retry agendado do canal anterior
+    // dispara setMediaItem em cima do novo, causando tela preta).
+    private val retryHandler = Handler(Looper.getMainLooper())
+    private val retryRunnable = Runnable { doRetryNow() }
+    // Sonda lenta: após esgotar os retries normais, tenta de novo a cada 30s
+    // pra que o canal volte sozinho quando a origem se recuperar.
+    private val slowProbeInterval = 30_000L
+    private val slowProbe = Runnable { doSlowProbe() }
+
     private val previewHandler = Handler(Looper.getMainLooper())
     private val tunePending = Runnable { commitPending() }
     private val previewDelay = 1500L
