@@ -1092,6 +1092,7 @@ class PlayerActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         stallHandler.removeCallbacksAndMessages(null)
+        retryHandler.removeCallbacksAndMessages(null)
         osdHandler.removeCallbacksAndMessages(null)
         previewHandler.removeCallbacksAndMessages(null)
         statsHandler.removeCallbacksAndMessages(null)
