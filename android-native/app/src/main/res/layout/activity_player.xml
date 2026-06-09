@@ -12,7 +12,10 @@
         android:layout_height="match_parent"
         app:resize_mode="fit"
         app:use_controller="false"
-        app:surface_type="surface_view"/>
+        app:surface_type="texture_view"/>
+    <!-- NOTA: trocado surface_view -> texture_view pra investigar "áudio sem vídeo".
+         Pra reverter, basta voltar pra app:surface_type="surface_view". -->
+
 
     <!-- OSD: número + logo + nome + EPG (parte de baixo) -->
     <LinearLayout
