@@ -706,6 +706,13 @@ class PlayerActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_MEDIA_REWIND -> { previewChannel(-1); true }
             KeyEvent.KEYCODE_STAR, KeyEvent.KEYCODE_BOOKMARK,
             KeyEvent.KEYCODE_BUTTON_Y -> { toggleFavorite(); true }
+            // Legenda: CC ou botão azul do controle
+            KeyEvent.KEYCODE_CAPTIONS, KeyEvent.KEYCODE_PROG_BLUE ->
+                { cycleSubtitleTrack(); true }
+            // Áudio: SAP, Audio/MTS ou botão amarelo
+            KeyEvent.KEYCODE_MEDIA_AUDIO_TRACK, KeyEvent.KEYCODE_TV_AUDIO_DESCRIPTION,
+            KeyEvent.KEYCODE_PROG_YELLOW ->
+                { cycleAudioTrack(); true }
             KeyEvent.KEYCODE_BACK -> handleBackPress()
             in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> {
                 appendDigit(keyCode - KeyEvent.KEYCODE_0); true
