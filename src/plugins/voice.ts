@@ -60,8 +60,13 @@ function wireOnce() {
 
 export const Voice = {
   async isAvailable(): Promise<boolean> {
+    // Legacy WebView (Android 5/6 sem Capacitor)
+    const w = window as any;
+    if (w.LntvLegacy?.voiceAvailable) {
+      try { return !!w.LntvLegacy.voiceAvailable(); } catch { /* ignore */ }
+    }
     try {
-      const cap = (window as any).Capacitor;
+      const cap = w.Capacitor;
       if (!cap?.isNativePlatform?.()) return false;
       wireOnce();
       const r: any = await Native.isAvailable();
@@ -69,6 +74,10 @@ export const Voice = {
     } catch { return false; }
   },
   async start(): Promise<void> {
+    const w = window as any;
+    if (w.LntvLegacy?.startVoice) {
+      try { w.LntvLegacy.startVoice(); return; } catch { /* fall through */ }
+    }
     wireOnce();
     await Native.start();
   },
