@@ -429,6 +429,7 @@ public class LegacyMainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        destroyVoiceRecognizer();
         if (downloadReceiver != null) {
             try { unregisterReceiver(downloadReceiver); } catch (Exception ignored) {}
             downloadReceiver = null;
