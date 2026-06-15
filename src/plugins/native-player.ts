@@ -31,6 +31,15 @@ export interface NativePlayerStats {
   playbackState?: number;
 }
 
+export interface NativeTrackCycleResult {
+  /** Rótulo amigável da faixa selecionada (ou "Desligado" / "Indisponível"). */
+  label: string;
+  /** Total de faixas disponíveis (0 = nenhuma; 1 = só uma, sem ciclo útil). */
+  count: number;
+  /** Índice atual após ciclar (-1 = desligado). */
+  index: number;
+}
+
 export interface NativePlayerPlugin {
   load(options: NativePlayerLoadOptions): Promise<void>;
   play(): Promise<void>;
@@ -38,6 +47,10 @@ export interface NativePlayerPlugin {
   stop(): Promise<void>;
   destroy(): Promise<void>;
   getStats(): Promise<NativePlayerStats>;
+  /** Cicla legenda: Desligado → faixa 1 → ... → Desligado. */
+  cycleSubtitle(): Promise<NativeTrackCycleResult>;
+  /** Cicla faixa de áudio. */
+  cycleAudio(): Promise<NativeTrackCycleResult>;
   addListener(
     eventName: NativePlayerEvent,
     listener: (data: { state?: number; code?: number; codeName?: string; message?: string; cause?: string }) => void,
