@@ -225,6 +225,152 @@ public class NativePlayerPlugin extends Plugin {
         });
     }
 
+    // ===================== Faixas de Legenda / Áudio =====================
+    // Ciclo do usuário via tecla CC/azul (legenda) e SAP/amarelo (áudio).
+    // Persistência: enquanto a Activity viver. Ao trocar de canal a seleção
+    // é zerada implicitamente pelo setMediaSource em load().
+
+    @PluginMethod
+    public void cycleSubtitle(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            JSObject out = new JSObject();
+            try {
+                if (player == null) {
+                    out.put("label", "Indisponível");
+                    out.put("count", 0);
+                    out.put("index", -1);
+                    call.resolve(out);
+                    return;
+                }
+                cycleTrack(player, C.TRACK_TYPE_TEXT, out, true);
+                call.resolve(out);
+            } catch (Exception e) {
+                call.reject("cycleSubtitle failed: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    @PluginMethod
+    public void cycleAudio(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            JSObject out = new JSObject();
+            try {
+                if (player == null) {
+                    out.put("label", "Indisponível");
+                    out.put("count", 0);
+                    out.put("index", -1);
+                    call.resolve(out);
+                    return;
+                }
+                cycleTrack(player, C.TRACK_TYPE_AUDIO, out, false);
+                call.resolve(out);
+            } catch (Exception e) {
+                call.reject("cycleAudio failed: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    /**
+     * Enumera as faixas do tipo dado, decide a próxima e aplica via
+     * TrackSelectionOverride. Para legenda (allowOff=true) o ciclo inclui "off".
+     */
+    private void cycleTrack(ExoPlayer p, int trackType, JSObject out, boolean allowOff) {
+        Tracks tracks = p.getCurrentTracks();
+        // Flatten: lista linear de (TrackGroup, indexNaGroup) das faixas suportadas
+        List<TrackGroup> groups = new ArrayList<>();
+        List<Integer> indexInGroup = new ArrayList<>();
+        List<Format> formats = new ArrayList<>();
+        for (Tracks.Group g : tracks.getGroups()) {
+            if (g.getType() != trackType) continue;
+            TrackGroup tg = g.getMediaTrackGroup();
+            for (int i = 0; i < tg.length; i++) {
+                if (!g.isTrackSupported(i)) continue;
+                groups.add(tg);
+                indexInGroup.add(i);
+                formats.add(tg.getFormat(i));
+            }
+        }
+        int total = formats.size();
+        out.put("count", total);
+        if (total == 0) {
+            out.put("label", allowOff ? "Sem legendas disponíveis" : "Áudio único disponível");
+            out.put("index", -1);
+            return;
+        }
+        if (!allowOff && total == 1) {
+            out.put("label", formatLabel(formats.get(0), 0));
+            out.put("index", 0);
+            return;
+        }
+        // Detecta seleção atual
+        int currentIdx = -1;
+        for (Tracks.Group g : tracks.getGroups()) {
+            if (g.getType() != trackType) continue;
+            TrackGroup tg = g.getMediaTrackGroup();
+            for (int i = 0; i < tg.length; i++) {
+                if (g.isTrackSelected(i)) {
+                    for (int k = 0; k < groups.size(); k++) {
+                        if (groups.get(k) == tg && indexInGroup.get(k) == i) {
+                            currentIdx = k;
+                            break;
+                        }
+                    }
+                    if (currentIdx >= 0) break;
+                }
+            }
+            if (currentIdx >= 0) break;
+        }
+        // Verifica se legenda está desabilitada por TrackTypeDisabled
+        boolean textDisabled = allowOff &&
+                p.getTrackSelectionParameters().disabledTrackTypes.contains(C.TRACK_TYPE_TEXT);
+        if (textDisabled) currentIdx = -1;
+
+        // Próximo índice
+        int nextIdx;
+        if (allowOff) {
+            nextIdx = currentIdx + 1 >= total ? -1 : currentIdx + 1;
+        } else {
+            nextIdx = currentIdx < 0 ? 0 : (currentIdx + 1) % total;
+        }
+
+        TrackSelectionParameters.Builder pb = p.getTrackSelectionParameters().buildUpon();
+        if (allowOff) {
+            // Limpa overrides anteriores deste tipo e desabilita/reabilita o tipo
+            pb.clearOverridesOfType(C.TRACK_TYPE_TEXT);
+            if (nextIdx < 0) {
+                pb.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true);
+            } else {
+                pb.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false);
+                pb.addOverride(new TrackSelectionOverride(
+                        groups.get(nextIdx),
+                        Collections.singletonList(indexInGroup.get(nextIdx))));
+            }
+        } else {
+            pb.clearOverridesOfType(C.TRACK_TYPE_AUDIO);
+            pb.addOverride(new TrackSelectionOverride(
+                    groups.get(nextIdx),
+                    Collections.singletonList(indexInGroup.get(nextIdx))));
+        }
+        p.setTrackSelectionParameters(pb.build());
+
+        out.put("index", nextIdx);
+        out.put("label", nextIdx < 0 ? "Desligado" : formatLabel(formats.get(nextIdx), nextIdx));
+    }
+
+    private String formatLabel(Format f, int fallbackIdx) {
+        if (f == null) return "Faixa " + (fallbackIdx + 1);
+        if (f.label != null && !f.label.isEmpty()) return f.label;
+        if (f.language != null && !f.language.isEmpty()) {
+            try {
+                return new Locale(f.language).getDisplayLanguage();
+            } catch (Exception ignored) {
+                return f.language;
+            }
+        }
+        return "Faixa " + (fallbackIdx + 1);
+    }
+
+
     @Override
     protected void handleOnDestroy() {
         getActivity().runOnUiThread(this::releasePlayer);
