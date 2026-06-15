@@ -6,6 +6,8 @@ import {
   isProxiedStreamUrl,
 } from "@/lib/stream";
 import { NativePlayer, type NativeStreamType } from "@/plugins/native-player";
+import { isSubtitleKey, isAudioTrackKey } from "@/lib/trackControls";
+import TrackOSD, { showTrackOsd } from "./TrackOSD";
 import type { VideoPlayerHandle } from "./VideoPlayer";
 
 interface Props {
