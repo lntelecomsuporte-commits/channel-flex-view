@@ -776,11 +776,10 @@ class PlayerActivity : AppCompatActivity() {
             val tg = g.mediaTrackGroup
             for (i in 0 until tg.length) {
                 if (g.isTrackSelected(i)) {
-                    items.forEachIndexed { k, it ->
-                        if (it.group === tg && it.indexInGroup == i) {
-                            currentIdx = k
-                            return@outer
-                        }
+                    val k = items.indexOfFirst { it.group === tg && it.indexInGroup == i }
+                    if (k >= 0) {
+                        currentIdx = k
+                        break@outer
                     }
                 }
             }
