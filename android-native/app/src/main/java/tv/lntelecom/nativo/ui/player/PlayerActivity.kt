@@ -1270,5 +1270,5 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 }
-}
+
 
