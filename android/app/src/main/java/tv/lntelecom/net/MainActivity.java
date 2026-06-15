@@ -155,6 +155,33 @@ public class MainActivity extends BridgeActivity {
                 }
             } catch (Exception ignored) {}
         }
+        // Legenda (CC / azul) e Áudio (SAP / amarelo): dispara KeyboardEvent
+        // no WebView pra que o handler do VideoPlayer/NativeAndroidPlayer reaja.
+        // O NativePlayerPlugin é quem aplica a troca real no ExoPlayer.
+        if (keyCode == 175 /* KEYCODE_CAPTIONS */
+                || keyCode == KeyEvent.KEYCODE_PROG_BLUE /* 186 */) {
+            dispatchTrackKey("subtitle", keyCode);
+            return true;
+        }
+        if (keyCode == KeyEvent.KEYCODE_MEDIA_AUDIO_TRACK /* 222 */
+                || keyCode == 252 /* KEYCODE_TV_AUDIO_DESCRIPTION */
+                || keyCode == KeyEvent.KEYCODE_PROG_YELLOW /* 185 */) {
+            dispatchTrackKey("audio", keyCode);
+            return true;
+        }
         return super.onKeyDown(keyCode, event);
+    }
+
+    private void dispatchTrackKey(String kind, int keyCode) {
+        try {
+            WebView wv = (this.bridge != null) ? this.bridge.getWebView() : null;
+            if (wv == null) return;
+            // Dispara KeyboardEvent com keyCode + key name conhecidos pelo helper JS.
+            String keyName = "subtitle".equals(kind) ? "Subtitle" : "AudioTrack";
+            String js = "window.dispatchEvent(new KeyboardEvent('keydown', {"
+                    + "key:'" + keyName + "', code:'" + keyName + "', keyCode:" + keyCode
+                    + ", which:" + keyCode + ", bubbles:true}));";
+            wv.evaluateJavascript(js, null);
+        } catch (Exception ignored) {}
     }
 }
