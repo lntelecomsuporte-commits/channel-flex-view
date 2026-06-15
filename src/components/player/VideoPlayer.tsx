@@ -680,6 +680,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         webkit-playsinline="true"
       />
       {isLoadingNewChannel && <DelayedSpinner key={activeStreamUrl} />}
+      <TrackOSD />
     </>
   );
 });
