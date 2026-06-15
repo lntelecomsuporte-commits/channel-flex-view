@@ -152,7 +152,7 @@ export function useAppUpdate(): UseAppUpdateResult {
     const native = await isNativeApp();
     console.log("[useAppUpdate] check() start, native=", native);
     if (!native) return;
-    const current = await getCurrentVersionCode();
+    const { code: current, name: currentName } = await getCurrentVersion();
     if (current === null) {
       console.warn("[useAppUpdate] currentVersionCode null, abortando");
       return;
@@ -165,7 +165,13 @@ export function useAppUpdate(): UseAppUpdateResult {
       return;
     }
 
-    console.log("[useAppUpdate] compare", { current, remote: remote.versionCode });
+    console.log("[useAppUpdate] compare", { current, currentName, remote: remote.versionCode, remoteName: remote.versionName });
+    // Se o versionName bate, considera mesma versão (versionCode pode ser
+    // timestamp/commit-hash que muda a cada build sem refletir release real).
+    if (normalizeVersionName(currentName) === normalizeVersionName(remote.versionName)) {
+      setAvailable(null);
+      return;
+    }
     if (remote.versionCode <= current) {
       setAvailable(null);
       return;
