@@ -71,6 +71,7 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var updater: UpdateChecker
     private lateinit var listAdapter: ChannelAdapter
     private var heartbeat: tv.lntelecom.nativo.data.HeartbeatManager? = null
+    private var voice: tv.lntelecom.nativo.voice.VoiceRecognizer? = null
 
     private var channels: List<Channel> = emptyList()
     private var index = 0
