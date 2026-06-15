@@ -53,6 +53,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(PlaybackKeepAlivePlugin.class);
         registerPlugin(NativePlayerPlugin.class);
         registerPlugin(DeviceInfoPlugin.class);
+        registerPlugin(VoicePlugin.class);
         super.onCreate(savedInstanceState);
         // Mantém a tela acesa enquanto a Activity estiver visível.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
