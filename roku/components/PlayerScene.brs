@@ -799,5 +799,17 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return true
     end if
 
+    ' Legenda: botão azul. Ciclo: Desligado → faixa 1 → ... → Desligado.
+    if key = "blue"
+        CycleSubtitleTrack()
+        return true
+    end if
+
+    ' Áudio: botão amarelo. Ciclo entre faixas disponíveis.
+    if key = "yellow"
+        CycleAudioTrack()
+        return true
+    end if
+
     return false
 end function
