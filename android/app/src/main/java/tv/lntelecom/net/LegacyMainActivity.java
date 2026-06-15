@@ -42,6 +42,8 @@ public class LegacyMainActivity extends Activity {
     private WebView webView;
     private Long currentDownloadId = null;
     private BroadcastReceiver downloadReceiver = null;
+    private SpeechRecognizer voiceRecognizer = null;
+    private static final int REQ_AUDIO = 7331;
 
     /** Bridge JS exposto como window.LntvLegacy — usado pelo auto-update do APK no legacy. */
     private class LegacyUpdateBridge {
