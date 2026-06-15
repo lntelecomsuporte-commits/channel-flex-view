@@ -714,6 +714,9 @@ class PlayerActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_MEDIA_AUDIO_TRACK, KeyEvent.KEYCODE_TV_AUDIO_DESCRIPTION,
             KeyEvent.KEYCODE_PROG_YELLOW ->
                 { cycleAudioTrack(); true }
+            // Voz: mic/Assist do controle
+            KeyEvent.KEYCODE_VOICE_ASSIST, KeyEvent.KEYCODE_ASSIST,
+            KeyEvent.KEYCODE_SEARCH -> { startVoice(); true }
             KeyEvent.KEYCODE_BACK -> handleBackPress()
             in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> {
                 appendDigit(keyCode - KeyEvent.KEYCODE_0); true
