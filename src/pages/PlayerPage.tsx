@@ -492,6 +492,15 @@ const PlayerPage = () => {
         return;
       }
 
+      // Tecla de voz (mic/Assist do controle): inicia reconhecimento
+      if (isVoiceKey(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+        (e as any).stopImmediatePropagation?.();
+        void startVoiceCapture();
+        return;
+      }
+
       // Tecla Menu/Configuração do controle: abre o menu de configurações
       if (isMenuKey(e)) {
         e.preventDefault();
