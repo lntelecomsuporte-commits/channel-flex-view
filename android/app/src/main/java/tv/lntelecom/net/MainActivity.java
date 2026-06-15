@@ -176,7 +176,25 @@ public class MainActivity extends BridgeActivity {
             dispatchTrackKey("audio", keyCode);
             return true;
         }
+        // Tecla de voz (mic/Assist do controle): dispara via JS pra acionar o plugin.
+        if (keyCode == 231 /* KEYCODE_VOICE_ASSIST */
+                || keyCode == 219 /* KEYCODE_ASSIST */
+                || keyCode == KeyEvent.KEYCODE_SEARCH) {
+            dispatchVoiceKey(keyCode);
+            return true;
+        }
         return super.onKeyDown(keyCode, event);
+    }
+
+    private void dispatchVoiceKey(int keyCode) {
+        try {
+            WebView wv = (this.bridge != null) ? this.bridge.getWebView() : null;
+            if (wv == null) return;
+            String js = "window.dispatchEvent(new KeyboardEvent('keydown', {"
+                    + "key:'VoiceAssist', code:'VoiceAssist', keyCode:" + keyCode
+                    + ", which:" + keyCode + ", bubbles:true}));";
+            wv.evaluateJavascript(js, null);
+        } catch (Exception ignored) {}
     }
 
     private void dispatchTrackKey(String kind, int keyCode) {
