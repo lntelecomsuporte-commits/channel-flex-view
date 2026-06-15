@@ -30,7 +30,6 @@ import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy;
 import androidx.media3.ui.AspectRatioFrameLayout;
 import androidx.media3.ui.PlayerView;
 
-import com.google.common.collect.ImmutableList;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
