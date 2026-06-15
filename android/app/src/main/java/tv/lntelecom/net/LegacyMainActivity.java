@@ -76,6 +76,28 @@ public class LegacyMainActivity extends Activity {
                 }
             });
         }
+
+        /** Voz: comando "desligar" fecha o app. */
+        @JavascriptInterface
+        public void shutdown() {
+            runOnUiThread(() -> {
+                try { if (webView != null) webView.destroy(); } catch (Exception ignored) {}
+                finishAndRemoveTask();
+                new Handler(Looper.getMainLooper()).postDelayed(() -> System.exit(0), 150);
+            });
+        }
+
+        /** Inicia o SpeechRecognizer nativo (compat Android 5+). */
+        @JavascriptInterface
+        public void startVoice() {
+            runOnUiThread(() -> startVoiceRecognition());
+        }
+
+        @JavascriptInterface
+        public boolean voiceAvailable() {
+            try { return SpeechRecognizer.isRecognitionAvailable(LegacyMainActivity.this); }
+            catch (Exception e) { return false; }
+        }
     }
 
     private void startApkDownload(String url) {
