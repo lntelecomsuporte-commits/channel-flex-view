@@ -31,7 +31,7 @@ public class MainActivity extends BridgeActivity {
         return true;
     }
 
-    /** Bridge JS pra sinalizar que o instalador do APK vai abrir. */
+    /** Bridge JS pra sinalizar que o instalador do APK vai abrir + shutdown via voz. */
     public class LntvNativeBridge {
         @JavascriptInterface
         public void setInstallingUpdate(boolean v) {
@@ -39,6 +39,12 @@ public class MainActivity extends BridgeActivity {
             // Auto-expira em 2 min, pra não travar shutdown pra sempre
             installingUpdateUntil = System.currentTimeMillis() + 2 * 60 * 1000L;
             android.util.Log.i("LNTV", "setInstallingUpdate=" + v);
+        }
+        /** Chamado pelo comando de voz "desligar". Fecha o app e tenta standby. */
+        @JavascriptInterface
+        public void shutdown() {
+            android.util.Log.i("LNTV", "shutdown via voz");
+            runOnUiThread(() -> shutdownAndRelease("voice_command"));
         }
     }
 
