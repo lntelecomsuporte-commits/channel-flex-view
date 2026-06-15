@@ -17,7 +17,9 @@ export interface RemoteVersion {
   versionCode: number;
   versionName: string;
   url: string;
+  apkUrl?: string;
   legacyUrl?: string;
+  slimUrl?: string;
   notes?: string;
 }
 
@@ -113,9 +115,11 @@ async function fetchRemoteVersion(): Promise<RemoteVersion | null> {
       const res = await fetch(fullUrl, { cache: "no-store" });
       console.log("[useAppUpdate] fetch", fullUrl, "->", res.status);
       if (!res.ok) continue;
-      const data = (await res.json()) as RemoteVersion;
+      const raw = (await res.json()) as RemoteVersion & { apkUrl?: string };
+      // Compat: schema novo usa `apkUrl`, antigo usava `url`.
+      const data: RemoteVersion = { ...raw, url: raw.url || raw.apkUrl || "" };
       if (typeof data.versionCode !== "number" || !data.url) {
-        console.warn("[useAppUpdate] payload inválido", data);
+        console.warn("[useAppUpdate] payload inválido", raw);
         continue;
       }
       console.log("[useAppUpdate] remote version", data);
