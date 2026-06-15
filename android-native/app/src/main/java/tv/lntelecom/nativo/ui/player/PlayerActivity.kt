@@ -18,10 +18,15 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.C
+import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackGroup
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -701,6 +706,13 @@ class PlayerActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_MEDIA_REWIND -> { previewChannel(-1); true }
             KeyEvent.KEYCODE_STAR, KeyEvent.KEYCODE_BOOKMARK,
             KeyEvent.KEYCODE_BUTTON_Y -> { toggleFavorite(); true }
+            // Legenda: CC ou botão azul do controle
+            KeyEvent.KEYCODE_CAPTIONS, KeyEvent.KEYCODE_PROG_BLUE ->
+                { cycleSubtitleTrack(); true }
+            // Áudio: SAP, Audio/MTS ou botão amarelo
+            KeyEvent.KEYCODE_MEDIA_AUDIO_TRACK, KeyEvent.KEYCODE_TV_AUDIO_DESCRIPTION,
+            KeyEvent.KEYCODE_PROG_YELLOW ->
+                { cycleAudioTrack(); true }
             KeyEvent.KEYCODE_BACK -> handleBackPress()
             in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> {
                 appendDigit(keyCode - KeyEvent.KEYCODE_0); true
@@ -712,6 +724,106 @@ class PlayerActivity : AppCompatActivity() {
                 if (digitBuffer.isNotEmpty()) { commitDigitBuffer(); true } else handleOkPress()
             } else super.onKeyDown(keyCode, event)
         }
+    }
+
+    // ====== Faixas de Legenda / Áudio ======
+    // Persistência: enquanto a Activity viver. Trocar de canal (loadCurrent →
+    // setMediaItem) reseta naturalmente. Ao fechar o app, volta ao padrão.
+
+    private fun cycleSubtitleTrack() {
+        val p = player ?: return
+        cycleTrack(p, C.TRACK_TYPE_TEXT, allowOff = true) { label ->
+            Toast.makeText(this, "Legenda: $label", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun cycleAudioTrack() {
+        val p = player ?: return
+        cycleTrack(p, C.TRACK_TYPE_AUDIO, allowOff = false) { label ->
+            Toast.makeText(this, "Áudio: $label", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun cycleTrack(
+        p: ExoPlayer,
+        trackType: Int,
+        allowOff: Boolean,
+        report: (String) -> Unit,
+    ) {
+        data class Item(val group: TrackGroup, val indexInGroup: Int, val format: Format)
+        val items = mutableListOf<Item>()
+        val tracks: Tracks = p.currentTracks
+        for (g in tracks.groups) {
+            if (g.type != trackType) continue
+            val tg = g.mediaTrackGroup
+            for (i in 0 until tg.length) {
+                if (!g.isTrackSupported(i)) continue
+                items.add(Item(tg, i, tg.getFormat(i)))
+            }
+        }
+        if (items.isEmpty()) {
+            report(if (allowOff) "Sem legendas disponíveis" else "Áudio único disponível")
+            return
+        }
+        if (!allowOff && items.size == 1) {
+            report(formatTrackLabel(items[0].format, 0))
+            return
+        }
+        // Índice atual
+        var currentIdx = -1
+        outer@ for (g in tracks.groups) {
+            if (g.type != trackType) continue
+            val tg = g.mediaTrackGroup
+            for (i in 0 until tg.length) {
+                if (g.isTrackSelected(i)) {
+                    items.forEachIndexed { k, it ->
+                        if (it.group === tg && it.indexInGroup == i) {
+                            currentIdx = k
+                            return@outer
+                        }
+                    }
+                }
+            }
+        }
+        val textDisabled = allowOff &&
+            p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
+        if (textDisabled) currentIdx = -1
+
+        val nextIdx: Int = if (allowOff) {
+            if (currentIdx + 1 >= items.size) -1 else currentIdx + 1
+        } else {
+            if (currentIdx < 0) 0 else (currentIdx + 1) % items.size
+        }
+
+        val pb = p.trackSelectionParameters.buildUpon()
+        if (allowOff) {
+            pb.clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            if (nextIdx < 0) {
+                pb.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            } else {
+                pb.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                pb.addOverride(
+                    TrackSelectionOverride(items[nextIdx].group, listOf(items[nextIdx].indexInGroup))
+                )
+            }
+        } else {
+            pb.clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+            pb.addOverride(
+                TrackSelectionOverride(items[nextIdx].group, listOf(items[nextIdx].indexInGroup))
+            )
+        }
+        p.trackSelectionParameters = pb.build()
+
+        report(if (nextIdx < 0) "Desligado" else formatTrackLabel(items[nextIdx].format, nextIdx))
+    }
+
+    private fun formatTrackLabel(f: Format?, fallbackIdx: Int): String {
+        if (f == null) return "Faixa ${fallbackIdx + 1}"
+        f.label?.takeIf { it.isNotEmpty() }?.let { return it }
+        f.language?.takeIf { it.isNotEmpty() }?.let {
+            return runCatching { Locale(it).displayLanguage }.getOrDefault(it)
+        }
+        return "Faixa ${fallbackIdx + 1}"
     }
 
     // ====== Numeric channel entry ======

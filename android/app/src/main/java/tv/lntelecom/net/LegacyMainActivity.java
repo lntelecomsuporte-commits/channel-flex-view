@@ -251,7 +251,30 @@ public class LegacyMainActivity extends Activity {
                 }
             } catch (Exception ignored) {}
         }
+        // Legenda (CC / azul) e Áudio (SAP / amarelo): repassa via KeyboardEvent.
+        // No legacy quem aplica é o <video>/hls.js (sem ExoPlayer aqui).
+        if (keyCode == 175 /* KEYCODE_CAPTIONS */
+                || keyCode == KeyEvent.KEYCODE_PROG_BLUE /* 186 */) {
+            dispatchTrackKey("Subtitle", keyCode);
+            return true;
+        }
+        if (keyCode == KeyEvent.KEYCODE_MEDIA_AUDIO_TRACK /* 222 */
+                || keyCode == 252 /* KEYCODE_TV_AUDIO_DESCRIPTION */
+                || keyCode == KeyEvent.KEYCODE_PROG_YELLOW /* 185 */) {
+            dispatchTrackKey("AudioTrack", keyCode);
+            return true;
+        }
         return super.onKeyDown(keyCode, event);
+    }
+
+    private void dispatchTrackKey(String keyName, int keyCode) {
+        try {
+            if (webView == null) return;
+            String js = "window.dispatchEvent(new KeyboardEvent('keydown', {"
+                    + "key:'" + keyName + "', code:'" + keyName + "', keyCode:" + keyCode
+                    + ", which:" + keyCode + ", bubbles:true}));";
+            webView.evaluateJavascript(js, null);
+        } catch (Exception ignored) {}
     }
 
     @Override

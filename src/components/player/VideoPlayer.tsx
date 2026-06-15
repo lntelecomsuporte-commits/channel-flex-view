@@ -4,6 +4,8 @@ import mpegts from "mpegts.js";
 import { getPlayableStreamUrl, resolveChannelStreamUrl, buildProxyStreamUrl, isProxiedStreamUrl, resolveRedirects } from "@/lib/stream";
 import { Capacitor } from "@capacitor/core";
 import { extractYouTubeVideoId } from "@/lib/youtube";
+import { isSubtitleKey, isAudioTrackKey, trackLabel } from "@/lib/trackControls";
+import TrackOSD, { showTrackOsd } from "./TrackOSD";
 
 import YouTubePlayer from "./YouTubePlayer";
 import NativeAndroidPlayer from "./NativeAndroidPlayer";
@@ -587,6 +589,71 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
     };
   }, []);
 
+  // === Troca de Legenda (CC / azul) e Áudio (SAP / amarelo) ===
+  // Persistência: somente sessão. Reset ao fechar o app (a SPA recarregar).
+  useEffect(() => {
+    const cycleSubtitle = () => {
+      const video = videoRef.current;
+      if (!video) return;
+      const hls = hlsRef.current;
+      if (hls && hls.subtitleTracks && hls.subtitleTracks.length > 0) {
+        const tracks = hls.subtitleTracks;
+        const cur = hls.subtitleTrack;
+        // Ciclo: -1 (off) → 0 → 1 → ... → -1
+        const next = cur + 1 >= tracks.length ? -1 : cur + 1;
+        hls.subtitleDisplay = next >= 0;
+        hls.subtitleTrack = next;
+        const label = next < 0 ? "Desligado" : trackLabel(tracks[next] as any, next);
+        showTrackOsd(`Legenda: ${label}`);
+        return;
+      }
+      // Fallback nativo: <video>.textTracks
+      const tt = video.textTracks;
+      if (!tt || tt.length === 0) {
+        showTrackOsd("Sem legendas disponíveis");
+        return;
+      }
+      let curIdx = -1;
+      for (let i = 0; i < tt.length; i++) if (tt[i].mode === "showing") { curIdx = i; break; }
+      const nextIdx = curIdx + 1 >= tt.length ? -1 : curIdx + 1;
+      for (let i = 0; i < tt.length; i++) tt[i].mode = i === nextIdx ? "showing" : "disabled";
+      const label = nextIdx < 0 ? "Desligado" : trackLabel(tt[nextIdx] as any, nextIdx);
+      showTrackOsd(`Legenda: ${label}`);
+    };
+
+    const cycleAudio = () => {
+      const video = videoRef.current;
+      if (!video) return;
+      const hls = hlsRef.current;
+      if (hls && hls.audioTracks && hls.audioTracks.length > 1) {
+        const tracks = hls.audioTracks;
+        const cur = hls.audioTrack;
+        const next = (cur + 1) % tracks.length;
+        hls.audioTrack = next;
+        showTrackOsd(`Áudio: ${trackLabel(tracks[next] as any, next)}`);
+        return;
+      }
+      // Fallback nativo (Safari iOS): video.audioTracks (não-padrão, mas existe)
+      const aTracks = (video as any).audioTracks;
+      if (!aTracks || aTracks.length < 2) {
+        showTrackOsd("Áudio único disponível");
+        return;
+      }
+      let curIdx = 0;
+      for (let i = 0; i < aTracks.length; i++) if (aTracks[i].enabled) { curIdx = i; break; }
+      const nextIdx = (curIdx + 1) % aTracks.length;
+      for (let i = 0; i < aTracks.length; i++) aTracks[i].enabled = i === nextIdx;
+      showTrackOsd(`Áudio: ${trackLabel(aTracks[nextIdx] as any, nextIdx)}`);
+    };
+
+    const onKey = (e: KeyboardEvent) => {
+      if (isSubtitleKey(e)) { e.preventDefault(); cycleSubtitle(); }
+      else if (isAudioTrackKey(e)) { e.preventDefault(); cycleAudio(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   if (youTubeVideoId) {
     return <YouTubePlayer videoId={youTubeVideoId} autoPlay={autoPlay} />;
   }
@@ -613,6 +680,7 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         webkit-playsinline="true"
       />
       {isLoadingNewChannel && <DelayedSpinner key={activeStreamUrl} />}
+      <TrackOSD />
     </>
   );
 });

@@ -6,6 +6,8 @@ import {
   isProxiedStreamUrl,
 } from "@/lib/stream";
 import { NativePlayer, type NativeStreamType } from "@/plugins/native-player";
+import { isSubtitleKey, isAudioTrackKey } from "@/lib/trackControls";
+import TrackOSD, { showTrackOsd } from "./TrackOSD";
 import type { VideoPlayerHandle } from "./VideoPlayer";
 
 interface Props {
@@ -112,12 +114,35 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
       };
     }, []);
 
+    // Teclas globais: CC/azul → legenda; SAP/amarelo → áudio. Chama o plugin
+    // nativo (ExoPlayer). Persistência só na sessão; ao fechar app, reseta.
+    useEffect(() => {
+      const onKey = async (e: KeyboardEvent) => {
+        try {
+          if (isSubtitleKey(e)) {
+            e.preventDefault();
+            const r = await NativePlayer.cycleSubtitle();
+            showTrackOsd(`Legenda: ${r.label}`);
+          } else if (isAudioTrackKey(e)) {
+            e.preventDefault();
+            const r = await NativePlayer.cycleAudio();
+            showTrackOsd(`Áudio: ${r.label}`);
+          }
+        } catch (err) {
+          console.warn("[NativePlayer] cycle track falhou:", err);
+        }
+      };
+      window.addEventListener("keydown", onKey);
+      return () => window.removeEventListener("keydown", onKey);
+    }, []);
+
     // Placeholder transparente — o vídeo real está no SurfaceView nativo
     // POR BAIXO do WebView. Mostramos só o spinner quando ainda sem 1º frame.
     return (
       <>
         <div className="absolute inset-0 w-full h-full pointer-events-none" />
         {!firstFrameReady && <DelayedSpinner key={activeStreamUrl} />}
+        <TrackOSD />
       </>
     );
   },

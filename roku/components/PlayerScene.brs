@@ -618,7 +618,80 @@ sub HandleOkAction()
     m.osdFromOk = true
 end sub
 
+' ==================== LEGENDA / ÁUDIO ====================
+' Persistência: somente sessão. Ao trocar de canal (OnChannelData faz
+' content = invalid; content = novo) a seleção volta ao padrão do stream.
+
+function TrackLabel(t as Object, idx as Integer) as String
+    if t = invalid then return "Faixa " + (idx + 1).toStr()
+    if t.Description <> invalid and t.Description <> "" then return t.Description
+    if t.Name <> invalid and t.Name <> "" then return t.Name
+    if t.Language <> invalid and t.Language <> "" then return t.Language
+    if t.TrackName <> invalid and t.TrackName <> "" then return t.TrackName
+    return "Faixa " + (idx + 1).toStr()
+end function
+
+sub CycleSubtitleTrack()
+    tracks = m.video.availableSubtitleTracks
+    if tracks = invalid or tracks.count() = 0
+        ShowToast("Sem legendas disponíveis")
+        return
+    end if
+    cur = m.video.subtitleTrack
+    ' cur é string TrackName; -1 / "" significa desligado
+    curIdx = -1
+    if cur <> invalid and cur <> ""
+        for i = 0 to tracks.count() - 1
+            tn = tracks[i].TrackName
+            if tn <> invalid and tn = cur
+                curIdx = i
+                exit for
+            end if
+        end for
+    end if
+    nextIdx = curIdx + 1
+    if nextIdx >= tracks.count()
+        m.video.subtitleTrack = ""
+        ShowToast("Legenda: Desligado")
+    else
+        tn = tracks[nextIdx].TrackName
+        if tn = invalid then tn = ""
+        m.video.subtitleTrack = tn
+        ShowToast("Legenda: " + TrackLabel(tracks[nextIdx], nextIdx))
+    end if
+end sub
+
+sub CycleAudioTrack()
+    tracks = m.video.availableAudioTracks
+    if tracks = invalid or tracks.count() = 0
+        ShowToast("Áudio único disponível")
+        return
+    end if
+    if tracks.count() = 1
+        ShowToast("Áudio: " + TrackLabel(tracks[0], 0))
+        return
+    end if
+    cur = m.video.currentAudioTrack
+    curIdx = -1
+    if cur <> invalid and cur <> ""
+        for i = 0 to tracks.count() - 1
+            tn = tracks[i].TrackName
+            if tn <> invalid and tn = cur
+                curIdx = i
+                exit for
+            end if
+        end for
+    end if
+    nextIdx = curIdx + 1
+    if nextIdx >= tracks.count() then nextIdx = 0
+    tn = tracks[nextIdx].TrackName
+    if tn = invalid then tn = ""
+    m.video.currentAudioTrack = tn
+    ShowToast("Áudio: " + TrackLabel(tracks[nextIdx], nextIdx))
+end sub
+
 ' ==================== KEYS ====================
+
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if key = "back"
@@ -796,6 +869,18 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
 
     if key = "channeldown" or key = "rewind"
         SwitchChannel(-1)
+        return true
+    end if
+
+    ' Legenda: botão azul. Ciclo: Desligado → faixa 1 → ... → Desligado.
+    if key = "blue"
+        CycleSubtitleTrack()
+        return true
+    end if
+
+    ' Áudio: botão amarelo. Ciclo entre faixas disponíveis.
+    if key = "yellow"
+        CycleAudioTrack()
         return true
     end if
 

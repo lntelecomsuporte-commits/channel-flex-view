@@ -1,69 +1,65 @@
-Ajustes no APK nativo (`android-native/`) — todos em Kotlin/XML, sem mexer no legacy/Roku/PWA.
+# Troca de Legenda e Áudio em Todas as Plataformas
 
-## 1. Zap pulando canais (UP repetido)
-Causa provável: `KeyEvent` com `repeat > 0` quando a tecla fica pressionada e múltiplos `changeChannel(±1)` são processados antes do player estabilizar.
+## Objetivo
+Permitir que o usuário troque a faixa de legenda e a faixa de áudio do canal em execução, quando o stream oferece múltiplas opções. A escolha persiste apenas durante a sessão (ao fechar e reabrir o app, volta ao padrão).
 
-Correção em `PlayerActivity.onKeyDown`:
-- Ignorar eventos com `event.repeatCount > 0` para `DPAD_UP/DOWN/CH_UP/CH_DOWN`.
-- Adicionar throttle mínimo de 250ms entre `changeChannel` (timestamp da última troca; se delta < 250ms, ignora).
+## Controles
+- **Legendas (CC):** tecla `CC` / `Closed Caption` ou tecla **azul** do controle remoto.
+  - Ciclo: `Desligado → Faixa 1 → Faixa 2 → ... → Desligado`.
+- **Áudio:** tecla `SAP` / `Audio` / `MTS` ou tecla **amarela** do controle remoto.
+  - Ciclo entre as faixas de áudio disponíveis.
 
-## 2. Player travado após canal off / queda (nenhum canal abre)
-Causa: depois de esgotar `maxRetries`, o `ExoPlayer` fica em estado de erro permanente e novos `setMediaItem` não recuperam.
+Cada troca mostra um OSD curto (ex.: "Legenda: Português" / "Áudio: Inglês (5.1)") por ~2s.
 
-Correção em `loadCurrent()`:
-- Antes de `setMediaItem`, se `player.playerError != null` ou se `retries >= maxRetries` da carga anterior, chamar `player.stop()` + `player.clearMediaItems()` antes de carregar o novo.
-- Em `attemptRetry`, ao atingir `maxRetries`, registrar flag `playerNeedsReset = true`; `loadCurrent` checa e faz reset.
+## Plataformas e arquivos
 
-## 3. Stats overlay consome 1/2 da tela
-Causa: `LinearLayout` com `wrap_content` + padding/minWidth — fundo escuro acompanha o widget mas a largura efetiva fica grande.
+### 1. Web / PWA — HLS.js (`src/components/player/VideoPlayer.tsx`)
+- Adicionar handlers para teclas: `c`, `C`, `Subtitle`, `ColorF0Blue` (azul), `MediaAudioTrack`, `ColorF1Yellow` (amarelo), além de keycodes 403 (vermelho), 404 (verde), 405 (amarelo), 406 (azul) usados em TVs.
+- Usar `hls.subtitleTracks` + `hls.subtitleTrack` para legendas; `hls.audioTracks` + `hls.audioTrack` para áudio. Fallback para `<video>.textTracks` e `audioTracks` quando não-HLS.
+- Pequeno componente OSD reaproveitando estilo existente.
+- Resetar seleção ao trocar de canal (sessão = vida do app já que é SPA; recarga do app = padrão).
 
-Correção em `activity_player.xml` + `PlayerActivity.showStats`:
-- Trocar `android:layout_width="wrap_content"` por largura fixa calculada em runtime = 1/3 da largura da tela (via `resources.displayMetrics.widthPixels / 3`).
-- Manter altura `wrap_content`, posição top|end, margem 16dp.
+### 2. Plugin Android nativo do app Capacitor (`android/app/src/main/java/tv/lntelecom/net/NativePlayerPlugin.java`)
+- Adicionar métodos `cycleSubtitle()` e `cycleAudio()` usando `ExoPlayer.trackSelectionParameters` (TrackSelectionOverride por TrackGroup).
+- Expor via plugin call para o JS.
+- `src/plugins/native-player.ts`: adicionar `cycleSubtitle()` / `cycleAudio()` retornando rótulo da faixa atual.
+- `NativeAndroidPlayer.tsx`: capturar teclas globais e chamar plugin.
 
-## 4. APK não fecha ao desligar receptor (standby)
-Causa: `PlayerActivity` não tem listener de `ACTION_SCREEN_OFF` (o legacy `MainActivity.java` tem, mas o nativo não).
+### 3. Activities legadas (`MainActivity.java`, `LegacyMainActivity.java`)
+- Em `dispatchKeyEvent`/`onKeyDown`, interceptar `KEYCODE_CAPTIONS` (saiba), `KEYCODE_PROG_BLUE`, `KEYCODE_PROG_YELLOW`, `KEYCODE_TV_AUDIO_DESCRIPTION` e enviar via JS bridge `window.dispatchEvent(new KeyboardEvent(...))` para que o `VideoPlayer` web reaja.
 
-Correção em `PlayerActivity`:
-- Registrar `BroadcastReceiver` dinâmico para `Intent.ACTION_SCREEN_OFF` em `onCreate`, desregistrar em `onDestroy`.
-- Ao receber: parar heartbeat, `player.release()`, `finishAffinity()`, `System.exit(0)` (mesmo padrão do legacy).
+### 4. App Android nativo (`android-native/.../PlayerActivity.kt`)
+- ExoPlayer já em uso. Adicionar:
+  - `cycleSubtitle()` e `cycleAudio()` usando `player.trackSelectionParameters` + `TrackSelectionOverride`.
+  - Em `onKeyDown`: `KEYCODE_CAPTIONS`, `KEYCODE_PROG_BLUE`, `KEYCODE_PROG_YELLOW`, `KEYCODE_TV_AUDIO_DESCRIPTION`, `KEYCODE_MEDIA_AUDIO_TRACK`.
+  - OSD usando o padrão de Toast/overlay já presente.
+- Resetar a cada troca de canal; ao fechar app, padrão.
 
-## 5. Canal não abre, troca e volta abre
-Mesma raiz do item 2 — player não reseta sozinho após erro/stall. O fix do item 2 resolve este também.
+### 5. Roku (`roku/components/PlayerScene.brs` + `PlayerScene.xml`)
+- Roku Video node expõe `availableSubtitleTracks`, `subtitleTrack`, `availableAudioTracks`, `currentAudioTrack`.
+- Em `onKeyEvent`:
+  - Azul (`"blue"`) ou Captions → ciclar `subtitleTrack` entre `""` (off) e índices disponíveis.
+  - Amarelo (`"yellow"`) → ciclar `currentAudioTrack` entre faixas disponíveis.
+- Mostrar OSD usando label existente.
+- Resetar ao trocar de canal.
 
-Adicional: em `checkStall()`, se já estamos em retry e ainda buffering, fazer `player.stop()` + `prepare()` ao invés de só `setMediaItem`.
+## Persistência
+Apenas em memória (variável de instância no componente/Activity/Scene). Nada gravado em disco — ao fechar o app, volta ao padrão automaticamente.
 
-## 6. ABR começar/migrar para resolução mais alta
-Atualmente `ExoPlayer.Builder(this).build()` usa `DefaultTrackSelector` com parâmetros padrão (escolhe baseado em bandwidth medida — começa baixa).
+## Detalhes técnicos
+- HLS.js: ouvir `Hls.Events.SUBTITLE_TRACKS_UPDATED` / `AUDIO_TRACKS_UPDATED` para popular lista.
+- ExoPlayer (ambos Android): usar `Player.getCurrentTracks()` para enumerar `TrackGroup` de tipo `C.TRACK_TYPE_TEXT` e `C.TRACK_TYPE_AUDIO`. Aplicar via `trackSelectionParameters.buildUpon().setOverrideForType(...)`. Para desligar legenda: `setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)`.
+- Roku: KeyCodes específicos não existem para CC/SAP — usamos azul/amarelo como padrão (mesma convenção do app oficial Roku).
 
-Correção em `initPlayer()`:
-- Construir `DefaultTrackSelector` com `setParameters(buildUponParameters().setMaxVideoSizeSd().clearVideoSizeConstraints().setForceHighestSupportedBitrate(false))` — na verdade queremos `setMinVideoSize(1280, 720)` quando disponível e remover cap superior.
-- Setar `setInitialBitrateEstimate(4_000_000)` no `DefaultBandwidthMeter` para o ABR não começar achando que a banda é baixa.
-- Usar `ExoPlayer.Builder(this).setTrackSelector(trackSelector).setBandwidthMeter(bandwidthMeter).build()`.
+## Keycodes Android
+| Função | Keycodes |
+|---|---|
+| Legenda | `KEYCODE_CAPTIONS` (175), `KEYCODE_PROG_BLUE` (186) |
+| Áudio | `KEYCODE_TV_AUDIO_DESCRIPTION` (252), `KEYCODE_MEDIA_AUDIO_TRACK` (222), `KEYCODE_PROG_YELLOW` (185) |
 
-## 7. Streams Amagi param após ~5min e travam o app
-Causa típica: live HLS com janela deslizante; quando a posição fica fora da janela (atrás demais), o player dá "BehindLiveWindowException" e não recupera; também pode ser token de proxy expirando.
+## Entrega
+Frontend (web) → build + rsync no servidor.  
+Android nativo + legacy → GitHub Actions (APK).  
+Roku → GitHub Actions (channel).
 
-Correção:
-- No `Player.Listener.onPlayerError`, detectar `error.errorCode == ERROR_CODE_BEHIND_LIVE_WINDOW` e fazer `player.seekToDefaultPosition()` + `player.prepare()` (sem contar como retry).
-- Configurar `LoadControl` com buffers maiores (min 15s, max 60s) e `DefaultLivePlaybackSpeedControl` com `setFallbackMinPlaybackSpeed(0.97f)` e `setFallbackMaxPlaybackSpeed(1.03f)` para o player ajustar velocidade e ficar dentro da janela live.
-- Em `MediaItem.Builder()` para HLS live, setar `setLiveConfiguration(MediaItem.LiveConfiguration.Builder().setTargetOffsetMs(8000).build())`.
-- Stall-check: se ficar buffering > 8s em live, reset completo (`stop`+`prepare`) em vez de `attemptRetry` exponencial.
-
-## Arquivos a editar
-
-```text
-android-native/app/src/main/java/tv/lntelecom/nativo/ui/player/PlayerActivity.kt
-android-native/app/src/main/res/layout/activity_player.xml
-```
-
-Nenhuma migration de banco. Apenas novo build do APK nativo (workflow `.github/workflows/android-nativo.yml` já existente).
-
-## Validação
-Após o build:
-- Item 1: segurar tecla UP — deve avançar de 1 em 1 com pausa.
-- Item 2/5: forçar erro (canal off conhecido) e trocar — deve voltar a tocar.
-- Item 3: ativar Konami — moldura ocupa ~1/3 da largura.
-- Item 4: desligar receptor — app deve fechar (verificar pelo `adb shell ps | grep lntelecom` se houver acesso).
-- Item 6: abrir canal com múltiplas qualidades — Konami deve mostrar resolução ≥ 720p após poucos segundos.
-- Item 7: deixar canal Amagi tocando > 10 min — não deve travar.
+Comandos pro servidor serão fornecidos ao final.
