@@ -1112,6 +1112,8 @@ const PlayerPage = () => {
               onLogout={signOut}
             />
           )}
+
+          <VoiceListeningOverlay />
         </>
       )}
     </div>
