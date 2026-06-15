@@ -22,6 +22,8 @@ import { useSessionHeartbeat } from "@/hooks/useSessionHeartbeat";
 import { isSelectKey, isPageNextKey, isPagePrevKey, isMenuKey } from "@/lib/remoteKeys";
 import SettingsMenu from "@/components/player/SettingsMenu";
 import PinPrompt from "@/components/player/PinPrompt";
+import VoiceListeningOverlay from "@/components/player/VoiceListeningOverlay";
+import { isVoiceKey, parseVoiceCommand, dispatchVoiceAction, emitVoiceUi, startVoiceCapture, type VoiceActionType } from "@/lib/voiceCommands";
 import { List, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseLocal";
