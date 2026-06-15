@@ -77,31 +77,39 @@ function normalizeApkUrl(remote: RemoteVersion): RemoteVersion {
   };
 }
 
-async function getCurrentVersionCode(): Promise<number | null> {
-  // Legacy: pega versionCode via JS bridge exposto pela LegacyMainActivity.
+async function getCurrentVersion(): Promise<{ code: number | null; name: string | null }> {
   const legacy = getLegacyBridge();
   if (legacy) {
     try {
       const code = legacy.getVersionCode();
-      console.log("[useAppUpdate] LntvLegacy.getVersionCode()", code);
-      return Number.isFinite(code) && code > 0 ? code : null;
+      const name = typeof legacy.getVersionName === "function" ? legacy.getVersionName() : null;
+      console.log("[useAppUpdate] LntvLegacy", { code, name });
+      return {
+        code: Number.isFinite(code) && code > 0 ? code : null,
+        name: name || null,
+      };
     } catch (e) {
-      console.warn("[useAppUpdate] LntvLegacy.getVersionCode() failed", e);
-      return null;
+      console.warn("[useAppUpdate] LntvLegacy failed", e);
+      return { code: null, name: null };
     }
   }
   try {
     const { App } = await import("@capacitor/app");
     const info = await App.getInfo();
-    // info.build é string com o versionCode no Android
     const code = parseInt(info.build, 10);
     console.log("[useAppUpdate] App.getInfo()", { name: info.name, version: info.version, build: info.build, parsedCode: code });
-    return Number.isFinite(code) ? code : null;
+    return { code: Number.isFinite(code) ? code : null, name: info.version || null };
   } catch (e) {
     console.warn("[useAppUpdate] App.getInfo() failed", e);
-    return null;
+    return { code: null, name: null };
   }
 }
+
+function normalizeVersionName(v: string | null | undefined): string {
+  if (!v) return "";
+  return v.trim().replace(/^nativo-v/, "").replace(/^v/, "");
+}
+
 
 async function fetchRemoteVersion(): Promise<RemoteVersion | null> {
   const urls = (await isNativeApp())
@@ -144,7 +152,7 @@ export function useAppUpdate(): UseAppUpdateResult {
     const native = await isNativeApp();
     console.log("[useAppUpdate] check() start, native=", native);
     if (!native) return;
-    const current = await getCurrentVersionCode();
+    const { code: current, name: currentName } = await getCurrentVersion();
     if (current === null) {
       console.warn("[useAppUpdate] currentVersionCode null, abortando");
       return;
@@ -157,7 +165,13 @@ export function useAppUpdate(): UseAppUpdateResult {
       return;
     }
 
-    console.log("[useAppUpdate] compare", { current, remote: remote.versionCode });
+    console.log("[useAppUpdate] compare", { current, currentName, remote: remote.versionCode, remoteName: remote.versionName });
+    // Se o versionName bate, considera mesma versão (versionCode pode ser
+    // timestamp/commit-hash que muda a cada build sem refletir release real).
+    if (normalizeVersionName(currentName) === normalizeVersionName(remote.versionName)) {
+      setAvailable(null);
+      return;
+    }
     if (remote.versionCode <= current) {
       setAvailable(null);
       return;
