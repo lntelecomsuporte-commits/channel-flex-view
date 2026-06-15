@@ -31,7 +31,7 @@ public class MainActivity extends BridgeActivity {
         return true;
     }
 
-    /** Bridge JS pra sinalizar que o instalador do APK vai abrir. */
+    /** Bridge JS pra sinalizar que o instalador do APK vai abrir + shutdown via voz. */
     public class LntvNativeBridge {
         @JavascriptInterface
         public void setInstallingUpdate(boolean v) {
@@ -40,6 +40,12 @@ public class MainActivity extends BridgeActivity {
             installingUpdateUntil = System.currentTimeMillis() + 2 * 60 * 1000L;
             android.util.Log.i("LNTV", "setInstallingUpdate=" + v);
         }
+        /** Chamado pelo comando de voz "desligar". Fecha o app e tenta standby. */
+        @JavascriptInterface
+        public void shutdown() {
+            android.util.Log.i("LNTV", "shutdown via voz");
+            runOnUiThread(() -> shutdownAndRelease("voice_command"));
+        }
     }
 
     @Override
@@ -47,6 +53,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(PlaybackKeepAlivePlugin.class);
         registerPlugin(NativePlayerPlugin.class);
         registerPlugin(DeviceInfoPlugin.class);
+        registerPlugin(VoicePlugin.class);
         super.onCreate(savedInstanceState);
         // Mantém a tela acesa enquanto a Activity estiver visível.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -169,7 +176,25 @@ public class MainActivity extends BridgeActivity {
             dispatchTrackKey("audio", keyCode);
             return true;
         }
+        // Tecla de voz (mic/Assist do controle): dispara via JS pra acionar o plugin.
+        if (keyCode == 231 /* KEYCODE_VOICE_ASSIST */
+                || keyCode == 219 /* KEYCODE_ASSIST */
+                || keyCode == KeyEvent.KEYCODE_SEARCH) {
+            dispatchVoiceKey(keyCode);
+            return true;
+        }
         return super.onKeyDown(keyCode, event);
+    }
+
+    private void dispatchVoiceKey(int keyCode) {
+        try {
+            WebView wv = (this.bridge != null) ? this.bridge.getWebView() : null;
+            if (wv == null) return;
+            String js = "window.dispatchEvent(new KeyboardEvent('keydown', {"
+                    + "key:'VoiceAssist', code:'VoiceAssist', keyCode:" + keyCode
+                    + ", which:" + keyCode + ", bubbles:true}));";
+            wv.evaluateJavascript(js, null);
+        } catch (Exception ignored) {}
     }
 
     private void dispatchTrackKey(String kind, int keyCode) {

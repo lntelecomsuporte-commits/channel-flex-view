@@ -22,6 +22,8 @@ import { useSessionHeartbeat } from "@/hooks/useSessionHeartbeat";
 import { isSelectKey, isPageNextKey, isPagePrevKey, isMenuKey } from "@/lib/remoteKeys";
 import SettingsMenu from "@/components/player/SettingsMenu";
 import PinPrompt from "@/components/player/PinPrompt";
+import VoiceListeningOverlay from "@/components/player/VoiceListeningOverlay";
+import { isVoiceKey, parseVoiceCommand, dispatchVoiceAction, emitVoiceUi, startVoiceCapture, type VoiceActionType } from "@/lib/voiceCommands";
 import { List, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseLocal";
@@ -200,6 +202,30 @@ const PlayerPage = () => {
     return () => window.removeEventListener("remotemenu", open);
   }, []);
 
+  // ====== Voz: transcrição → parse → ação ======
+  useEffect(() => {
+    const onTranscript = (e: Event) => {
+      const text = (e as CustomEvent<{ text: string }>).detail?.text || "";
+      if (!text) return;
+      emitVoiceUi({ kind: "result", text: `“${text}”` });
+      const action = parseVoiceCommand(text, channels);
+      setTimeout(() => emitVoiceUi({ kind: "idle" }), 1400);
+      dispatchVoiceAction(action);
+    };
+    window.addEventListener("lntv:voice-transcript", onTranscript as EventListener);
+    return () => window.removeEventListener("lntv:voice-transcript", onTranscript as EventListener);
+  }, [channels]);
+
+  const voiceActionRef = useRef<((a: VoiceActionType) => void) | null>(null);
+  useEffect(() => {
+    const onAction = (e: Event) => {
+      const a = (e as CustomEvent<VoiceActionType>).detail;
+      if (a) voiceActionRef.current?.(a);
+    };
+    window.addEventListener("lntv:voice-action", onAction as EventListener);
+    return () => window.removeEventListener("lntv:voice-action", onAction as EventListener);
+  }, []);
+
   // Carrega o PIN parental do perfil
   useEffect(() => {
     if (!user) return;
@@ -317,6 +343,63 @@ const PlayerPage = () => {
     },
     [osdTimeout]
   );
+
+  // Implementação das ações de voz (depois de showOSDTemporarily e channels existirem).
+  useEffect(() => {
+    voiceActionRef.current = (a: VoiceActionType) => {
+      switch (a.type) {
+        case "tuneNumber": {
+          if (!channels?.length) return;
+          const idx = channels.findIndex((c) => c.channel_number === a.number);
+          if (idx >= 0) {
+            setShowPreview(false);
+            setPreviewIndex(null);
+            setCurrentIndex(idx);
+            showOSDTemporarily();
+          } else {
+            toast.error(`Canal ${a.number} não encontrado`);
+          }
+          return;
+        }
+        case "tuneChannelId": {
+          if (!channels?.length) return;
+          const idx = channels.findIndex((c) => c.id === a.id);
+          if (idx >= 0) {
+            setShowPreview(false);
+            setPreviewIndex(null);
+            setCurrentIndex(idx);
+            showOSDTemporarily();
+            toast(`Sintonizando ${a.name}`, { duration: 1800 });
+          }
+          return;
+        }
+        case "audio":
+          window.dispatchEvent(new KeyboardEvent("keydown", {
+            key: "AudioTrack", code: "AudioTrack", keyCode: 222, bubbles: true,
+          } as any));
+          return;
+        case "subtitle":
+          window.dispatchEvent(new KeyboardEvent("keydown", {
+            key: "Subtitle", code: "Subtitle", keyCode: 175, bubbles: true,
+          } as any));
+          return;
+        case "shutdown": {
+          toast("Encerrando...", { duration: 1500 });
+          const w = window as any;
+          try {
+            if (w.LntvNative?.shutdown) { w.LntvNative.shutdown(); return; }
+            if (w.LntvLegacy?.shutdown) { w.LntvLegacy.shutdown(); return; }
+          } catch { /* ignore */ }
+          setTimeout(() => { try { window.close(); } catch { /* ignore */ } }, 1200);
+          return;
+        }
+        case "unknown":
+        default:
+          toast.error(`Não entendi${a.type === "unknown" && a.raw ? `: "${a.raw}"` : ""}`);
+          return;
+      }
+    };
+  }, [channels, showOSDTemporarily]);
 
   const changeChannel = useCallback(
     (direction: "up" | "down") => {
@@ -487,6 +570,15 @@ const PlayerPage = () => {
         e.preventDefault();
         e.stopPropagation();
         (e as any).stopImmediatePropagation?.();
+        return;
+      }
+
+      // Tecla de voz (mic/Assist do controle): inicia reconhecimento
+      if (isVoiceKey(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+        (e as any).stopImmediatePropagation?.();
+        void startVoiceCapture();
         return;
       }
 
@@ -1020,6 +1112,8 @@ const PlayerPage = () => {
               onLogout={signOut}
             />
           )}
+
+          <VoiceListeningOverlay />
         </>
       )}
     </div>

@@ -1,65 +1,83 @@
-# Troca de Legenda e Áudio em Todas as Plataformas
+## Busca por voz no controle remoto
 
-## Objetivo
-Permitir que o usuário troque a faixa de legenda e a faixa de áudio do canal em execução, quando o stream oferece múltiplas opções. A escolha persiste apenas durante a sessão (ao fechar e reabrir o app, volta ao padrão).
+Adicionar reconhecimento de fala em pt-BR ativado pelo botão de microfone/voz do controle. O usuário poderá falar:
 
-## Controles
-- **Legendas (CC):** tecla `CC` / `Closed Caption` ou tecla **azul** do controle remoto.
-  - Ciclo: `Desligado → Faixa 1 → Faixa 2 → ... → Desligado`.
-- **Áudio:** tecla `SAP` / `Audio` / `MTS` ou tecla **amarela** do controle remoto.
-  - Ciclo entre as faixas de áudio disponíveis.
+- **"canal 23"** ou **"23"** → sintoniza pelo número
+- **"globo"**, **"ESPN"**, **"Band"** → fuzzy match pelo nome do canal
+- **"áudio"** → abre menu de trilhas de áudio (se só houver uma, OSD informa "Sem áudio alternativo")
+- **"legenda"** / **"caption"** → abre menu de legendas (mesmo fallback)
+- **"desligar"** → fecha o app e tenta desligar receptor/TV via HDMI-CEC (KEYCODE_TV_POWER / standby intent)
 
-Cada troca mostra um OSD curto (ex.: "Legenda: Português" / "Áudio: Inglês (5.1)") por ~2s.
+Engine: SpeechRecognizer nativo do Android (pt-BR, sem custo, funciona offline em devices recentes). Roku usa o voice search nativo da plataforma via deep linking ECP — não captura voz dentro do app.
 
-## Plataformas e arquivos
+### Plataformas e gatilhos
 
-### 1. Web / PWA — HLS.js (`src/components/player/VideoPlayer.tsx`)
-- Adicionar handlers para teclas: `c`, `C`, `Subtitle`, `ColorF0Blue` (azul), `MediaAudioTrack`, `ColorF1Yellow` (amarelo), além de keycodes 403 (vermelho), 404 (verde), 405 (amarelo), 406 (azul) usados em TVs.
-- Usar `hls.subtitleTracks` + `hls.subtitleTrack` para legendas; `hls.audioTracks` + `hls.audioTrack` para áudio. Fallback para `<video>.textTracks` e `audioTracks` quando não-HLS.
-- Pequeno componente OSD reaproveitando estilo existente.
-- Resetar seleção ao trocar de canal (sessão = vida do app já que é SPA; recarga do app = padrão).
+**APK Nativo (Kotlin) — `PlayerActivity`**
+- Interceptar `KEYCODE_VOICE_ASSIST` (231), `KEYCODE_ASSIST` (219), `KEYCODE_SEARCH` (84) e long-press do mic
+- Abrir `SpeechRecognizer` com `RecognizerIntent.ACTION_RECOGNIZE_SPEECH`, locale `pt-BR`, `EXTRA_PARTIAL_RESULTS=true`
+- Overlay translúcido com microfone animado + transcrição parcial
+- Permissão `RECORD_AUDIO` adicionada no `AndroidManifest.xml` com runtime request no primeiro uso
+- Parser de comandos compartilhado em Kotlin (`VoiceCommandParser.kt`)
 
-### 2. Plugin Android nativo do app Capacitor (`android/app/src/main/java/tv/lntelecom/net/NativePlayerPlugin.java`)
-- Adicionar métodos `cycleSubtitle()` e `cycleAudio()` usando `ExoPlayer.trackSelectionParameters` (TrackSelectionOverride por TrackGroup).
-- Expor via plugin call para o JS.
-- `src/plugins/native-player.ts`: adicionar `cycleSubtitle()` / `cycleAudio()` retornando rótulo da faixa atual.
-- `NativeAndroidPlayer.tsx`: capturar teclas globais e chamar plugin.
+**APK Release (WebView Capacitor) — novo plugin `VoicePlugin`**
+- Java plugin que chama o mesmo `SpeechRecognizer` e devolve resultado via `notifyListeners("result", {...})`
+- `LegacyMainActivity` e `MainActivity` interceptam mesmas keycodes e chamam `plugin.startListening()`
+- Frontend (`src/plugins/voice.ts`) recebe transcrição e roteia pro mesmo parser TS
+- Permissão `RECORD_AUDIO` no `AndroidManifest.xml`
 
-### 3. Activities legadas (`MainActivity.java`, `LegacyMainActivity.java`)
-- Em `dispatchKeyEvent`/`onKeyDown`, interceptar `KEYCODE_CAPTIONS` (saiba), `KEYCODE_PROG_BLUE`, `KEYCODE_PROG_YELLOW`, `KEYCODE_TV_AUDIO_DESCRIPTION` e enviar via JS bridge `window.dispatchEvent(new KeyboardEvent(...))` para que o `VideoPlayer` web reaja.
+**Roku — `PlayerScene.brs`**
+- Roku não permite gravar áudio dentro do canal; apenas o voice search global do sistema
+- Adicionar entradas `<contentNode>` no manifest pra deep link via ECP: `tv.lntelecom.net?contentId=<channelId>` 
+- Documentar no README; sem mudança de UI dentro do app
 
-### 4. App Android nativo (`android-native/.../PlayerActivity.kt`)
-- ExoPlayer já em uso. Adicionar:
-  - `cycleSubtitle()` e `cycleAudio()` usando `player.trackSelectionParameters` + `TrackSelectionOverride`.
-  - Em `onKeyDown`: `KEYCODE_CAPTIONS`, `KEYCODE_PROG_BLUE`, `KEYCODE_PROG_YELLOW`, `KEYCODE_TV_AUDIO_DESCRIPTION`, `KEYCODE_MEDIA_AUDIO_TRACK`.
-  - OSD usando o padrão de Toast/overlay já presente.
-- Resetar a cada troca de canal; ao fechar app, padrão.
+### Parser de comandos (compartilhado)
 
-### 5. Roku (`roku/components/PlayerScene.brs` + `PlayerScene.xml`)
-- Roku Video node expõe `availableSubtitleTracks`, `subtitleTrack`, `availableAudioTracks`, `currentAudioTrack`.
-- Em `onKeyEvent`:
-  - Azul (`"blue"`) ou Captions → ciclar `subtitleTrack` entre `""` (off) e índices disponíveis.
-  - Amarelo (`"yellow"`) → ciclar `currentAudioTrack` entre faixas disponíveis.
-- Mostrar OSD usando label existente.
-- Resetar ao trocar de canal.
+`src/lib/voiceCommands.ts` (TS) e espelho `VoiceCommandParser.kt`:
 
-## Persistência
-Apenas em memória (variável de instância no componente/Activity/Scene). Nada gravado em disco — ao fechar o app, volta ao padrão automaticamente.
+```text
+input normalizado (lowercase, sem acento)
+├─ /^(canal\s+)?(\d{1,4})$/ → tuneByNumber(n)
+├─ /^(audio|som|sap)$/      → openAudioMenu()
+├─ /^(legenda|caption|cc|subtitulo)$/ → openSubtitleMenu()
+├─ /^(desligar|sair|fechar)$/ → shutdown()
+└─ fallback → fuzzy match em channels.name (Levenshtein ≤ 2 OU substring) → tuneById
+```
 
-## Detalhes técnicos
-- HLS.js: ouvir `Hls.Events.SUBTITLE_TRACKS_UPDATED` / `AUDIO_TRACKS_UPDATED` para popular lista.
-- ExoPlayer (ambos Android): usar `Player.getCurrentTracks()` para enumerar `TrackGroup` de tipo `C.TRACK_TYPE_TEXT` e `C.TRACK_TYPE_AUDIO`. Aplicar via `trackSelectionParameters.buildUpon().setOverrideForType(...)`. Para desligar legenda: `setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)`.
-- Roku: KeyCodes específicos não existem para CC/SAP — usamos azul/amarelo como padrão (mesma convenção do app oficial Roku).
+### Integrações
 
-## Keycodes Android
-| Função | Keycodes |
-|---|---|
-| Legenda | `KEYCODE_CAPTIONS` (175), `KEYCODE_PROG_BLUE` (186) |
-| Áudio | `KEYCODE_TV_AUDIO_DESCRIPTION` (252), `KEYCODE_MEDIA_AUDIO_TRACK` (222), `KEYCODE_PROG_YELLOW` (185) |
+- `tuneByNumber` reutiliza lógica do `ChannelSearch.tsx`
+- `openAudioMenu`/`openSubtitleMenu` disparam o mesmo `TrackOSD` já existente (com flag "force show even if única faixa → mostra mensagem 'sem alternativa'")
+- `shutdown`: nativo chama `finishAffinity()` + `sendBroadcast(Intent.ACTION_SHUTDOWN)` quando permitido; senão envia `KEYCODE_TV_POWER` via `InputManager.injectInputEvent` (requer permissão do sistema — em devices não-root, apenas fecha o app e exibe toast "Use o botão Power do controle pra desligar a TV")
 
-## Entrega
-Frontend (web) → build + rsync no servidor.  
-Android nativo + legacy → GitHub Actions (APK).  
-Roku → GitHub Actions (channel).
+### Feedback visual
 
-Comandos pro servidor serão fornecidos ao final.
+Novo componente `VoiceListeningOverlay.tsx` (frontend + equivalente XML no nativo):
+- Ícone de mic pulsando
+- "Ouvindo…" → transcrição parcial em tempo real
+- Após resultado: "Entendi: <texto>" + ação executada por 1,5s
+- Erro/timeout (4s sem fala): "Não entendi, tente novamente"
+
+### Arquivos a criar/editar
+
+**Novos**
+- `src/lib/voiceCommands.ts` — parser + fuzzy match
+- `src/components/player/VoiceListeningOverlay.tsx`
+- `src/plugins/voice.ts` — bridge Capacitor
+- `android/app/src/main/java/tv/lntelecom/net/VoicePlugin.java`
+- `android-native/app/src/main/java/tv/lntelecom/nativo/voice/VoiceCommandParser.kt`
+- `android-native/app/src/main/java/tv/lntelecom/nativo/voice/VoiceRecognizer.kt`
+
+**Editados**
+- `src/pages/PlayerPage.tsx` — listener de keys voice + integração com parser/overlay
+- `src/lib/remoteKeys.ts` — adicionar `isVoiceKey()`
+- `src/components/player/TrackOSD.tsx` — aceitar `forceShow` pra mostrar mensagem "sem alternativa"
+- `android/app/src/main/AndroidManifest.xml` — `RECORD_AUDIO`, registro do plugin
+- `android/app/src/main/java/tv/lntelecom/net/MainActivity.java` + `LegacyMainActivity.java` — registrar plugin + interceptar keys
+- `android-native/app/src/main/AndroidManifest.xml` — `RECORD_AUDIO`
+- `android-native/app/src/main/java/tv/lntelecom/nativo/ui/player/PlayerActivity.kt` — keys + overlay
+- `roku/README.md` — documentação do voice search via ECP
+
+### Fora de escopo
+- Wake word ("Ok LN TV") — exigiria mic sempre ligado
+- iOS (projeto é Android+Roku+Web)
+- Comandos de navegação extra ("próximo", "favoritos") — pode entrar em iteração futura

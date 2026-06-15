@@ -71,6 +71,7 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var updater: UpdateChecker
     private lateinit var listAdapter: ChannelAdapter
     private var heartbeat: tv.lntelecom.nativo.data.HeartbeatManager? = null
+    private var voice: tv.lntelecom.nativo.voice.VoiceRecognizer? = null
 
     private var channels: List<Channel> = emptyList()
     private var index = 0
@@ -713,6 +714,9 @@ class PlayerActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_MEDIA_AUDIO_TRACK, KeyEvent.KEYCODE_TV_AUDIO_DESCRIPTION,
             KeyEvent.KEYCODE_PROG_YELLOW ->
                 { cycleAudioTrack(); true }
+            // Voz: mic/Assist do controle
+            KeyEvent.KEYCODE_VOICE_ASSIST, KeyEvent.KEYCODE_ASSIST,
+            KeyEvent.KEYCODE_SEARCH -> { startVoice(); true }
             KeyEvent.KEYCODE_BACK -> handleBackPress()
             in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> {
                 appendDigit(keyCode - KeyEvent.KEYCODE_0); true
@@ -1213,8 +1217,58 @@ class PlayerActivity : AppCompatActivity() {
         }
         heartbeat?.stop()
         heartbeat = null
+        voice?.destroy()
+        voice = null
         player?.release()
         player = null
     }
+
+    // ====== Reconhecimento de voz ======
+    private fun startVoice() {
+        if (voice == null) {
+            voice = tv.lntelecom.nativo.voice.VoiceRecognizer(this) { text ->
+                handleVoiceTranscript(text)
+            }
+        }
+        voice?.start()
+    }
+
+    private fun handleVoiceTranscript(raw: String) {
+        val action = tv.lntelecom.nativo.voice.VoiceCommandParser.parse(raw, channels)
+        when (action) {
+            is tv.lntelecom.nativo.voice.VoiceAction.TuneNumber -> {
+                val idx = channels.indexOfFirst { it.channelNumber == action.number }
+                if (idx >= 0) {
+                    index = idx
+                    retries = 0
+                    loadCurrent()
+                } else {
+                    Toast.makeText(this, "Canal ${action.number} não encontrado", Toast.LENGTH_SHORT).show()
+                }
+            }
+            is tv.lntelecom.nativo.voice.VoiceAction.TuneChannel -> {
+                val idx = channels.indexOfFirst { it.id == action.channel.id }
+                if (idx >= 0) {
+                    index = idx
+                    retries = 0
+                    loadCurrent()
+                    Toast.makeText(this, "Sintonizando ${action.channel.name}", Toast.LENGTH_SHORT).show()
+                }
+            }
+            tv.lntelecom.nativo.voice.VoiceAction.Audio -> cycleAudioTrack()
+            tv.lntelecom.nativo.voice.VoiceAction.Subtitle -> cycleSubtitleTrack()
+            tv.lntelecom.nativo.voice.VoiceAction.Shutdown -> {
+                Toast.makeText(this, "Encerrando...", Toast.LENGTH_SHORT).show()
+                Handler(Looper.getMainLooper()).postDelayed({
+                    finishAndRemoveTask()
+                    System.exit(0)
+                }, 800)
+            }
+            is tv.lntelecom.nativo.voice.VoiceAction.Unknown -> {
+                Toast.makeText(this, "Não entendi: \"${action.raw}\"", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+}
 }
 

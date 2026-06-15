@@ -1,17 +1,24 @@
 package tv.lntelecom.net;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.DownloadManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.view.KeyEvent;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -24,14 +31,19 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 import android.content.pm.PackageInfo;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 
 import java.io.File;
+import java.util.ArrayList;
 
 public class LegacyMainActivity extends Activity {
     private WebView webView;
     private Long currentDownloadId = null;
     private BroadcastReceiver downloadReceiver = null;
+    private SpeechRecognizer voiceRecognizer = null;
+    private static final int REQ_AUDIO = 7331;
 
     /** Bridge JS exposto como window.LntvLegacy — usado pelo auto-update do APK no legacy. */
     private class LegacyUpdateBridge {
@@ -63,6 +75,28 @@ public class LegacyMainActivity extends Activity {
                     startApkDownload(url);
                 }
             });
+        }
+
+        /** Voz: comando "desligar" fecha o app. */
+        @JavascriptInterface
+        public void shutdown() {
+            runOnUiThread(() -> {
+                try { if (webView != null) webView.destroy(); } catch (Exception ignored) {}
+                finishAndRemoveTask();
+                new Handler(Looper.getMainLooper()).postDelayed(() -> System.exit(0), 150);
+            });
+        }
+
+        /** Inicia o SpeechRecognizer nativo (compat Android 5+). */
+        @JavascriptInterface
+        public void startVoice() {
+            runOnUiThread(() -> startVoiceRecognition());
+        }
+
+        @JavascriptInterface
+        public boolean voiceAvailable() {
+            try { return SpeechRecognizer.isRecognitionAvailable(LegacyMainActivity.this); }
+            catch (Exception e) { return false; }
         }
     }
 
@@ -264,6 +298,13 @@ public class LegacyMainActivity extends Activity {
             dispatchTrackKey("AudioTrack", keyCode);
             return true;
         }
+        // Tecla de voz
+        if (keyCode == 231 /* KEYCODE_VOICE_ASSIST */
+                || keyCode == 219 /* KEYCODE_ASSIST */
+                || keyCode == KeyEvent.KEYCODE_SEARCH) {
+            startVoiceRecognition();
+            return true;
+        }
         return super.onKeyDown(keyCode, event);
     }
 
@@ -275,6 +316,103 @@ public class LegacyMainActivity extends Activity {
                     + ", which:" + keyCode + ", bubbles:true}));";
             webView.evaluateJavascript(js, null);
         } catch (Exception ignored) {}
+    }
+
+    // ====== Reconhecimento de voz (pt-BR) ======
+    private void startVoiceRecognition() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, REQ_AUDIO);
+            emitVoiceUi("error", "Permita o microfone e tente de novo");
+            return;
+        }
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            emitVoiceUi("error", "Reconhecimento de voz indisponível");
+            return;
+        }
+        destroyVoiceRecognizer();
+        try {
+            voiceRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            voiceRecognizer.setRecognitionListener(new RecognitionListener() {
+                @Override public void onReadyForSpeech(Bundle params) { emitVoiceUi("listening", ""); }
+                @Override public void onBeginningOfSpeech() {}
+                @Override public void onRmsChanged(float rmsdB) {}
+                @Override public void onBufferReceived(byte[] buffer) {}
+                @Override public void onEndOfSpeech() {}
+                @Override public void onError(int error) {
+                    String msg;
+                    switch (error) {
+                        case SpeechRecognizer.ERROR_NO_MATCH:
+                        case SpeechRecognizer.ERROR_SPEECH_TIMEOUT: msg = "Não entendi"; break;
+                        case SpeechRecognizer.ERROR_NETWORK:
+                        case SpeechRecognizer.ERROR_NETWORK_TIMEOUT: msg = "Sem internet"; break;
+                        case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS: msg = "Sem permissão de microfone"; break;
+                        default: msg = "Erro de voz (" + error + ")";
+                    }
+                    emitVoiceUi("error", msg);
+                }
+                @Override public void onResults(Bundle results) {
+                    ArrayList<String> arr = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    String text = (arr != null && !arr.isEmpty()) ? arr.get(0) : "";
+                    if (!text.isEmpty()) emitVoiceTranscript(text);
+                    else emitVoiceUi("error", "Não entendi");
+                }
+                @Override public void onPartialResults(Bundle partial) {
+                    ArrayList<String> arr = partial.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    if (arr != null && !arr.isEmpty()) emitVoiceUi("partial", arr.get(0));
+                }
+                @Override public void onEvent(int eventType, Bundle params) {}
+            });
+            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR");
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "pt-BR");
+            intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+            intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+            intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());
+            voiceRecognizer.startListening(intent);
+        } catch (Exception e) {
+            emitVoiceUi("error", "Falha ao iniciar voz");
+        }
+    }
+
+    private void destroyVoiceRecognizer() {
+        if (voiceRecognizer != null) {
+            try { voiceRecognizer.stopListening(); } catch (Exception ignored) {}
+            try { voiceRecognizer.cancel(); } catch (Exception ignored) {}
+            try { voiceRecognizer.destroy(); } catch (Exception ignored) {}
+            voiceRecognizer = null;
+        }
+    }
+
+    private String jsEscape(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("'", "\\'").replace("\n", " ").replace("\r", " ");
+    }
+
+    private void emitVoiceUi(String kind, String text) {
+        if (webView == null) return;
+        final String k = jsEscape(kind);
+        final String t = jsEscape(text);
+        final String js;
+        if ("partial".equals(kind)) {
+            js = "window.dispatchEvent(new CustomEvent('lntv:voice-ui',{detail:{kind:'listening',partial:'" + t + "'}}));";
+        } else if ("listening".equals(kind)) {
+            js = "window.dispatchEvent(new CustomEvent('lntv:voice-ui',{detail:{kind:'listening'}}));";
+        } else if ("error".equals(kind)) {
+            js = "window.dispatchEvent(new CustomEvent('lntv:voice-ui',{detail:{kind:'error',message:'" + t + "'}}));"
+               + "setTimeout(function(){window.dispatchEvent(new CustomEvent('lntv:voice-ui',{detail:{kind:'idle'}}));},2000);";
+        } else {
+            js = "window.dispatchEvent(new CustomEvent('lntv:voice-ui',{detail:{kind:'" + k + "'}}));";
+        }
+        try { webView.evaluateJavascript(js, null); } catch (Exception ignored) {}
+    }
+
+    private void emitVoiceTranscript(String text) {
+        if (webView == null) return;
+        final String t = jsEscape(text);
+        final String js = "window.dispatchEvent(new CustomEvent('lntv:voice-transcript',{detail:{text:'" + t + "'}}));";
+        try { webView.evaluateJavascript(js, null); } catch (Exception ignored) {}
     }
 
     @Override
@@ -291,6 +429,7 @@ public class LegacyMainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        destroyVoiceRecognizer();
         if (downloadReceiver != null) {
             try { unregisterReceiver(downloadReceiver); } catch (Exception ignored) {}
             downloadReceiver = null;
