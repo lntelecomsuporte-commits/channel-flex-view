@@ -23,3 +23,4 @@ SEMPRE ao final de QUALQUER mudança (frontend, edge function, migration), inclu
 - [UI & Styling](mem://design/ui) — Scroll locks, overlay layout, branding assets
 - [Project Setup](mem://project/setup) — PWA configuration and environments
 - [Roku Channel](mem://features/roku-channel) — App BrightScript em roku/, build no mesmo workflow do APK, sync via sync-lntv-apk.sh
+- [Tizen App](mem://features/tizen-app) — Samsung Smart TV web app em tizen/, AVPlay nativo, sideload via Tizen Studio CLI
