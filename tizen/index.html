@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1920, height=1080, user-scalable=no">
+  <title>LN TV</title>
+  <link rel="stylesheet" href="css/app.css">
+  <script src="$WEBAPIS/webapis/webapis.js"></script>
+</head>
+<body>
+  <!-- Splash / Login -->
+  <div id="screen-login" class="screen">
+    <div class="login-box">
+      <div class="brand">LN TV</div>
+      <div class="login-status" id="login-status">Inicializando…</div>
+      <div class="pair-label">Código de pareamento</div>
+      <div class="pair-code" id="pair-code">----</div>
+      <div class="pair-hint">Informe esse código no painel de controle para liberar este aparelho.</div>
+
+      <div class="manual-login" id="manual-login">
+        <input id="login-user" type="text" placeholder="CPF ou e-mail" autocomplete="off">
+        <input id="login-pass" type="password" placeholder="Senha" autocomplete="off">
+        <button id="login-btn">Entrar</button>
+        <div class="login-err" id="login-err"></div>
+      </div>
+
+      <div class="dev-line" id="dev-line"></div>
+    </div>
+  </div>
+
+  <!-- Player -->
+  <div id="screen-player" class="screen hidden">
+    <object id="avplay" type="application/avplayer" style="width:1920px;height:1080px;background:#000;"></object>
+    <video id="htmlplayer" class="hidden" autoplay playsinline></video>
+
+    <!-- OSD canal -->
+    <div id="osd" class="osd hidden">
+      <div class="osd-row">
+        <img id="osd-logo" alt="">
+        <div class="osd-info">
+          <div class="osd-num" id="osd-num"></div>
+          <div class="osd-name" id="osd-name"></div>
+        </div>
+      </div>
+      <div class="osd-epg">
+        <div class="now"><span class="lbl">AGORA</span> <span id="osd-now"></span></div>
+        <div class="next"><span class="lbl">A SEGUIR</span> <span id="osd-next"></span></div>
+      </div>
+    </div>
+
+    <!-- Buffer numérico -->
+    <div id="num-buffer" class="num-buffer hidden"></div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast hidden"></div>
+
+    <!-- Lista de canais -->
+    <div id="channel-list" class="channel-list hidden">
+      <div class="cl-header">Canais</div>
+      <ul id="cl-ul"></ul>
+    </div>
+
+    <!-- Menu lateral -->
+    <div id="menu" class="menu hidden">
+      <div class="m-header">Menu</div>
+      <ul id="menu-ul">
+        <li data-id="change-password">🔑  Trocar senha de login</li>
+        <li data-id="change-pin">🔞  Trocar PIN de canais adultos</li>
+        <li data-id="stats">📊  Estatísticas</li>
+        <li data-id="about">ℹ️  Sobre o aplicativo</li>
+        <li data-id="logout">🚪  Sair</li>
+      </ul>
+    </div>
+
+    <!-- Modal genérico -->
+    <div id="modal" class="modal hidden">
+      <div class="modal-box">
+        <div class="modal-title" id="modal-title"></div>
+        <div class="modal-body" id="modal-body"></div>
+        <div class="modal-actions">
+          <button id="modal-ok">OK</button>
+          <button id="modal-cancel">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Voice overlay -->
+    <div id="voice" class="voice hidden">
+      <div class="voice-mic">🎤</div>
+      <div class="voice-status" id="voice-status">Ouvindo…</div>
+      <div class="voice-text" id="voice-text"></div>
+    </div>
+
+    <!-- Stats overlay -->
+    <div id="stats" class="stats hidden"></div>
+  </div>
+
+  <!-- Modules (ES5-compatible, sem bundler) -->
+  <script src="js/config.js"></script>
+  <script src="js/keys.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/device.js"></script>
+  <script src="js/supabase.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/logos.js"></script>
+  <script src="js/epg.js"></script>
+  <script src="js/channels.js"></script>
+  <script src="js/heartbeat.js"></script>
+  <script src="js/osd.js"></script>
+  <script src="js/menu.js"></script>
+  <script src="js/voice.js"></script>
+  <script src="js/update.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
