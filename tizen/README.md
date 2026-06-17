@@ -26,7 +26,7 @@ tizen/
     ├── osd.js        OSD canal, lista, toast, buffer numérico
     ├── menu.js       menu lateral + modal + stats
     ├── voice.js      Web Speech API + parser pt-BR
-    ├── update.js     version-tizen.json + tizen.package.install
+    ├── update.js     version-tizen.json
     ├── player.js     AVPlay + retry/stall + audio/legenda
     └── app.js        bootstrap, screens, router de teclas
 ```
@@ -105,7 +105,7 @@ Ao abrir, o app busca `https://tv2.lntelecom.net/version-tizen.json`:
 }
 ```
 
-Se `tizenVersionCode` > local OU `tizenVersionName` diferente → baixa via `tizen.download` e instala via `tizen.package.install`.
+Se `tizenVersionCode` > local OU `tizenVersionName` diferente → mostra aviso de nova versão. A instalação precisa ser feita pelo Tizen Studio/Device Manager.
 
 ## Servidor — arquivos a publicar
 

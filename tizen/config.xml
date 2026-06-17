@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="http://tv.lntelecom/tizen" version="1.0.0" viewmodes="maximized">
-    <tizen:application id="LNTVtizen0.LNTV" package="LNTVtizen0" required_version="6.5" launch_mode="single"/>
+    <tizen:application id="LNTVtizen0.LNTV" package="LNTVtizen0" required_version="10.0" launch_mode="single"/>
     <content src="index.html"/>
     <feature name="http://tizen.org/feature/screen.size.all"/>
     <icon src="icon.png"/>
@@ -17,8 +17,6 @@
     <tizen:privilege name="http://tizen.org/privilege/network.get"/>
     <tizen:privilege name="http://tizen.org/privilege/system"/>
     <tizen:privilege name="http://tizen.org/privilege/power"/>
-    <tizen:privilege name="http://tizen.org/privilege/packagemanager.install"/>
     <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
-    <tizen:privilege name="http://tizen.org/privilege/download"/>
     <tizen:privilege name="http://developer.samsung.com/privilege/productinfo"/>
 </widget>
