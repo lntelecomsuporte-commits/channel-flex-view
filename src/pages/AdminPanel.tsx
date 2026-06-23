@@ -187,7 +187,19 @@ const AdminPanel = () => {
     }
   };
 
-  const handleDeleteChannel = async (id: string) => {
+  const CHANNEL_DELETE_ALLOWED_EMAIL = "lucasiappe@yahoo.com.br";
+  const canDeleteChannels =
+    (user?.email ?? "").trim().toLowerCase() === CHANNEL_DELETE_ALLOWED_EMAIL;
+
+  const handleDeleteChannel = async (id: string, name?: string) => {
+    if (!canDeleteChannels) {
+      toast.error("Você não tem permissão para remover canais.");
+      return;
+    }
+    const ok = window.confirm(
+      `Tem certeza que deseja remover o canal${name ? ` "${name}"` : ""}? Esta ação não pode ser desfeita.`
+    );
+    if (!ok) return;
     const { error } = await supabase.from("channels").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir: " + error.message); }
     else { toast.success("Canal excluído"); queryClient.invalidateQueries({ queryKey: ["channels-all"] }); queryClient.invalidateQueries({ queryKey: ["channels"] }); }
