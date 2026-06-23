@@ -607,9 +607,11 @@ const AdminPanel = () => {
                             {ch.is_active ? "Ativo" : "Inativo"}
                           </span>
                           <Button variant="ghost" size="sm" onClick={() => handleEditChannel(ch)}>Editar</Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleDeleteChannel(ch.id)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                          {canDeleteChannels && (
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteChannel(ch.id, ch.name)}>
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     ))}
