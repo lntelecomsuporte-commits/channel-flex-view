@@ -47,6 +47,7 @@ const AdminPanel = () => {
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name?: string } | null>(null);
   const channelFormRef = useRef<HTMLDivElement>(null);
   const categoryFormRef = useRef<HTMLDivElement>(null);
 
@@ -195,7 +196,7 @@ const AdminPanel = () => {
   const canDeleteChannels =
     (user?.email ?? "").trim().toLowerCase() === CHANNEL_DELETE_ALLOWED_EMAIL;
 
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name?: string } | null>(null);
+  
 
   const handleDeleteChannel = (id: string, name?: string) => {
     if (!canDeleteChannels) {
