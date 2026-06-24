@@ -15,6 +15,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Plus, Trash2, LogOut, Tv, Layers, Users, Link, Activity, Download, Shield } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import UserManagement from "@/components/admin/UserManagement";
 import HubsoftIntegration from "@/components/admin/HubsoftIntegration";
@@ -191,15 +195,20 @@ const AdminPanel = () => {
   const canDeleteChannels =
     (user?.email ?? "").trim().toLowerCase() === CHANNEL_DELETE_ALLOWED_EMAIL;
 
-  const handleDeleteChannel = async (id: string, name?: string) => {
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name?: string } | null>(null);
+
+  const handleDeleteChannel = (id: string, name?: string) => {
     if (!canDeleteChannels) {
       toast.error("Você não tem permissão para remover canais.");
       return;
     }
-    const ok = window.confirm(
-      `Tem certeza que deseja remover o canal${name ? ` "${name}"` : ""}? Esta ação não pode ser desfeita.`
-    );
-    if (!ok) return;
+    setDeleteTarget({ id, name });
+  };
+
+  const confirmDeleteChannel = async () => {
+    if (!deleteTarget) return;
+    const { id } = deleteTarget;
+    setDeleteTarget(null);
     const { error } = await supabase.from("channels").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir: " + error.message); }
     else { toast.success("Canal excluído"); queryClient.invalidateQueries({ queryKey: ["channels-all"] }); queryClient.invalidateQueries({ queryKey: ["channels"] }); }
@@ -741,6 +750,23 @@ const AdminPanel = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover canal?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja remover o canal{deleteTarget?.name ? ` "${deleteTarget.name}"` : ""}? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteChannel} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
