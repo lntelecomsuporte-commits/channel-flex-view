@@ -4,13 +4,11 @@ on:
   push:
     branches: [main]
     paths:
+      # APK é shell remoto (capacitor.config.ts aponta pra tv2.lntelecom.net),
+      # então mudanças em src/**, public/**, index.html NÃO afetam o APK.
+      # Só rebuild quando algo nativo/capacitor/build mudar de verdade.
       - 'android/**'
       - 'resources/**'
-      - 'src/**'
-      - 'public/**'
-      - 'index.html'
-      - 'vite.config.ts'
-      - 'tailwind.config.ts'
       - 'capacitor.config.ts'
       - 'package.json'
       - 'package-lock.json'
