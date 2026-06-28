@@ -94,7 +94,9 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
           await NativePlayer.load({
             url,
             type: detectType(url),
-            headers: isProxiedStreamUrl(url) ? {} : { "User-Agent": "LNTV/1.0" },
+            // Sem User-Agent custom: deixa o plugin nativo usar o UA real do device
+            // (System.getProperty("http.agent")), pra cada receptor mandar o próprio.
+            headers: {},
           });
           if (autoPlay) await NativePlayer.play();
         } catch (e: any) {
