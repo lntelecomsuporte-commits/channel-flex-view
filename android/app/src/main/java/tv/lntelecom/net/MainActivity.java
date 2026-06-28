@@ -68,6 +68,8 @@ public class MainActivity extends BridgeActivity {
 
             WebSettings settings = webView.getSettings();
             settings.setMediaPlaybackRequiresUserGesture(false);
+            // User-Agent fixo do APK release (spoof Fire TV Stick AFTMM)
+            settings.setUserAgentString("Dalvik/2.1.0 (Linux; U; Android 7.1.2; AFTMM Build/NS6711)");
 
             // Bridge pra suprimir shutdown quando o instalador do APK abrir
             webView.addJavascriptInterface(new LntvNativeBridge(), "LntvNative");
