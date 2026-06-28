@@ -75,17 +75,11 @@ public class NativePlayerPlugin extends Plugin {
     private static final long STALL_TIMEOUT_MS = 8000L;
     private static final int MAX_AUTO_RETRIES = 6;
 
-    /**
-     * UA do device no formato Dalvik — "Dalvik/2.1.0 (Linux; U; Android <ver>; <modelo> Build/<id>)".
-     * NÃO usamos System.getProperty("http.agent") porque dentro do app Capacitor
-     * isso retorna o UA do WebView ("Mozilla/5.0 ... Chrome/..."). Aqui montamos
-     * sempre o UA Dalvik com as props reais do hardware, pra cada receptor
-     * (Fire TV, BOX, celular) aparecer com seu próprio modelo/build no servidor.
-     */
-    private static String defaultDeviceUserAgent() {
-        return "Dalvik/2.1.0 (Linux; U; Android " + android.os.Build.VERSION.RELEASE
-                + "; " + android.os.Build.MODEL + " Build/" + android.os.Build.ID + ")";
-    }
+    // UA: deixamos o ExoPlayer/Media3 preencher o User-Agent default
+    // (ex.: "media3/1.x.x (Linux;Android 11) ExoPlayerLib/..."), igual ao
+    // app android-native. Alguns provedores (ex.: Olé) bloqueiam UA Dalvik
+    // mas aceitam o UA default do Media3 — manter este comportamento
+    // garante paridade com o player nativo que funciona nesses canais.
 
     @PluginMethod
     public void load(PluginCall call) {
@@ -117,8 +111,7 @@ public class NativePlayerPlugin extends Plugin {
                 droppedFramesTotal = 0L;
 
                 DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
-                        .setAllowCrossProtocolRedirects(true)
-                        .setUserAgent(defaultDeviceUserAgent());
+                        .setAllowCrossProtocolRedirects(true);
                 if (!headers.isEmpty()) httpFactory.setDefaultRequestProperties(headers);
 
                 MediaItem item = MediaItem.fromUri(url);
@@ -521,8 +514,7 @@ public class NativePlayerPlugin extends Plugin {
         if (lastUrl == null) return null;
         try {
             DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
-                    .setAllowCrossProtocolRedirects(true)
-                    .setUserAgent(defaultDeviceUserAgent());
+                    .setAllowCrossProtocolRedirects(true);
             if (lastHeaders != null && !lastHeaders.isEmpty()) httpFactory.setDefaultRequestProperties(lastHeaders);
             MediaItem item = MediaItem.fromUri(lastUrl);
             LoadErrorHandlingPolicy retryPolicy = new DefaultLoadErrorHandlingPolicy() {
