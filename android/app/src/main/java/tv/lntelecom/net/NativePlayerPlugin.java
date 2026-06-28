@@ -75,6 +75,17 @@ public class NativePlayerPlugin extends Plugin {
     private static final long STALL_TIMEOUT_MS = 8000L;
     private static final int MAX_AUTO_RETRIES = 6;
 
+    /**
+     * UA padrão do device — "Dalvik/2.1.0 (Linux; U; Android <ver>; <modelo> Build/<id>)".
+     * Cada receptor (Fire TV, BOX, celular, etc.) envia o seu próprio UA real.
+     */
+    private static String defaultDeviceUserAgent() {
+        String ua = System.getProperty("http.agent");
+        if (ua != null && !ua.isEmpty()) return ua;
+        return "Dalvik/2.1.0 (Linux; U; Android " + android.os.Build.VERSION.RELEASE
+                + "; " + android.os.Build.MODEL + " Build/" + android.os.Build.ID + ")";
+    }
+
     @PluginMethod
     public void load(PluginCall call) {
         final String url = call.getString("url");
