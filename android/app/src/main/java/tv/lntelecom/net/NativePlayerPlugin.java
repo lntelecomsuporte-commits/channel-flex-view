@@ -76,12 +76,13 @@ public class NativePlayerPlugin extends Plugin {
     private static final int MAX_AUTO_RETRIES = 6;
 
     /**
-     * UA padrão do device — "Dalvik/2.1.0 (Linux; U; Android <ver>; <modelo> Build/<id>)".
-     * Cada receptor (Fire TV, BOX, celular, etc.) envia o seu próprio UA real.
+     * UA do device no formato Dalvik — "Dalvik/2.1.0 (Linux; U; Android <ver>; <modelo> Build/<id>)".
+     * NÃO usamos System.getProperty("http.agent") porque dentro do app Capacitor
+     * isso retorna o UA do WebView ("Mozilla/5.0 ... Chrome/..."). Aqui montamos
+     * sempre o UA Dalvik com as props reais do hardware, pra cada receptor
+     * (Fire TV, BOX, celular) aparecer com seu próprio modelo/build no servidor.
      */
     private static String defaultDeviceUserAgent() {
-        String ua = System.getProperty("http.agent");
-        if (ua != null && !ua.isEmpty()) return ua;
         return "Dalvik/2.1.0 (Linux; U; Android " + android.os.Build.VERSION.RELEASE
                 + "; " + android.os.Build.MODEL + " Build/" + android.os.Build.ID + ")";
     }
