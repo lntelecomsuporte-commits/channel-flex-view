@@ -101,6 +101,9 @@ public class NativePlayerPlugin extends Plugin {
         while (keys.hasNext()) {
             String k = keys.next();
             String v = headersObj.optString(k);
+            // Nunca aceita User-Agent vindo do JS/web bundle. Builds antigos do frontend
+            // ainda podem mandar "LNTV/1.0"; o APK release deve usar o UA real do device.
+            if (k != null && "User-Agent".equalsIgnoreCase(k)) continue;
             if (v != null && !v.isEmpty()) headers.put(k, v);
         }
 
@@ -114,7 +117,7 @@ public class NativePlayerPlugin extends Plugin {
 
                 DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
                         .setAllowCrossProtocolRedirects(true)
-                        .setUserAgent(headers.getOrDefault("User-Agent", defaultDeviceUserAgent()));
+                        .setUserAgent(defaultDeviceUserAgent());
                 if (!headers.isEmpty()) httpFactory.setDefaultRequestProperties(headers);
 
                 MediaItem item = MediaItem.fromUri(url);
@@ -518,7 +521,7 @@ public class NativePlayerPlugin extends Plugin {
         try {
             DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
                     .setAllowCrossProtocolRedirects(true)
-                    .setUserAgent(lastHeaders != null ? lastHeaders.getOrDefault("User-Agent", defaultDeviceUserAgent()) : defaultDeviceUserAgent());
+                    .setUserAgent(defaultDeviceUserAgent());
             if (lastHeaders != null && !lastHeaders.isEmpty()) httpFactory.setDefaultRequestProperties(lastHeaders);
             MediaItem item = MediaItem.fromUri(lastUrl);
             LoadErrorHandlingPolicy retryPolicy = new DefaultLoadErrorHandlingPolicy() {
