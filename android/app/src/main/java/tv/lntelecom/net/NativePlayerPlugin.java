@@ -75,6 +75,17 @@ public class NativePlayerPlugin extends Plugin {
     private static final long STALL_TIMEOUT_MS = 8000L;
     private static final int MAX_AUTO_RETRIES = 6;
 
+    /**
+     * UA padrão do device — "Dalvik/2.1.0 (Linux; U; Android <ver>; <modelo> Build/<id>)".
+     * Cada receptor (Fire TV, BOX, celular, etc.) envia o seu próprio UA real.
+     */
+    private static String defaultDeviceUserAgent() {
+        String ua = System.getProperty("http.agent");
+        if (ua != null && !ua.isEmpty()) return ua;
+        return "Dalvik/2.1.0 (Linux; U; Android " + android.os.Build.VERSION.RELEASE
+                + "; " + android.os.Build.MODEL + " Build/" + android.os.Build.ID + ")";
+    }
+
     @PluginMethod
     public void load(PluginCall call) {
         final String url = call.getString("url");
@@ -103,7 +114,7 @@ public class NativePlayerPlugin extends Plugin {
 
                 DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
                         .setAllowCrossProtocolRedirects(true)
-                        .setUserAgent(headers.getOrDefault("User-Agent", "Dalvik/2.1.0 (Linux; U; Android 7.1.2; AFTMM Build/NS6711)"));
+                        .setUserAgent(headers.getOrDefault("User-Agent", defaultDeviceUserAgent()));
                 if (!headers.isEmpty()) httpFactory.setDefaultRequestProperties(headers);
 
                 MediaItem item = MediaItem.fromUri(url);
@@ -507,7 +518,7 @@ public class NativePlayerPlugin extends Plugin {
         try {
             DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
                     .setAllowCrossProtocolRedirects(true)
-                    .setUserAgent(lastHeaders != null ? lastHeaders.getOrDefault("User-Agent", "Dalvik/2.1.0 (Linux; U; Android 7.1.2; AFTMM Build/NS6711)") : "Dalvik/2.1.0 (Linux; U; Android 7.1.2; AFTMM Build/NS6711)");
+                    .setUserAgent(lastHeaders != null ? lastHeaders.getOrDefault("User-Agent", defaultDeviceUserAgent()) : defaultDeviceUserAgent());
             if (lastHeaders != null && !lastHeaders.isEmpty()) httpFactory.setDefaultRequestProperties(lastHeaders);
             MediaItem item = MediaItem.fromUri(lastUrl);
             LoadErrorHandlingPolicy retryPolicy = new DefaultLoadErrorHandlingPolicy() {
