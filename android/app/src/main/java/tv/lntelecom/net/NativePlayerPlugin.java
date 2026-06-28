@@ -507,7 +507,7 @@ public class NativePlayerPlugin extends Plugin {
         try {
             DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
                     .setAllowCrossProtocolRedirects(true)
-                    .setUserAgent(lastHeaders != null ? lastHeaders.getOrDefault("User-Agent", "Dalvik/2.1.0 (Linux; U; Android 7.1.2; AFTMM Build/NS6711)") : "Dalvik/2.1.0 (Linux; U; Android 7.1.2; AFTMM Build/NS6711)");
+                    .setUserAgent(lastHeaders != null ? lastHeaders.getOrDefault("User-Agent", defaultDeviceUserAgent()) : defaultDeviceUserAgent());
             if (lastHeaders != null && !lastHeaders.isEmpty()) httpFactory.setDefaultRequestProperties(lastHeaders);
             MediaItem item = MediaItem.fromUri(lastUrl);
             LoadErrorHandlingPolicy retryPolicy = new DefaultLoadErrorHandlingPolicy() {
