@@ -103,7 +103,7 @@ public class NativePlayerPlugin extends Plugin {
 
                 DefaultHttpDataSource.Factory httpFactory = new DefaultHttpDataSource.Factory()
                         .setAllowCrossProtocolRedirects(true)
-                        .setUserAgent(headers.getOrDefault("User-Agent", "Dalvik/2.1.0 (Linux; U; Android 7.1.2; AFTMM Build/NS6711)"));
+                        .setUserAgent(headers.getOrDefault("User-Agent", defaultDeviceUserAgent()));
                 if (!headers.isEmpty()) httpFactory.setDefaultRequestProperties(headers);
 
                 MediaItem item = MediaItem.fromUri(url);
