@@ -983,6 +983,47 @@ const UserManagement = () => {
                 </div>
 
                 <div className="space-y-2">
+                  <Label>Link curto (fácil de digitar na TV)</Label>
+                  {shortSlug ? (
+                    <>
+                      <div className="flex gap-2">
+                        <Input
+                          readOnly
+                          value={shortUrlFor(shortSlug)}
+                          className="font-mono text-xs"
+                          onFocus={(e) => e.currentTarget.select()}
+                        />
+                        <Button variant="outline" size="icon" onClick={() => copyText(shortUrlFor(shortSlug), "Link curto")}>
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          title="Gerar novo código"
+                          disabled={shortLoading}
+                          onClick={async () => {
+                            if (!playlistUser) return;
+                            // remove o atual e gera outro
+                            await supabase.from("short_links").delete().eq("slug", shortSlug);
+                            setShortSlug(null);
+                            await generateShortLink();
+                          }}
+                        >
+                          <RefreshCw className={`h-4 w-4 ${shortLoading ? "animate-spin" : ""}`} />
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Redireciona para a URL completa. Código: <span className="font-mono">{shortSlug}</span>
+                      </p>
+                    </>
+                  ) : (
+                    <Button variant="outline" onClick={generateShortLink} disabled={shortLoading} className="w-full">
+                      {shortLoading ? "Gerando..." : "Gerar link curto"}
+                    </Button>
+                  )}
+                </div>
+
+                <div className="space-y-2">
                   <Label>Link HLS (usuário + senha)</Label>
                   <div className="flex gap-2">
                     <Input readOnly value={hlsUrl} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
