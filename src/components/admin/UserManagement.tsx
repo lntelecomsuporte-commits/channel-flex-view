@@ -138,6 +138,78 @@ const UserManagement = () => {
   const [activeReport, setActiveReport] = useState<ReportFilter>(null);
   const [playlistUser, setPlaylistUser] = useState<Profile | null>(null);
   const [regenerating, setRegenerating] = useState(false);
+  const [shortSlug, setShortSlug] = useState<string | null>(null);
+  const [shortLoading, setShortLoading] = useState(false);
+
+  useEffect(() => {
+    if (!playlistUser) { setShortSlug(null); return; }
+    let cancel = false;
+    (async () => {
+      const { tokenUrl } = buildPlaylistUrls(playlistUser);
+      const { data } = await supabase
+        .from("short_links")
+        .select("slug")
+        .eq("user_id", playlistUser.user_id)
+        .eq("target_url", tokenUrl)
+        .maybeSingle();
+      if (!cancel) setShortSlug(data?.slug ?? null);
+    })();
+    return () => { cancel = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playlistUser?.id, playlistUser?.playlist_token]);
+
+  const randomSlug = (len = 6) => {
+    const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
+    let out = "";
+    const buf = new Uint8Array(len);
+    crypto.getRandomValues(buf);
+    for (let i = 0; i < len; i++) out += alphabet[buf[i] % alphabet.length];
+    return out;
+  };
+
+  const shortUrlFor = (slug: string) => `${PLAYLIST_HOST}/functions/v1/s?c=${slug}`;
+
+  const generateShortLink = async () => {
+    if (!playlistUser || shortLoading) return;
+    setShortLoading(true);
+    try {
+      const { tokenUrl } = buildPlaylistUrls(playlistUser);
+      // Reaproveita se já existir
+      const { data: existing } = await supabase
+        .from("short_links")
+        .select("slug")
+        .eq("user_id", playlistUser.user_id)
+        .eq("target_url", tokenUrl)
+        .maybeSingle();
+      if (existing?.slug) {
+        setShortSlug(existing.slug);
+        toast.success("Link curto já existia — reutilizado");
+        return;
+      }
+      // Tenta até 5 vezes em caso de colisão
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const slug = randomSlug(6);
+        const { error } = await supabase.from("short_links").insert({
+          slug,
+          target_url: tokenUrl,
+          user_id: playlistUser.user_id,
+        });
+        if (!error) {
+          setShortSlug(slug);
+          toast.success("Link curto gerado");
+          return;
+        }
+        if (!error.message?.toLowerCase().includes("duplicate")) {
+          throw error;
+        }
+      }
+      throw new Error("Não foi possível gerar slug único");
+    } catch (e) {
+      toast.error("Erro ao gerar link curto: " + (e as Error).message);
+    } finally {
+      setShortLoading(false);
+    }
+  };
 
   const buildPlaylistUrls = (p: Profile) => {
     const token = p.playlist_token ?? "";
