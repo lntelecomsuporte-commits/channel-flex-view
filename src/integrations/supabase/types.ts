@@ -418,6 +418,36 @@ export type Database = {
         }
         Relationships: []
       }
+      short_links: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          hit_count: number
+          last_hit_at: string | null
+          slug: string
+          target_url: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          hit_count?: number
+          last_hit_at?: string | null
+          slug: string
+          target_url: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          hit_count?: number
+          last_hit_at?: string | null
+          slug?: string
+          target_url?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       user_category_access: {
         Row: {
           category_id: string
