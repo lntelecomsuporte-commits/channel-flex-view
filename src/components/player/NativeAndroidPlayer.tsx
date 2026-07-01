@@ -17,6 +17,7 @@ interface Props {
   useProxyToken?: boolean;
   forceProxyNative?: boolean;
   backupStreamUrls?: string[] | null;
+  preferSoftwareDecoder?: boolean;
 }
 
 const detectType = (url: string): NativeStreamType => {
