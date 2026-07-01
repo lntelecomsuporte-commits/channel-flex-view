@@ -550,6 +550,19 @@ const AdminPanel = () => {
                       certificado ruim, HTTP cleartext, ou rotas instáveis. <strong>Aumenta latência e banda
                       do servidor.</strong> Ignorado na web.
                     </p>
+                </div>
+                <div className="flex items-start gap-2 rounded-md border border-border bg-muted/30 p-3">
+                  <Switch
+                    checked={channelForm.prefer_sw_decoder}
+                    onCheckedChange={(v) => setChannelForm((f) => ({ ...f, prefer_sw_decoder: v }))}
+                  />
+                  <div className="space-y-1">
+                    <Label className="cursor-pointer">🧩 Preferir decoder de software (H.264)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Apenas no APK Android. Marque se o vídeo aparece <strong>verde ou com faixas/blocos</strong>
+                      {" "}no receptor (bug do decoder de hardware com o codec deste canal — comum em 1080i).
+                      Aumenta uso de CPU, então ative só nos canais afetados.
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3">
