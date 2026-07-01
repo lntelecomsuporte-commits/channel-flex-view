@@ -79,6 +79,11 @@ public class NativePlayerPlugin extends Plugin {
     private static final long STALL_TIMEOUT_MS = 8000L;
     private static final int MAX_AUTO_RETRIES = 6;
 
+    // Preferência de decoder da instância atual do ExoPlayer. Como o
+    // RenderersFactory é fixado na construção do player, se a flag mudar
+    // entre canais precisamos recriar o player.
+    private boolean currentPreferSwDecoder = false;
+
     // UA: deixamos o ExoPlayer/Media3 preencher o User-Agent default
     // (ex.: "media3/1.x.x (Linux;Android 11) ExoPlayerLib/..."), igual ao
     // app android-native. Alguns provedores (ex.: Olé) bloqueiam UA Dalvik
