@@ -899,6 +899,7 @@ const PlayerPage = () => {
               channelId={currentChannel.id}
               useProxyToken={(currentChannel as any).use_proxy_token ?? false}
               forceProxyNative={(currentChannel as any).force_proxy_native ?? false}
+              preferSoftwareDecoder={(currentChannel as any).prefer_sw_decoder ?? false}
               backupStreamUrls={(currentChannel as any).backup_stream_urls ?? null}
             />
           ) : (
