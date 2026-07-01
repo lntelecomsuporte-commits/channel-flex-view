@@ -550,6 +550,7 @@ const AdminPanel = () => {
                       certificado ruim, HTTP cleartext, ou rotas instáveis. <strong>Aumenta latência e banda
                       do servidor.</strong> Ignorado na web.
                     </p>
+                  </div>
                 </div>
                 <div className="flex items-start gap-2 rounded-md border border-border bg-muted/30 p-3">
                   <Switch
