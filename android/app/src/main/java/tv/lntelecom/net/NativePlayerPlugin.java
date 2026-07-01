@@ -90,6 +90,32 @@ public class NativePlayerPlugin extends Plugin {
     // mas aceitam o UA default do Media3 — manter este comportamento
     // garante paridade com o player nativo que funciona nesses canais.
 
+    /**
+     * MediaCodecSelector que reordena os decoders retornados pelo default para
+     * priorizar decoders de software (nomes começando com "OMX.google.",
+     * "c2.android." ou contendo ".sw."/"software"). Contorna bugs do decoder
+     * de hardware H.264 em alguns receptores (vídeo verde/faixas em certos
+     * canais, ex.: 1080i entrelaçado).
+     */
+    private static final MediaCodecSelector SOFTWARE_FIRST_SELECTOR =
+            (mimeType, requiresSecure, requiresTunneling) -> {
+                List<MediaCodecInfo> list = new ArrayList<>(
+                        MediaCodecSelector.DEFAULT.getDecoderInfos(
+                                mimeType, requiresSecure, requiresTunneling));
+                Collections.sort(list, (a, b) ->
+                        Boolean.compare(isHardwareDecoder(a.name), isHardwareDecoder(b.name)));
+                return list;
+            };
+
+    private static boolean isHardwareDecoder(String name) {
+        if (name == null) return true;
+        String n = name.toLowerCase(Locale.ROOT);
+        return !(n.startsWith("omx.google.")
+                || n.startsWith("c2.android.")
+                || n.contains(".sw.")
+                || n.contains("software"));
+    }
+
     @PluginMethod
     public void load(PluginCall call) {
         final String url = call.getString("url");
