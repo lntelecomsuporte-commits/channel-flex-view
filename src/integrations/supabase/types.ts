@@ -96,6 +96,7 @@ export type Database = {
           logo_source_url: string | null
           logo_url: string | null
           name: string
+          prefer_sw_decoder: boolean
           stream_format: string
           stream_url: string
           updated_at: string
@@ -119,6 +120,7 @@ export type Database = {
           logo_source_url?: string | null
           logo_url?: string | null
           name: string
+          prefer_sw_decoder?: boolean
           stream_format?: string
           stream_url: string
           updated_at?: string
@@ -142,6 +144,7 @@ export type Database = {
           logo_source_url?: string | null
           logo_url?: string | null
           name?: string
+          prefer_sw_decoder?: boolean
           stream_format?: string
           stream_url?: string
           updated_at?: string
