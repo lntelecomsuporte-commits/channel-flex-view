@@ -30,7 +30,10 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.mediacodec.MediaCodecInfo as ExoMediaCodecInfo
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.recyclerview.widget.LinearLayoutManager
 import coil.load
 import kotlinx.coroutines.Dispatchers
@@ -83,6 +86,9 @@ class PlayerActivity : AppCompatActivity() {
     private val channelChangeDedupMs = 40L
     private var screenOffReceiver: BroadcastReceiver? = null
     private var shuttingDown = false
+    // Preferência de decoder da instância atual do ExoPlayer. Se o próximo
+    // canal exigir preferência diferente, o player é recriado em loadCurrent().
+    private var currentPreferSwDecoder = false
 
     private val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
 
@@ -260,6 +266,10 @@ class PlayerActivity : AppCompatActivity() {
     private val isListOpen: Boolean get() = b.listOverlay.visibility == View.VISIBLE
 
     private fun initPlayer() {
+        initPlayer(currentPreferSwDecoder)
+    }
+
+    private fun initPlayer(preferSwDecoder: Boolean) {
         // Buffer mais conservador para TV ao vivo: não força ficar colado no
         // live edge e tenta manter uma folga maior antes de tocar/rebufferizar.
         val loadControl = DefaultLoadControl.Builder()
@@ -271,7 +281,14 @@ class PlayerActivity : AppCompatActivity() {
             )
             .build()
 
-        val p = ExoPlayer.Builder(this)
+        currentPreferSwDecoder = preferSwDecoder
+        val renderersFactory = DefaultRenderersFactory(this)
+            .setEnableDecoderFallback(true)
+            .setMediaCodecSelector(
+                if (preferSwDecoder) SOFTWARE_FIRST_SELECTOR else MediaCodecSelector.DEFAULT
+            )
+
+        val p = ExoPlayer.Builder(this, renderersFactory)
             .setLoadControl(loadControl)
             .build()
         p.addListener(object : Player.Listener {
@@ -301,9 +318,50 @@ class PlayerActivity : AppCompatActivity() {
         player = p
     }
 
+    private fun rebuildPlayerIfDecoderChanged(preferSwDecoder: Boolean) {
+        if (player != null && preferSwDecoder == currentPreferSwDecoder) return
+        android.util.Log.i("LNTV",
+            "recriando ExoPlayer: preferSwDecoder $currentPreferSwDecoder -> $preferSwDecoder")
+        try {
+            player?.stop()
+            player?.release()
+        } catch (_: Exception) {}
+        player = null
+        initPlayer(preferSwDecoder)
+    }
+
+    companion object {
+        /**
+         * Reordena decoders para colocar decoders de software na frente
+         * (OMX.google.*, c2.android.*, .sw., "software"). Contorna bugs do
+         * decoder HW H.264 (vídeo verde/faixas em alguns canais 1080i).
+         */
+        private val SOFTWARE_FIRST_SELECTOR = MediaCodecSelector { mimeType, requiresSecure, requiresTunneling ->
+            val list: MutableList<ExoMediaCodecInfo> =
+                MediaCodecSelector.DEFAULT.getDecoderInfos(mimeType, requiresSecure, requiresTunneling).toMutableList()
+            list.sortWith(Comparator { a, b ->
+                java.lang.Boolean.compare(isHardwareDecoder(a.name), isHardwareDecoder(b.name))
+            })
+            list
+        }
+
+        private fun isHardwareDecoder(name: String?): Boolean {
+            if (name == null) return true
+            val n = name.lowercase(Locale.ROOT)
+            return !(n.startsWith("omx.google.")
+                    || n.startsWith("c2.android.")
+                    || n.contains(".sw.")
+                    || n.contains("software"))
+        }
+    }
+
     private fun loadCurrent() {
-        val p = player ?: return
         val c = channels.getOrNull(index) ?: return
+        // Se o canal exige preferência de decoder diferente, recria o player
+        // (RenderersFactory é fixado na construção). Faz isso ANTES de qualquer
+        // uso de `player` no restante da função.
+        rebuildPlayerIfDecoderChanged(c.preferSwDecoder)
+        val p = player ?: return
         if (maybeRequestPin(c)) return
         lastSafeIndex = index
         // Cancela qualquer callback pendente do canal anterior:

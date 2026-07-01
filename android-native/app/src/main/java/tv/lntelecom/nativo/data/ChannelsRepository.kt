@@ -73,7 +73,8 @@ class ChannelsRepository(private val sb: SupabaseClient) {
                             isActive = o.optBoolean("is_active", true),
                             updatedAt = o.optString("updated_at"),
                             forceProxyNative = o.optBoolean("force_proxy_native", false),
-                            isAdult = o.optBoolean("is_adult", false)
+                            isAdult = o.optBoolean("is_adult", false),
+                            preferSwDecoder = o.optBoolean("prefer_sw_decoder", false)
                         )
                     )
                 }

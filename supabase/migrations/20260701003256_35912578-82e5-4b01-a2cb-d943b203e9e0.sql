@@ -1,0 +1,1 @@
+ALTER TABLE public.channels ADD COLUMN IF NOT EXISTS prefer_sw_decoder boolean NOT NULL DEFAULT false;

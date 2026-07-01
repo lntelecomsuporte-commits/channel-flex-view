@@ -31,7 +31,7 @@ import { getLocalFunctionUrl, LOCAL_SUPABASE_PUBLISHABLE_KEY } from "@/lib/local
 const emptyChannelForm = {
   name: "", channel_number: "", stream_url: "", backup_stream_urls: "", logo_url: "", category_id: "", is_active: true,
   epg_type: "", epg_url: "", epg_alt_text: "", epg_channel_id: "", epg_grab_logo: false, epg_show_synopsis: false,
-  use_proxy_token: false, force_proxy_native: false, is_adult: false,
+  use_proxy_token: false, force_proxy_native: false, prefer_sw_decoder: false, is_adult: false,
 };
 
 const AdminPanel = () => {
@@ -165,6 +165,7 @@ const AdminPanel = () => {
       epg_show_synopsis: channelForm.epg_show_synopsis,
       use_proxy_token: channelForm.use_proxy_token,
       force_proxy_native: channelForm.force_proxy_native,
+      prefer_sw_decoder: channelForm.prefer_sw_decoder,
       is_adult: channelForm.is_adult,
     };
     if (isExternalLogo) {
@@ -243,6 +244,7 @@ const AdminPanel = () => {
       epg_show_synopsis: (ch as any).epg_show_synopsis ?? false,
       use_proxy_token: (ch as any).use_proxy_token ?? false,
       force_proxy_native: (ch as any).force_proxy_native ?? false,
+      prefer_sw_decoder: (ch as any).prefer_sw_decoder ?? false,
       is_adult: (ch as any).is_adult ?? false,
     });
     requestAnimationFrame(() => {
@@ -547,6 +549,20 @@ const AdminPanel = () => {
                       Apenas no APK. Passa o stream pelo proxy local sem assinatura — útil pra canais com
                       certificado ruim, HTTP cleartext, ou rotas instáveis. <strong>Aumenta latência e banda
                       do servidor.</strong> Ignorado na web.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 rounded-md border border-border bg-muted/30 p-3">
+                  <Switch
+                    checked={channelForm.prefer_sw_decoder}
+                    onCheckedChange={(v) => setChannelForm((f) => ({ ...f, prefer_sw_decoder: v }))}
+                  />
+                  <div className="space-y-1">
+                    <Label className="cursor-pointer">🧩 Preferir decoder de software (H.264)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Apenas no APK Android. Marque se o vídeo aparece <strong>verde ou com faixas/blocos</strong>
+                      {" "}no receptor (bug do decoder de hardware com o codec deste canal — comum em 1080i).
+                      Aumenta uso de CPU, então ative só nos canais afetados.
                     </p>
                   </div>
                 </div>

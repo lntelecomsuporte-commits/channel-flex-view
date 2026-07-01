@@ -19,9 +19,13 @@ import androidx.media3.common.TrackSelectionParameters;
 import androidx.media3.common.Tracks;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.DefaultHttpDataSource;
+import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.RenderersFactory;
 import androidx.media3.exoplayer.analytics.AnalyticsListener;
 import androidx.media3.exoplayer.hls.HlsMediaSource;
+import androidx.media3.exoplayer.mediacodec.MediaCodecInfo;
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector;
 import androidx.media3.exoplayer.source.MediaSource;
 import androidx.media3.exoplayer.source.ProgressiveMediaSource;
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter;
@@ -75,17 +79,49 @@ public class NativePlayerPlugin extends Plugin {
     private static final long STALL_TIMEOUT_MS = 8000L;
     private static final int MAX_AUTO_RETRIES = 6;
 
+    // Preferência de decoder da instância atual do ExoPlayer. Como o
+    // RenderersFactory é fixado na construção do player, se a flag mudar
+    // entre canais precisamos recriar o player.
+    private boolean currentPreferSwDecoder = false;
+
     // UA: deixamos o ExoPlayer/Media3 preencher o User-Agent default
     // (ex.: "media3/1.x.x (Linux;Android 11) ExoPlayerLib/..."), igual ao
     // app android-native. Alguns provedores (ex.: Olé) bloqueiam UA Dalvik
     // mas aceitam o UA default do Media3 — manter este comportamento
     // garante paridade com o player nativo que funciona nesses canais.
 
+    /**
+     * MediaCodecSelector que reordena os decoders retornados pelo default para
+     * priorizar decoders de software (nomes começando com "OMX.google.",
+     * "c2.android." ou contendo ".sw."/"software"). Contorna bugs do decoder
+     * de hardware H.264 em alguns receptores (vídeo verde/faixas em certos
+     * canais, ex.: 1080i entrelaçado).
+     */
+    private static final MediaCodecSelector SOFTWARE_FIRST_SELECTOR =
+            (mimeType, requiresSecure, requiresTunneling) -> {
+                List<MediaCodecInfo> list = new ArrayList<>(
+                        MediaCodecSelector.DEFAULT.getDecoderInfos(
+                                mimeType, requiresSecure, requiresTunneling));
+                Collections.sort(list, (a, b) ->
+                        Boolean.compare(isHardwareDecoder(a.name), isHardwareDecoder(b.name)));
+                return list;
+            };
+
+    private static boolean isHardwareDecoder(String name) {
+        if (name == null) return true;
+        String n = name.toLowerCase(Locale.ROOT);
+        return !(n.startsWith("omx.google.")
+                || n.startsWith("c2.android.")
+                || n.contains(".sw.")
+                || n.contains("software"));
+    }
+
     @PluginMethod
     public void load(PluginCall call) {
         final String url = call.getString("url");
         final String type = call.getString("type", "hls");
         final JSObject headersObj = call.getObject("headers", new JSObject());
+        final boolean preferSw = Boolean.TRUE.equals(call.getBoolean("preferSoftwareDecoder", false));
         if (url == null || url.isEmpty()) {
             call.reject("url required");
             return;
@@ -104,7 +140,14 @@ public class NativePlayerPlugin extends Plugin {
 
         getActivity().runOnUiThread(() -> {
             try {
-                ensurePlayer();
+                // Se a preferência de decoder mudou em relação ao player atual,
+                // recria a instância (RenderersFactory é fixado na construção).
+                if (player != null && preferSw != currentPreferSwDecoder) {
+                    android.util.Log.i("NativePlayer",
+                        "recriando ExoPlayer: preferSwDecoder " + currentPreferSwDecoder + " -> " + preferSw);
+                    releasePlayer();
+                }
+                ensurePlayer(preferSw);
 
                 // Zera contadores ao trocar de canal
                 totalBytesTransferred = 0L;
@@ -386,6 +429,10 @@ public class NativePlayerPlugin extends Plugin {
     }
 
     private void ensurePlayer() {
+        ensurePlayer(currentPreferSwDecoder);
+    }
+
+    private void ensurePlayer(boolean preferSwDecoder) {
         if (player != null) return;
 
         bandwidthMeter = new DefaultBandwidthMeter.Builder(getContext()).build();
@@ -393,7 +440,14 @@ public class NativePlayerPlugin extends Plugin {
         bandwidthMeter.addEventListener(new Handler(Looper.getMainLooper()),
                 (elapsedMs, bytes, bitrate) -> totalBytesTransferred += bytes);
 
-        player = new ExoPlayer.Builder(getContext())
+        currentPreferSwDecoder = preferSwDecoder;
+        RenderersFactory renderersFactory = new DefaultRenderersFactory(getContext())
+                .setEnableDecoderFallback(true)
+                .setMediaCodecSelector(preferSwDecoder
+                        ? SOFTWARE_FIRST_SELECTOR
+                        : MediaCodecSelector.DEFAULT);
+
+        player = new ExoPlayer.Builder(getContext(), renderersFactory)
                 .setBandwidthMeter(bandwidthMeter)
                 .build();
 

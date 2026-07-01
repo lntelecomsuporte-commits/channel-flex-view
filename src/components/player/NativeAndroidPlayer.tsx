@@ -17,6 +17,7 @@ interface Props {
   useProxyToken?: boolean;
   forceProxyNative?: boolean;
   backupStreamUrls?: string[] | null;
+  preferSoftwareDecoder?: boolean;
 }
 
 const detectType = (url: string): NativeStreamType => {
@@ -34,7 +35,7 @@ const detectType = (url: string): NativeStreamType => {
  * Toda a UI (controles, EPG, OSD) continua sendo HTML por cima.
  */
 const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
-  ({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, forceProxyNative = false, backupStreamUrls = null }, ref) => {
+  ({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, forceProxyNative = false, backupStreamUrls = null, preferSoftwareDecoder = false }, ref) => {
     const [backupIndex, setBackupIndex] = useState(-1);
     const backups = backupStreamUrls?.filter((u) => !!u && u.trim().length > 0) ?? [];
     const activeStreamUrl = backupIndex < 0 ? streamUrl : (backups[backupIndex] ?? streamUrl);
@@ -97,6 +98,7 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
             // Sem User-Agent custom: deixa o plugin nativo usar o UA real do device
             // (System.getProperty("http.agent")), pra cada receptor mandar o próprio.
             headers: {},
+            preferSoftwareDecoder,
           });
           if (autoPlay) await NativePlayer.play();
         } catch (e: any) {
@@ -105,7 +107,7 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
         }
       })();
       return () => { cancelled = true; };
-    }, [activeStreamUrl, useProxyToken, forceProxyNative, channelId, autoPlay]);
+    }, [activeStreamUrl, useProxyToken, forceProxyNative, channelId, autoPlay, preferSoftwareDecoder]);
 
     // Unmount: derruba player + restaura WebView preto + remove flag transparente.
     useEffect(() => {

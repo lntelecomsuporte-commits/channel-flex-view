@@ -1,37 +1,87 @@
+# Fix: canais com vídeo verde/faixas no Android (ex.: TV Senado)
+
 ## Diagnóstico
 
-Comparando o player do **android-native** (que abre os canais da Olé) com o plugin **release/Capacitor** (que não abre):
+Áudio ok + vídeo verde com faixas apenas no APK Android (funciona no navegador) = bug do **decoder H.264 por hardware** (MediaCodec) do receptor com esse stream. Causas típicas: 1080i entrelaçado, perfil High incomum, ou SEI/B-frames que travam o decoder HW do chip (Amlogic/MTK/Fire TV). O navegador não sofre porque usa decoder de software.
 
-| | android-native (funciona) | release/Capacitor (bloqueia) |
-|---|---|---|
-| ExoPlayer.Builder | default | default |
-| HttpDataSource.Factory | **não define nenhuma** — usa o `DefaultDataSource` interno do ExoPlayer | `DefaultHttpDataSource.Factory().setUserAgent("Dalvik/2.1.0 …")` |
-| User-Agent enviado | UA default do Media3 (ex.: `media3/1.4.1 (Linux;Android 11) ExoPlayerLib/2.19`) | `Dalvik/2.1.0 (Linux; U; Android …; … Build/…)` |
-| Headers extras | nenhum | os do JS (sem `User-Agent`) |
+Solução: permitir marcar canais problemáticos para o ExoPlayer preferir **decoder de software** (OMX.google.* / c2.android.*). Fica cirúrgico — só quem precisa paga o custo de CPU.
 
-A origem da Olé está **bloqueando o UA Dalvik** (provavelmente whitelist que aceita só UAs estilo "ExoPlayer/Media3" ou Stagefright). Mudar o UA pro do "app oficial da Olé" também é caminho válido, mas o mais simples e que já sabemos que funciona é deixar o ExoPlayer mandar o **mesmo UA default do Media3** que o app android-native já usa.
+## Escopo
 
-## Mudança
+Aplicar nos dois APKs: `android/` (Capacitor release) e `android-native/`.
 
-Em `android/app/src/main/java/tv/lntelecom/net/NativePlayerPlugin.java`, no método `load(...)`:
+## Passos
 
-1. Remover a chamada `.setUserAgent(defaultDeviceUserAgent())` do `DefaultHttpDataSource.Factory` — o Media3 já preenche um UA default próprio (`media3/<versão> …`) que é exatamente o que o android-native envia hoje e a Olé aceita.
-2. Manter `.setAllowCrossProtocolRedirects(true)` e o `setDefaultRequestProperties(headers)` (sem `User-Agent`, que já filtramos do JS).
-3. Aplicar a mesma remoção no segundo `DefaultHttpDataSource.Factory` (usado no auto-retry do stall watchdog).
-4. Apagar o método `defaultDeviceUserAgent()` (vira código morto).
+### 1. Banco (migration)
 
-Trade-off pra confirmar com você antes de eu editar: isso **abre mão do UA Dalvik com modelo do receptor** (`AFTMM Build/NS6711` etc.) que você pediu antes. O servidor passa a ver `media3/1.x.x (Linux;Android 11) ExoPlayerLib/…` em vez do modelo do device. Se você precisa identificar o receptor no log do Flussonic E ao mesmo tempo destravar a Olé, a alternativa é:
+- `ALTER TABLE public.channels ADD COLUMN prefer_sw_decoder boolean NOT NULL DEFAULT false;`
 
-- **Opção A (recomendada):** UA default do ExoPlayer pra todo mundo, igual ao android-native. Resolve a Olé. Perde o modelo no log.
-- **Opção B:** Adicionar uma flag por canal no admin (`exoplayer_default_ua boolean`) e só nesses canais da Olé pular o UA Dalvik. Mantém Dalvik nos outros, usa default só onde precisa. Mais código (migration + UI admin + passar a flag JS→plugin), mas preserva o UA Dalvik nos demais canais.
-- **Opção C:** Trocar o UA pro UA real do app oficial da Olé (se você capturar). Resolve, mas todo receptor manda o mesmo UA fixo.
+### 2. Admin UI
 
-Me diga qual opção seguir (ou se prefere A direto) que eu implemento.
+- Em `src/components/admin/` (form de canal): adicionar checkbox **"Preferir decoder de software (H.264)"** com dica "Marque se o vídeo aparece verde/com faixas no Android".
+- Persistir `prefer_sw_decoder` junto com os outros campos.
 
-## Após o build
+### 3. Bridge JS → plugin nativo
 
-Como mexe em `android/**`, o GitHub Actions gera o APK release. No servidor:
+- `src/plugins/native-player.ts`: adicionar `preferSoftwareDecoder?: boolean` em `NativePlayerLoadOptions`.
+- `src/components/player/NativeAndroidPlayer.tsx`: aceitar prop `preferSoftwareDecoder` e repassar em `NativePlayer.load({...})`.
+- `src/pages/PlayerPage.tsx` (ou onde o canal é resolvido pro player): passar `channel.prefer_sw_decoder` para o `NativeAndroidPlayer`.
+
+### 4. Plugin nativo Capacitor (`android/`)
+
+Em `android/app/src/main/java/tv/lntelecom/net/NativePlayerPlugin.java`:
+
+- Ler `preferSoftwareDecoder` do call em `load(...)`.
+- Se true, construir o `ExoPlayer.Builder` com um `DefaultRenderersFactory` configurado com:
+  - `setEnableDecoderFallback(true)`
+  - `setMediaCodecSelector(preferSoftwareSelector)` — selector customizado que reordena a lista de `MediaCodecInfo` para colocar antes os decoders cujo `name` começa com `OMX.google.`, `c2.android.` ou contém `.sw.` / `.software`.
+- Se false (default), comportamento atual (HW).
+
+### 5. android-native (`android-native/`)
+
+Espelhar a mesma lógica no player Kotlin:
+- Ler `channel.preferSwDecoder` do modelo `Channel`.
+- Adicionar `preferSwDecoder: Boolean = false` no `data class Channel` e no mapeamento do repositório.
+- Aplicar o mesmo `DefaultRenderersFactory` + selector custom ao montar o `ExoPlayer`.
+
+### 6. Marcar TV Senado
+
+Após deploy, o admin marca o canal TV Senado (e outros que apresentarem o mesmo sintoma) no painel.
+
+## Detalhes técnicos
+
+```java
+// Selector: coloca SW decoders na frente
+MediaCodecSelector preferSw = (mimeType, requiresSecure, requiresTunneling) -> {
+    List<MediaCodecInfo> list = new ArrayList<>(
+        MediaCodecSelector.DEFAULT.getDecoderInfos(mimeType, requiresSecure, requiresTunneling)
+    );
+    Collections.sort(list, (a, b) -> Boolean.compare(isHw(b.name), isHw(a.name))); // SW antes
+    return list;
+};
+static boolean isHw(String n) {
+    String s = n.toLowerCase();
+    return !(s.startsWith("omx.google.") || s.startsWith("c2.android.") || s.contains(".sw."));
+}
+
+RenderersFactory rf = new DefaultRenderersFactory(ctx)
+    .setEnableDecoderFallback(true)
+    .setMediaCodecSelector(preferSw);
+
+ExoPlayer player = new ExoPlayer.Builder(ctx, rf).build();
+```
+
+Observações:
+- `setEnableDecoderFallback(true)` já faz o ExoPlayer tentar o próximo decoder se o primeiro falhar — dá robustez extra.
+- Não mexer no HttpDataSource / User-Agent (mantém o fix anterior da Olé).
+- Custo: decodificar 1080p H.264 em SW num Fire TV Stick é viável; se o receptor for muito fraco (Fire TV Stick 1ª gen), pode gaguejar — por isso a flag é por canal.
+
+## Após aprovar
+
+Migration → tipos regenerados → edito código → GitHub Actions gera APKs (release e android-native) porque mexe em `android/**` e `android-native/**`. No servidor:
 
 ```bash
-cd /opt/lntv-frontend && git pull
+cd /opt/lntv-frontend && git pull && npm run build && rsync -a --delete --exclude logos dist/ /var/www/lntv/
 ```
+
+Depois o admin marca **TV Senado** com "Preferir decoder de software" e reabre no APK — vídeo deve normalizar.

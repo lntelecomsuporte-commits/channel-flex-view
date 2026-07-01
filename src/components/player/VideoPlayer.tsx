@@ -44,6 +44,9 @@ interface VideoPlayerProps {
    *  na URL principal (erro fatal não-recuperável), avança automaticamente
    *  para a próxima URL desta lista. */
   backupStreamUrls?: string[] | null;
+  /** APK Android apenas — pede pro ExoPlayer preferir decoder de software
+   *  H.264. Contorna vídeo verde/faixas causado por bug do decoder HW. */
+  preferSoftwareDecoder?: boolean;
 }
 
 export interface VideoPlayerHandle {

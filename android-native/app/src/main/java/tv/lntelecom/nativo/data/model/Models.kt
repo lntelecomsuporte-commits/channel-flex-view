@@ -14,7 +14,8 @@ data class Channel(
     val isActive: Boolean,
     val updatedAt: String?,
     val forceProxyNative: Boolean = false,
-    val isAdult: Boolean = false
+    val isAdult: Boolean = false,
+    val preferSwDecoder: Boolean = false
 )
 
 data class Category(
