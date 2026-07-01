@@ -35,7 +35,7 @@ const detectType = (url: string): NativeStreamType => {
  * Toda a UI (controles, EPG, OSD) continua sendo HTML por cima.
  */
 const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
-  ({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, forceProxyNative = false, backupStreamUrls = null }, ref) => {
+  ({ streamUrl, autoPlay = true, channelId = null, useProxyToken = false, forceProxyNative = false, backupStreamUrls = null, preferSoftwareDecoder = false }, ref) => {
     const [backupIndex, setBackupIndex] = useState(-1);
     const backups = backupStreamUrls?.filter((u) => !!u && u.trim().length > 0) ?? [];
     const activeStreamUrl = backupIndex < 0 ? streamUrl : (backups[backupIndex] ?? streamUrl);
