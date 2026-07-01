@@ -95,6 +95,7 @@ public class NativePlayerPlugin extends Plugin {
         final String url = call.getString("url");
         final String type = call.getString("type", "hls");
         final JSObject headersObj = call.getObject("headers", new JSObject());
+        final boolean preferSw = Boolean.TRUE.equals(call.getBoolean("preferSoftwareDecoder", false));
         if (url == null || url.isEmpty()) {
             call.reject("url required");
             return;
@@ -113,7 +114,14 @@ public class NativePlayerPlugin extends Plugin {
 
         getActivity().runOnUiThread(() -> {
             try {
-                ensurePlayer();
+                // Se a preferência de decoder mudou em relação ao player atual,
+                // recria a instância (RenderersFactory é fixado na construção).
+                if (player != null && preferSw != currentPreferSwDecoder) {
+                    android.util.Log.i("NativePlayer",
+                        "recriando ExoPlayer: preferSwDecoder " + currentPreferSwDecoder + " -> " + preferSw);
+                    releasePlayer();
+                }
+                ensurePlayer(preferSw);
 
                 // Zera contadores ao trocar de canal
                 totalBytesTransferred = 0L;
