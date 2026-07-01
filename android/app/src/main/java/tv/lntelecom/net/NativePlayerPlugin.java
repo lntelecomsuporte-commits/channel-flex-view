@@ -403,6 +403,10 @@ public class NativePlayerPlugin extends Plugin {
     }
 
     private void ensurePlayer() {
+        ensurePlayer(currentPreferSwDecoder);
+    }
+
+    private void ensurePlayer(boolean preferSwDecoder) {
         if (player != null) return;
 
         bandwidthMeter = new DefaultBandwidthMeter.Builder(getContext()).build();
@@ -410,7 +414,14 @@ public class NativePlayerPlugin extends Plugin {
         bandwidthMeter.addEventListener(new Handler(Looper.getMainLooper()),
                 (elapsedMs, bytes, bitrate) -> totalBytesTransferred += bytes);
 
-        player = new ExoPlayer.Builder(getContext())
+        currentPreferSwDecoder = preferSwDecoder;
+        RenderersFactory renderersFactory = new DefaultRenderersFactory(getContext())
+                .setEnableDecoderFallback(true)
+                .setMediaCodecSelector(preferSwDecoder
+                        ? SOFTWARE_FIRST_SELECTOR
+                        : MediaCodecSelector.DEFAULT);
+
+        player = new ExoPlayer.Builder(getContext(), renderersFactory)
                 .setBandwidthMeter(bandwidthMeter)
                 .build();
 
