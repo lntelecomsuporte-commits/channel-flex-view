@@ -98,6 +98,7 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
             // Sem User-Agent custom: deixa o plugin nativo usar o UA real do device
             // (System.getProperty("http.agent")), pra cada receptor mandar o próprio.
             headers: {},
+            preferSoftwareDecoder,
           });
           if (autoPlay) await NativePlayer.play();
         } catch (e: any) {
@@ -106,7 +107,7 @@ const NativeAndroidPlayer = forwardRef<VideoPlayerHandle, Props>(
         }
       })();
       return () => { cancelled = true; };
-    }, [activeStreamUrl, useProxyToken, forceProxyNative, channelId, autoPlay]);
+    }, [activeStreamUrl, useProxyToken, forceProxyNative, channelId, autoPlay, preferSoftwareDecoder]);
 
     // Unmount: derruba player + restaura WebView preto + remove flag transparente.
     useEffect(() => {
