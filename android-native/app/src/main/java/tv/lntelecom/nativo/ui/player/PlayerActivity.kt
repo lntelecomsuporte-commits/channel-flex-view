@@ -30,7 +30,10 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.mediacodec.MediaCodecInfo as ExoMediaCodecInfo
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.recyclerview.widget.LinearLayoutManager
 import coil.load
 import kotlinx.coroutines.Dispatchers
