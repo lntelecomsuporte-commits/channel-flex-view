@@ -86,6 +86,9 @@ class PlayerActivity : AppCompatActivity() {
     private val channelChangeDedupMs = 40L
     private var screenOffReceiver: BroadcastReceiver? = null
     private var shuttingDown = false
+    // Preferência de decoder da instância atual do ExoPlayer. Se o próximo
+    // canal exigir preferência diferente, o player é recriado em loadCurrent().
+    private var currentPreferSwDecoder = false
 
     private val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
 
