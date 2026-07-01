@@ -31,7 +31,7 @@ import { getLocalFunctionUrl, LOCAL_SUPABASE_PUBLISHABLE_KEY } from "@/lib/local
 const emptyChannelForm = {
   name: "", channel_number: "", stream_url: "", backup_stream_urls: "", logo_url: "", category_id: "", is_active: true,
   epg_type: "", epg_url: "", epg_alt_text: "", epg_channel_id: "", epg_grab_logo: false, epg_show_synopsis: false,
-  use_proxy_token: false, force_proxy_native: false, is_adult: false,
+  use_proxy_token: false, force_proxy_native: false, prefer_sw_decoder: false, is_adult: false,
 };
 
 const AdminPanel = () => {
