@@ -356,8 +356,12 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun loadCurrent() {
-        val p = player ?: return
         val c = channels.getOrNull(index) ?: return
+        // Se o canal exige preferência de decoder diferente, recria o player
+        // (RenderersFactory é fixado na construção). Faz isso ANTES de qualquer
+        // uso de `player` no restante da função.
+        rebuildPlayerIfDecoderChanged(c.preferSwDecoder)
+        val p = player ?: return
         if (maybeRequestPin(c)) return
         lastSafeIndex = index
         // Cancela qualquer callback pendente do canal anterior:
