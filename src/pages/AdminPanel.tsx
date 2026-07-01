@@ -244,6 +244,7 @@ const AdminPanel = () => {
       epg_show_synopsis: (ch as any).epg_show_synopsis ?? false,
       use_proxy_token: (ch as any).use_proxy_token ?? false,
       force_proxy_native: (ch as any).force_proxy_native ?? false,
+      prefer_sw_decoder: (ch as any).prefer_sw_decoder ?? false,
       is_adult: (ch as any).is_adult ?? false,
     });
     requestAnimationFrame(() => {
