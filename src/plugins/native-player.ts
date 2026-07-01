@@ -13,6 +13,10 @@ export interface NativePlayerLoadOptions {
   url: string;
   type?: NativeStreamType;
   headers?: Record<string, string>;
+  /** Quando true, o ExoPlayer prefere decoders de software H.264
+   *  (OMX.google.* / c2.android.*). Contorna bugs de decoder HW que
+   *  causam vídeo verde/faixas em alguns canais. Custo: mais CPU. */
+  preferSoftwareDecoder?: boolean;
 }
 
 export type NativePlayerEvent = "playing" | "buffering" | "ended" | "error";
