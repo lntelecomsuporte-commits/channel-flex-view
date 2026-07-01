@@ -165,6 +165,7 @@ const AdminPanel = () => {
       epg_show_synopsis: channelForm.epg_show_synopsis,
       use_proxy_token: channelForm.use_proxy_token,
       force_proxy_native: channelForm.force_proxy_native,
+      prefer_sw_decoder: channelForm.prefer_sw_decoder,
       is_adult: channelForm.is_adult,
     };
     if (isExternalLogo) {
