@@ -1,87 +1,46 @@
-# Fix: canais com vídeo verde/faixas no Android (ex.: TV Senado)
+Nenhuma alteração de código nesta rodada — o usuário só queria entender o comportamento.
 
-## Diagnóstico
+## Diagnóstico do "pula 10-15 canais" no app nativo Android
 
-Áudio ok + vídeo verde com faixas apenas no APK Android (funciona no navegador) = bug do **decoder H.264 por hardware** (MediaCodec) do receptor com esse stream. Causas típicas: 1080i entrelaçado, perfil High incomum, ou SEI/B-frames que travam o decoder HW do chip (Amlogic/MTK/Fire TV). O navegador não sofre porque usa decoder de software.
+Arquivo: `android-native/app/src/main/java/tv/lntelecom/nativo/ui/player/PlayerActivity.kt`
 
-Solução: permitir marcar canais problemáticos para o ExoPlayer preferir **decoder de software** (OMX.google.* / c2.android.*). Fica cirúrgico — só quem precisa paga o custo de CPU.
+### Fluxo atual de UP/DOWN (e CH_UP/CH_DOWN)
 
-## Escopo
+1. `onKeyDown` mapeia `KEYCODE_DPAD_UP | KEYCODE_CHANNEL_UP` → `changeChannel(+1)` (linha 760).
+2. `changeChannel(delta)` (linha 577):
+   - Dedup de **40 ms** via `System.currentTimeMillis()` (só filtra duplicata de driver IR).
+   - `cancelPending()` (zera preview de LEFT/RIGHT).
+   - `index = (index + delta) mod N` — **incrementa imediatamente**.
+   - Chama `loadCurrent()` na hora.
+3. `loadCurrent()` (linha 358), tudo na main thread:
+   - cancela retries pendentes,
+   - se `retries>0` / erro / flag: `player.stop()` + `clearMediaItems()`,
+   - resolve URL (string, sem rede),
+   - `setMediaItem` + `prepare` + `playWhenReady=true`,
+   - `showOsd(index)` — Coil carrega logo,
+   - `heartbeat.updateChannel(...)`.
+4. Não checa `event.repeatCount` — auto-repeat do Android (~50 ms segurando) passa direto.
 
-Aplicar nos dois APKs: `android/` (Capacitor release) e `android-native/`.
+### Por que salta vários canais quando o usuário para
 
-## Passos
+Duas causas somadas:
 
-### 1. Banco (migration)
+- **Backlog de KeyEvents na main thread.** `setMediaItem+prepare` + inflar OSD/logo bloqueiam a UI por dezenas/centenas de ms. Enquanto isso, o Android continua enfileirando eventos de auto-repeat. Ao liberar, a fila é drenada em rajada e `index` avança várias vezes antes do OSD refletir. O usuário solta achando estar em 202, mas a fila ainda tem N eventos que serão processados → cai em 230.
+- **Auto-repeat residual pós-release.** Alguns controles/receivers (Fire TV, caixinhas Android) mandam 1-2 `DOWN` extras depois do `ACTION_UP`.
 
-- `ALTER TABLE public.channels ADD COLUMN prefer_sw_decoder boolean NOT NULL DEFAULT false;`
+O dedup de 40 ms não protege: é menor que o intervalo do auto-repeat (~50 ms) e é medido pelo tempo de processamento, não por `event.eventTime`. Eventos enfileirados quase todos passam.
 
-### 2. Admin UI
+### Por que LEFT/RIGHT não sofre
 
-- Em `src/components/admin/` (form de canal): adicionar checkbox **"Preferir decoder de software (H.264)"** com dica "Marque se o vídeo aparece verde/com faixas no Android".
-- Persistir `prefer_sw_decoder` junto com os outros campos.
+`previewChannel()` (linha 593) só atualiza o índice de preview + OSD e agenda `commitPending()` em **1500 ms**. Enquanto o usuário anda, nenhum `setMediaItem`/`prepare`. Só o canal final é sintonizado. Main thread livre → sem backlog.
 
-### 3. Bridge JS → plugin nativo
+### Melhorias possíveis (não aplicadas agora)
 
-- `src/plugins/native-player.ts`: adicionar `preferSoftwareDecoder?: boolean` em `NativePlayerLoadOptions`.
-- `src/components/player/NativeAndroidPlayer.tsx`: aceitar prop `preferSoftwareDecoder` e repassar em `NativePlayer.load({...})`.
-- `src/pages/PlayerPage.tsx` (ou onde o canal é resolvido pro player): passar `channel.prefer_sw_decoder` para o `NativeAndroidPlayer`.
+1. Ignorar `event.repeatCount > 0` em UP/DOWN — 1 toque = 1 canal.
+2. Dedup maior (~150-200 ms) medido por `event.getEventTime()` em vez de `System.currentTimeMillis()`.
+3. Aplicar padrão do preview no UP/DOWN: OSD imediato, `loadCurrent()` só depois de ~600 ms de silêncio (debounce). Elimina o backlog.
+4. Mover custo pesado do `loadCurrent` pra fora da main (Coil já é async; `prepare` precisa da main — daí (3) ser o mais efetivo).
 
-### 4. Plugin nativo Capacitor (`android/`)
+## Próximo passo
 
-Em `android/app/src/main/java/tv/lntelecom/net/NativePlayerPlugin.java`:
-
-- Ler `preferSoftwareDecoder` do call em `load(...)`.
-- Se true, construir o `ExoPlayer.Builder` com um `DefaultRenderersFactory` configurado com:
-  - `setEnableDecoderFallback(true)`
-  - `setMediaCodecSelector(preferSoftwareSelector)` — selector customizado que reordena a lista de `MediaCodecInfo` para colocar antes os decoders cujo `name` começa com `OMX.google.`, `c2.android.` ou contém `.sw.` / `.software`.
-- Se false (default), comportamento atual (HW).
-
-### 5. android-native (`android-native/`)
-
-Espelhar a mesma lógica no player Kotlin:
-- Ler `channel.preferSwDecoder` do modelo `Channel`.
-- Adicionar `preferSwDecoder: Boolean = false` no `data class Channel` e no mapeamento do repositório.
-- Aplicar o mesmo `DefaultRenderersFactory` + selector custom ao montar o `ExoPlayer`.
-
-### 6. Marcar TV Senado
-
-Após deploy, o admin marca o canal TV Senado (e outros que apresentarem o mesmo sintoma) no painel.
-
-## Detalhes técnicos
-
-```java
-// Selector: coloca SW decoders na frente
-MediaCodecSelector preferSw = (mimeType, requiresSecure, requiresTunneling) -> {
-    List<MediaCodecInfo> list = new ArrayList<>(
-        MediaCodecSelector.DEFAULT.getDecoderInfos(mimeType, requiresSecure, requiresTunneling)
-    );
-    Collections.sort(list, (a, b) -> Boolean.compare(isHw(b.name), isHw(a.name))); // SW antes
-    return list;
-};
-static boolean isHw(String n) {
-    String s = n.toLowerCase();
-    return !(s.startsWith("omx.google.") || s.startsWith("c2.android.") || s.contains(".sw."));
-}
-
-RenderersFactory rf = new DefaultRenderersFactory(ctx)
-    .setEnableDecoderFallback(true)
-    .setMediaCodecSelector(preferSw);
-
-ExoPlayer player = new ExoPlayer.Builder(ctx, rf).build();
-```
-
-Observações:
-- `setEnableDecoderFallback(true)` já faz o ExoPlayer tentar o próximo decoder se o primeiro falhar — dá robustez extra.
-- Não mexer no HttpDataSource / User-Agent (mantém o fix anterior da Olé).
-- Custo: decodificar 1080p H.264 em SW num Fire TV Stick é viável; se o receptor for muito fraco (Fire TV Stick 1ª gen), pode gaguejar — por isso a flag é por canal.
-
-## Após aprovar
-
-Migration → tipos regenerados → edito código → GitHub Actions gera APKs (release e android-native) porque mexe em `android/**` e `android-native/**`. No servidor:
-
-```bash
-cd /opt/lntv-frontend && git pull && npm run build && rsync -a --delete --exclude logos dist/ /var/www/lntv/
-```
-
-Depois o admin marca **TV Senado** com "Preferir decoder de software" e reabre no APK — vídeo deve normalizar.
+Quando o usuário quiser atacar o problema, escolher entre (a) debounce estilo LEFT/RIGHT, (b) ignorar auto-repeat + dedup mais forte, ou (c) as duas coisas juntas.
