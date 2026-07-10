@@ -82,7 +82,8 @@ class PlayerActivity : AppCompatActivity() {
     private var retries = 0
     private val maxRetries = 6
     private var playerNeedsReset = false
-    // (dedup antigo do zap removido — substituído por debounce em changeChannel)
+    private var lastChannelChangeMs = 0L
+    private val channelChangeDedupMs = 40L
     private var screenOffReceiver: BroadcastReceiver? = null
     private var shuttingDown = false
     // Preferência de decoder da instância atual do ExoPlayer. Se o próximo
@@ -110,9 +111,6 @@ class PlayerActivity : AppCompatActivity() {
     private val previewHandler = Handler(Looper.getMainLooper())
     private val tunePending = Runnable { commitPending() }
     private val previewDelay = 1500L
-    // Debounce curto do zap UP/DOWN. Grande o bastante pra absorver auto-repeat
-    // e o backlog de KeyEvents, pequeno o bastante pra não parecer lento.
-    private val zapDelay = 500L
 
     // Numeric channel entry (digits typed on the remote)
     private val digitBuffer = StringBuilder()
@@ -575,23 +573,19 @@ class PlayerActivity : AppCompatActivity() {
     }
 
 
-    /**
-     * Troca com UP/DOWN/CH_UP/CH_DOWN: agora usa DEBOUNCE (500 ms), igual ao
-     * LEFT/RIGHT mas mais rápido. Motivos:
-     *  - Load pesado (setMediaItem+prepare) na main thread criava backlog de
-     *    KeyEvents; ao soltar a tecla o índice pulava 10-15 canais sozinho.
-     *  - Auto-repeat do Android (~50 ms) + eventos residuais pós-release
-     *    passavam pelo dedup antigo de 40 ms.
-     * Agora só sintoniza o canal onde o usuário parou. OSD atualiza na hora.
-     * OK durante o preview commita imediato (ver handleOkPress).
-     */
+    /** Troca imediata (UP/DOWN/CH_UP/CH_DOWN). */
     private fun changeChannel(delta: Int) {
         if (channels.isEmpty()) return
-        val base = if (pendingIndex >= 0) pendingIndex else index
-        pendingIndex = ((base + delta) % channels.size + channels.size) % channels.size
-        showOsd(pendingIndex)
-        previewHandler.removeCallbacks(tunePending)
-        previewHandler.postDelayed(tunePending, zapDelay)
+        // Dedup curto (40ms): ignora eventos duplicados que alguns drivers
+        // de controle IR disparam pra mesma tecla. NÃO bloqueia auto-repeat
+        // do Android (que vem a cada ~50ms quando a tecla fica segurada).
+        val now = System.currentTimeMillis()
+        if (now - lastChannelChangeMs < channelChangeDedupMs) return
+        lastChannelChangeMs = now
+        cancelPending()
+        index = ((index + delta) % channels.size + channels.size) % channels.size
+        retries = 0
+        loadCurrent()
     }
 
 
@@ -721,12 +715,10 @@ class PlayerActivity : AppCompatActivity() {
         if (b.statsOverlay.visibility == View.VISIBLE) {
             return when (keyCode) {
                 KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
-                    if ((event?.repeatCount ?: 0) == 0) { changeChannel(1); renderStats() }
-                    true
+                    changeChannel(1); renderStats(); true
                 }
                 KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
-                    if ((event?.repeatCount ?: 0) == 0) { changeChannel(-1); renderStats() }
-                    true
+                    changeChannel(-1); renderStats(); true
                 }
                 KeyEvent.KEYCODE_BACK -> { hideStats(); true }
                 // Qualquer outra tecla fecha o overlay e processa normalmente
@@ -765,12 +757,8 @@ class PlayerActivity : AppCompatActivity() {
             showMenu(); return true
         }
         return when (keyCode) {
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
-                if ((event?.repeatCount ?: 0) == 0) changeChannel(1); true
-            }
-            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
-                if ((event?.repeatCount ?: 0) == 0) changeChannel(-1); true
-            }
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> { changeChannel(1); true }
+            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> { changeChannel(-1); true }
             KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_NEXT,
             KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { previewChannel(1); true }
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_PREVIOUS,
