@@ -82,8 +82,7 @@ class PlayerActivity : AppCompatActivity() {
     private var retries = 0
     private val maxRetries = 6
     private var playerNeedsReset = false
-    private var lastChannelChangeMs = 0L
-    private val channelChangeDedupMs = 40L
+    // (dedup antigo do zap removido — substituído por debounce em changeChannel)
     private var screenOffReceiver: BroadcastReceiver? = null
     private var shuttingDown = false
     // Preferência de decoder da instância atual do ExoPlayer. Se o próximo
