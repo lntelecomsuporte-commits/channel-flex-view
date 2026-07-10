@@ -111,6 +111,9 @@ class PlayerActivity : AppCompatActivity() {
     private val previewHandler = Handler(Looper.getMainLooper())
     private val tunePending = Runnable { commitPending() }
     private val previewDelay = 1500L
+    // Debounce curto do zap UP/DOWN. Grande o bastante pra absorver auto-repeat
+    // e o backlog de KeyEvents, pequeno o bastante pra não parecer lento.
+    private val zapDelay = 500L
 
     // Numeric channel entry (digits typed on the remote)
     private val digitBuffer = StringBuilder()
