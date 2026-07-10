@@ -573,19 +573,23 @@ class PlayerActivity : AppCompatActivity() {
     }
 
 
-    /** Troca imediata (UP/DOWN/CH_UP/CH_DOWN). */
+    /**
+     * Troca com UP/DOWN/CH_UP/CH_DOWN: agora usa DEBOUNCE (500 ms), igual ao
+     * LEFT/RIGHT mas mais rápido. Motivos:
+     *  - Load pesado (setMediaItem+prepare) na main thread criava backlog de
+     *    KeyEvents; ao soltar a tecla o índice pulava 10-15 canais sozinho.
+     *  - Auto-repeat do Android (~50 ms) + eventos residuais pós-release
+     *    passavam pelo dedup antigo de 40 ms.
+     * Agora só sintoniza o canal onde o usuário parou. OSD atualiza na hora.
+     * OK durante o preview commita imediato (ver handleOkPress).
+     */
     private fun changeChannel(delta: Int) {
         if (channels.isEmpty()) return
-        // Dedup curto (40ms): ignora eventos duplicados que alguns drivers
-        // de controle IR disparam pra mesma tecla. NÃO bloqueia auto-repeat
-        // do Android (que vem a cada ~50ms quando a tecla fica segurada).
-        val now = System.currentTimeMillis()
-        if (now - lastChannelChangeMs < channelChangeDedupMs) return
-        lastChannelChangeMs = now
-        cancelPending()
-        index = ((index + delta) % channels.size + channels.size) % channels.size
-        retries = 0
-        loadCurrent()
+        val base = if (pendingIndex >= 0) pendingIndex else index
+        pendingIndex = ((base + delta) % channels.size + channels.size) % channels.size
+        showOsd(pendingIndex)
+        previewHandler.removeCallbacks(tunePending)
+        previewHandler.postDelayed(tunePending, zapDelay)
     }
 
 
