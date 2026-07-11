@@ -115,6 +115,9 @@ class PlayerActivity : AppCompatActivity() {
     private val previewHandler = Handler(Looper.getMainLooper())
     private val tunePending = Runnable { commitPending() }
     private val previewDelay = 1500L
+    // Debounce do zap adaptativo (só usado em rajada).
+    private val zapPending = Runnable { retries = 0; loadCurrent() }
+
 
     // Numeric channel entry (digits typed on the remote)
     private val digitBuffer = StringBuilder()
