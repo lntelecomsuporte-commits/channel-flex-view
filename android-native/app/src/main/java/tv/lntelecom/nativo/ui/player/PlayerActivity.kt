@@ -626,6 +626,7 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun cancelPending() {
         previewHandler.removeCallbacks(tunePending)
+        previewHandler.removeCallbacks(zapPending)
         pendingIndex = -1
     }
 
