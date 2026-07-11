@@ -580,19 +580,29 @@ class PlayerActivity : AppCompatActivity() {
     }
 
 
-    /** Troca imediata (UP/DOWN/CH_UP/CH_DOWN). */
-    private fun changeChannel(delta: Int) {
+    /**
+     * Troca UP/DOWN/CH_UP/CH_DOWN — zap adaptativo:
+     *  - toque isolado (fora da janela de rajada) → loadCurrent() na hora;
+     *  - dentro da janela → só atualiza OSD e agenda loadCurrent() após
+     *    zapCommitDelayMs de silêncio. Absorve backlog de KeyEvents e
+     *    evita sintonizar canais intermediários numa passada rápida.
+     */
+    private fun changeChannel(delta: Int, eventTimeMs: Long = 0L) {
         if (channels.isEmpty()) return
-        // Dedup curto (40ms): ignora eventos duplicados que alguns drivers
-        // de controle IR disparam pra mesma tecla. NÃO bloqueia auto-repeat
-        // do Android (que vem a cada ~50ms quando a tecla fica segurada).
-        val now = System.currentTimeMillis()
-        if (now - lastChannelChangeMs < channelChangeDedupMs) return
-        lastChannelChangeMs = now
         cancelPending()
+        previewHandler.removeCallbacks(zapPending)
         index = ((index + delta) % channels.size + channels.size) % channels.size
-        retries = 0
-        loadCurrent()
+        // Feedback visual imediato sempre.
+        showOsd(index)
+        val now = if (eventTimeMs > 0L) eventTimeMs else android.os.SystemClock.uptimeMillis()
+        val burst = (now - lastZapEventMs) < zapBurstWindowMs
+        lastZapEventMs = now
+        if (burst) {
+            previewHandler.postDelayed(zapPending, zapCommitDelayMs)
+        } else {
+            retries = 0
+            loadCurrent()
+        }
     }
 
 
