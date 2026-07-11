@@ -82,8 +82,12 @@ class PlayerActivity : AppCompatActivity() {
     private var retries = 0
     private val maxRetries = 6
     private var playerNeedsReset = false
-    private var lastChannelChangeMs = 0L
-    private val channelChangeDedupMs = 40L
+    // Zap adaptativo: toque isolado sintoniza na hora; rajada (toques dentro de
+    // zapBurstWindowMs) só sintoniza o canal final após zapCommitDelayMs de silêncio.
+    // Usa event.eventTime (SystemClock.uptimeMillis) — imune a atraso da main thread.
+    private var lastZapEventMs = 0L
+    private val zapBurstWindowMs = 250L
+    private val zapCommitDelayMs = 350L
     private var screenOffReceiver: BroadcastReceiver? = null
     private var shuttingDown = false
     // Preferência de decoder da instância atual do ExoPlayer. Se o próximo
