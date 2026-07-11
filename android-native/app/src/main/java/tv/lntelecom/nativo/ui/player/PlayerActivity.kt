@@ -82,8 +82,12 @@ class PlayerActivity : AppCompatActivity() {
     private var retries = 0
     private val maxRetries = 6
     private var playerNeedsReset = false
-    private var lastChannelChangeMs = 0L
-    private val channelChangeDedupMs = 40L
+    // Zap adaptativo: toque isolado sintoniza na hora; rajada (toques dentro de
+    // zapBurstWindowMs) só sintoniza o canal final após zapCommitDelayMs de silêncio.
+    // Usa event.eventTime (SystemClock.uptimeMillis) — imune a atraso da main thread.
+    private var lastZapEventMs = 0L
+    private val zapBurstWindowMs = 250L
+    private val zapCommitDelayMs = 350L
     private var screenOffReceiver: BroadcastReceiver? = null
     private var shuttingDown = false
     // Preferência de decoder da instância atual do ExoPlayer. Se o próximo
@@ -111,6 +115,9 @@ class PlayerActivity : AppCompatActivity() {
     private val previewHandler = Handler(Looper.getMainLooper())
     private val tunePending = Runnable { commitPending() }
     private val previewDelay = 1500L
+    // Debounce do zap adaptativo (só usado em rajada).
+    private val zapPending = Runnable { retries = 0; loadCurrent() }
+
 
     // Numeric channel entry (digits typed on the remote)
     private val digitBuffer = StringBuilder()
@@ -573,19 +580,29 @@ class PlayerActivity : AppCompatActivity() {
     }
 
 
-    /** Troca imediata (UP/DOWN/CH_UP/CH_DOWN). */
-    private fun changeChannel(delta: Int) {
+    /**
+     * Troca UP/DOWN/CH_UP/CH_DOWN — zap adaptativo:
+     *  - toque isolado (fora da janela de rajada) → loadCurrent() na hora;
+     *  - dentro da janela → só atualiza OSD e agenda loadCurrent() após
+     *    zapCommitDelayMs de silêncio. Absorve backlog de KeyEvents e
+     *    evita sintonizar canais intermediários numa passada rápida.
+     */
+    private fun changeChannel(delta: Int, eventTimeMs: Long = 0L) {
         if (channels.isEmpty()) return
-        // Dedup curto (40ms): ignora eventos duplicados que alguns drivers
-        // de controle IR disparam pra mesma tecla. NÃO bloqueia auto-repeat
-        // do Android (que vem a cada ~50ms quando a tecla fica segurada).
-        val now = System.currentTimeMillis()
-        if (now - lastChannelChangeMs < channelChangeDedupMs) return
-        lastChannelChangeMs = now
         cancelPending()
+        previewHandler.removeCallbacks(zapPending)
         index = ((index + delta) % channels.size + channels.size) % channels.size
-        retries = 0
-        loadCurrent()
+        // Feedback visual imediato sempre.
+        showOsd(index)
+        val now = if (eventTimeMs > 0L) eventTimeMs else android.os.SystemClock.uptimeMillis()
+        val burst = (now - lastZapEventMs) < zapBurstWindowMs
+        lastZapEventMs = now
+        if (burst) {
+            previewHandler.postDelayed(zapPending, zapCommitDelayMs)
+        } else {
+            retries = 0
+            loadCurrent()
+        }
     }
 
 
@@ -609,6 +626,7 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun cancelPending() {
         previewHandler.removeCallbacks(tunePending)
+        previewHandler.removeCallbacks(zapPending)
         pendingIndex = -1
     }
 
@@ -715,10 +733,16 @@ class PlayerActivity : AppCompatActivity() {
         if (b.statsOverlay.visibility == View.VISIBLE) {
             return when (keyCode) {
                 KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
-                    changeChannel(1); renderStats(); true
+                    if ((event?.repeatCount ?: 0) == 0) {
+                        changeChannel(1, event?.eventTime ?: 0L); renderStats()
+                    }
+                    true
                 }
                 KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
-                    changeChannel(-1); renderStats(); true
+                    if ((event?.repeatCount ?: 0) == 0) {
+                        changeChannel(-1, event?.eventTime ?: 0L); renderStats()
+                    }
+                    true
                 }
                 KeyEvent.KEYCODE_BACK -> { hideStats(); true }
                 // Qualquer outra tecla fecha o overlay e processa normalmente
@@ -757,8 +781,14 @@ class PlayerActivity : AppCompatActivity() {
             showMenu(); return true
         }
         return when (keyCode) {
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> { changeChannel(1); true }
-            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> { changeChannel(-1); true }
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
+                if ((event?.repeatCount ?: 0) == 0) changeChannel(1, event?.eventTime ?: 0L)
+                true
+            }
+            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
+                if ((event?.repeatCount ?: 0) == 0) changeChannel(-1, event?.eventTime ?: 0L)
+                true
+            }
             KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_NEXT,
             KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { previewChannel(1); true }
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_PREVIOUS,
