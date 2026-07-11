@@ -733,10 +733,16 @@ class PlayerActivity : AppCompatActivity() {
         if (b.statsOverlay.visibility == View.VISIBLE) {
             return when (keyCode) {
                 KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
-                    changeChannel(1); renderStats(); true
+                    if ((event?.repeatCount ?: 0) == 0) {
+                        changeChannel(1, event?.eventTime ?: 0L); renderStats()
+                    }
+                    true
                 }
                 KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
-                    changeChannel(-1); renderStats(); true
+                    if ((event?.repeatCount ?: 0) == 0) {
+                        changeChannel(-1, event?.eventTime ?: 0L); renderStats()
+                    }
+                    true
                 }
                 KeyEvent.KEYCODE_BACK -> { hideStats(); true }
                 // Qualquer outra tecla fecha o overlay e processa normalmente
