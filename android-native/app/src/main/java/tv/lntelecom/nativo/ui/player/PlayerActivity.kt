@@ -725,12 +725,16 @@ class PlayerActivity : AppCompatActivity() {
                 KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
                     if ((event?.repeatCount ?: 0) == 0) {
                         changeChannel(1, event?.eventTime ?: 0L); renderStats()
+                    } else {
+                        previewChannel(1); renderStats()
                     }
                     true
                 }
                 KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
                     if ((event?.repeatCount ?: 0) == 0) {
                         changeChannel(-1, event?.eventTime ?: 0L); renderStats()
+                    } else {
+                        previewChannel(-1); renderStats()
                     }
                     true
                 }
@@ -772,11 +776,16 @@ class PlayerActivity : AppCompatActivity() {
         }
         return when (keyCode) {
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
+                // Primeiro toque: sintoniza na hora. Auto-repeat (segurando):
+                // cicla OSD como preview; sintoniza ao soltar (onKeyUp) ou
+                // após previewDelay de silêncio.
                 if ((event?.repeatCount ?: 0) == 0) changeChannel(1, event?.eventTime ?: 0L)
+                else previewChannel(1)
                 true
             }
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
                 if ((event?.repeatCount ?: 0) == 0) changeChannel(-1, event?.eventTime ?: 0L)
+                else previewChannel(-1)
                 true
             }
             KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_NEXT,
