@@ -239,8 +239,20 @@ class PlayerActivity : AppCompatActivity() {
         try { heartbeat?.stop() } catch (_: Exception) {}
         try { player?.release() } catch (_: Exception) {}
         player = null
-        try { finishAffinity() } catch (_: Exception) {}
+        try { finishAndRemoveTask() } catch (_: Exception) {
+            try { finishAffinity() } catch (_: Exception) {}
+        }
         Handler(Looper.getMainLooper()).postDelayed({ System.exit(0) }, 150)
+    }
+
+    /**
+     * Disparado quando o usuário aperta Home (casinha) ou Recents no controle.
+     * Encerra o app antes do launcher aparecer, liberando RAM completamente.
+     * Mesmo padrão do legacy `MainActivity.java` (Capacitor).
+     */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        shutdownAndRelease("user_leave_hint")
     }
 
     private fun setupListOverlay() {
