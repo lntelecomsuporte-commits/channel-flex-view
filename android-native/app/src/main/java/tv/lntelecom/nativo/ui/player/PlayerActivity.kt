@@ -581,28 +581,18 @@ class PlayerActivity : AppCompatActivity() {
 
 
     /**
-     * Troca UP/DOWN/CH_UP/CH_DOWN — zap adaptativo:
-     *  - toque isolado (fora da janela de rajada) → loadCurrent() na hora;
-     *  - dentro da janela → só atualiza OSD e agenda loadCurrent() após
-     *    zapCommitDelayMs de silêncio. Absorve backlog de KeyEvents e
-     *    evita sintonizar canais intermediários numa passada rápida.
+     * Troca UP/DOWN/CH_UP/CH_DOWN — paridade com o app release (web):
+     *  - toque isolado (sem auto-repeat) → sintoniza instantaneamente;
+     *  - segurando (auto-repeat) → não chama aqui; usa previewChannel()
+     *    pra ciclar OSD e só sintonizar ao soltar (ver onKeyDown/onKeyUp).
      */
     private fun changeChannel(delta: Int, eventTimeMs: Long = 0L) {
         if (channels.isEmpty()) return
         cancelPending()
-        previewHandler.removeCallbacks(zapPending)
         index = ((index + delta) % channels.size + channels.size) % channels.size
-        // Feedback visual imediato sempre.
+        retries = 0
         showOsd(index)
-        val now = if (eventTimeMs > 0L) eventTimeMs else android.os.SystemClock.uptimeMillis()
-        val burst = (now - lastZapEventMs) < zapBurstWindowMs
-        lastZapEventMs = now
-        if (burst) {
-            previewHandler.postDelayed(zapPending, zapCommitDelayMs)
-        } else {
-            retries = 0
-            loadCurrent()
-        }
+        loadCurrent()
     }
 
 
@@ -735,12 +725,16 @@ class PlayerActivity : AppCompatActivity() {
                 KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
                     if ((event?.repeatCount ?: 0) == 0) {
                         changeChannel(1, event?.eventTime ?: 0L); renderStats()
+                    } else {
+                        previewChannel(1); renderStats()
                     }
                     true
                 }
                 KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
                     if ((event?.repeatCount ?: 0) == 0) {
                         changeChannel(-1, event?.eventTime ?: 0L); renderStats()
+                    } else {
+                        previewChannel(-1); renderStats()
                     }
                     true
                 }
@@ -782,11 +776,16 @@ class PlayerActivity : AppCompatActivity() {
         }
         return when (keyCode) {
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
+                // Primeiro toque: sintoniza na hora. Auto-repeat (segurando):
+                // cicla OSD como preview; sintoniza ao soltar (onKeyUp) ou
+                // após previewDelay de silêncio.
                 if ((event?.repeatCount ?: 0) == 0) changeChannel(1, event?.eventTime ?: 0L)
+                else previewChannel(1)
                 true
             }
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
                 if ((event?.repeatCount ?: 0) == 0) changeChannel(-1, event?.eventTime ?: 0L)
+                else previewChannel(-1)
                 true
             }
             KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_NEXT,
@@ -816,6 +815,21 @@ class PlayerActivity : AppCompatActivity() {
                 if (digitBuffer.isNotEmpty()) { commitDigitBuffer(); true } else handleOkPress()
             } else super.onKeyDown(keyCode, event)
         }
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+        // Ao soltar UP/DOWN/CH_UP/CH_DOWN: se ficou um preview pendente
+        // (usuário estava segurando pra ciclar canais), sintoniza na hora
+        // sem esperar o previewDelay. Paridade com o app release/web.
+        if (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
+            keyCode == KeyEvent.KEYCODE_CHANNEL_UP || keyCode == KeyEvent.KEYCODE_CHANNEL_DOWN) {
+            if (pendingIndex >= 0) {
+                previewHandler.removeCallbacks(tunePending)
+                commitPending()
+                return true
+            }
+        }
+        return super.onKeyUp(keyCode, event)
     }
 
     // ====== Faixas de Legenda / Áudio ======

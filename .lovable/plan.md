@@ -1,17 +1,22 @@
-Zap adaptativo aplicado em `android-native/.../PlayerActivity.kt` (build > 50).
+# Zap UP/DOWN — paridade com o release/web
 
-## O que ficou
+Aplicado em `android-native/.../PlayerActivity.kt` (build > 50).
 
-- `changeChannel(delta, eventTimeMs)` — sempre atualiza `index` + OSD na hora.
-- Rajada: se `event.eventTime` cair a <250ms do toque anterior, cancela `zapPending` e agenda `loadCurrent()` pra 350ms depois. Absorve backlog e só sintoniza o canal final.
-- Toque isolado (>250ms): `loadCurrent()` imediato — sem delay perceptível.
-- `onKeyDown` continua ignorando `repeatCount > 0` (nada de auto-repeat).
-- `cancelPending()` limpa `tunePending` + `zapPending` (evita tune fantasma após entrada numérica ou preview LEFT/RIGHT).
-- Removidos os antigos `lastChannelChangeMs` / `channelChangeDedupMs` (dedup de 40ms medido na main thread — inútil pra auto-repeat).
+## Comportamento (igual app release/web)
 
-## Constantes ajustáveis
+- **Toque solto** UP/DOWN (`repeatCount == 0`) → `changeChannel()` sintoniza **instantaneamente**. Sem debounce, sem burst window.
+- **Segurando** UP/DOWN (`repeatCount > 0`) → `previewChannel(delta)` cicla índice pendente + OSD, **sem** sintonizar (reusa a máquina de LEFT/RIGHT).
+- **Ao soltar** (`onKeyUp`) — se `pendingIndex >= 0`, cancela `tunePending` e comita na hora. Sem esperar os 1500ms.
+- Se ficar parado com preview aberto, o `previewDelay = 1500L` do `tunePending` ainda comita sozinho (rede de segurança).
 
-- `zapBurstWindowMs = 250L`
-- `zapCommitDelayMs = 350L`
+## Alterações
 
-Se ainda parecer travado numa passada rápida, baixar o commit delay pra ~250L. Se ainda pular canais, subir a janela de rajada pra ~350L.
+- `changeChannel(delta, eventTimeMs)` — removido todo o debounce adaptativo (`zapPending`, `zapBurstWindowMs`, `zapCommitDelayMs`, `lastZapEventMs` — ficaram declarados mas não usados). Agora só: atualiza `index`, mostra OSD, `loadCurrent()`.
+- `onKeyDown` UP/DOWN/CH_UP/CH_DOWN — `repeatCount==0 ? changeChannel : previewChannel`.
+- Novo `onKeyUp` — solta UP/DOWN/CH_UP/CH_DOWN e comita `pendingIndex` se houver.
+- Stats overlay: mesma regra (solto sintoniza, segurando cicla preview).
+
+## Fora de escopo
+
+- LEFT/RIGHT continuam usando `previewChannel` + `previewDelay = 1500L` (sem mudanças).
+- `NativePlayerPlugin.java` (Capacitor) e `NativeAndroidPlayer.tsx` (web) — este bug era só do nativo Kotlin.
