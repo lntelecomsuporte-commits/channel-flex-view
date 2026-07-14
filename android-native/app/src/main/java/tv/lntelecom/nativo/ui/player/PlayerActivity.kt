@@ -817,6 +817,20 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
+    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+        // Ao soltar UP/DOWN/CH_UP/CH_DOWN: se ficou um preview pendente
+        // (usuário estava segurando pra ciclar canais), sintoniza na hora
+        // sem esperar o previewDelay. Paridade com o app release/web.
+        if (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
+            keyCode == KeyEvent.KEYCODE_CHANNEL_UP || keyCode == KeyEvent.KEYCODE_CHANNEL_DOWN) {
+            if (pendingIndex >= 0) {
+                previewHandler.removeCallbacks(tunePending)
+                commitPending()
+                return true
+            }
+        }
+        return super.onKeyUp(keyCode, event)
+
     // ====== Faixas de Legenda / Áudio ======
     // Persistência: enquanto a Activity viver. Trocar de canal (loadCurrent →
     // setMediaItem) reseta naturalmente. Ao fechar o app, volta ao padrão.
