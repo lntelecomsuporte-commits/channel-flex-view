@@ -581,28 +581,18 @@ class PlayerActivity : AppCompatActivity() {
 
 
     /**
-     * Troca UP/DOWN/CH_UP/CH_DOWN — zap adaptativo:
-     *  - toque isolado (fora da janela de rajada) → loadCurrent() na hora;
-     *  - dentro da janela → só atualiza OSD e agenda loadCurrent() após
-     *    zapCommitDelayMs de silêncio. Absorve backlog de KeyEvents e
-     *    evita sintonizar canais intermediários numa passada rápida.
+     * Troca UP/DOWN/CH_UP/CH_DOWN — paridade com o app release (web):
+     *  - toque isolado (sem auto-repeat) → sintoniza instantaneamente;
+     *  - segurando (auto-repeat) → não chama aqui; usa previewChannel()
+     *    pra ciclar OSD e só sintonizar ao soltar (ver onKeyDown/onKeyUp).
      */
     private fun changeChannel(delta: Int, eventTimeMs: Long = 0L) {
         if (channels.isEmpty()) return
         cancelPending()
-        previewHandler.removeCallbacks(zapPending)
         index = ((index + delta) % channels.size + channels.size) % channels.size
-        // Feedback visual imediato sempre.
+        retries = 0
         showOsd(index)
-        val now = if (eventTimeMs > 0L) eventTimeMs else android.os.SystemClock.uptimeMillis()
-        val burst = (now - lastZapEventMs) < zapBurstWindowMs
-        lastZapEventMs = now
-        if (burst) {
-            previewHandler.postDelayed(zapPending, zapCommitDelayMs)
-        } else {
-            retries = 0
-            loadCurrent()
-        }
+        loadCurrent()
     }
 
 
