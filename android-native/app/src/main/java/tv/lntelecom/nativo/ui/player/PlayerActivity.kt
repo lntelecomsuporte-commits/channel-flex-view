@@ -731,6 +731,13 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        // Power/Sleep: alguns STBs/FireTV entregam a tecla ao app antes de
+        // acionar SCREEN_OFF. Encerra o app imediatamente pra liberar RAM.
+        if (keyCode == KeyEvent.KEYCODE_POWER || keyCode == KeyEvent.KEYCODE_SLEEP ||
+            keyCode == KeyEvent.KEYCODE_SOFT_SLEEP) {
+            shutdownAndRelease("power_key")
+            return true
+        }
         // Stats overlay: deixa trocar canal com cima/baixo mantendo overlay aberto
         if (b.statsOverlay.visibility == View.VISIBLE) {
             return when (keyCode) {
