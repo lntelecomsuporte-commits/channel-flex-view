@@ -830,6 +830,7 @@ class PlayerActivity : AppCompatActivity() {
             }
         }
         return super.onKeyUp(keyCode, event)
+    }
 
     // ====== Faixas de Legenda / Áudio ======
     // Persistência: enquanto a Activity viver. Trocar de canal (loadCurrent →
