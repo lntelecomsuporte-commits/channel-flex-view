@@ -68,7 +68,13 @@ Deno.serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return json({ error: "Unauthorized" }, 401);
+    const uaHeader = req.headers.get("user-agent") ?? "";
+    const looksLikeRoku = /roku/i.test(uaHeader);
+
+    if (!authHeader) {
+      if (looksLikeRoku) console.log("[hb][roku] 401 sem Authorization ua=", uaHeader);
+      return json({ error: "Unauthorized" }, 401);
+    }
 
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -80,7 +86,10 @@ Deno.serve(async (req) => {
       error: userError,
     } = await userClient.auth.getUser();
 
-    if (userError || !user) return json({ error: "Unauthorized" }, 401);
+    if (userError || !user) {
+      if (looksLikeRoku) console.log("[hb][roku] 401 auth.getUser falhou err=", userError?.message, "ua=", uaHeader);
+      return json({ error: "Unauthorized" }, 401);
+    }
 
     const { action, sessionId, sessionToken, userAgent, channelId, channelName, isWatching, clientIpv4, clientIpv6, deviceId, platform, deviceName, appVersion } =
       await req.json();
@@ -89,6 +98,16 @@ Deno.serve(async (req) => {
     const cIpv6 = sanitizeIp(clientIpv6);
     const cleanDeviceId = typeof deviceId === "string" && deviceId.length >= 6 ? deviceId : null;
     const cleanPlatform = ["android", "roku", "web", "pwa"].includes(platform) ? platform : null;
+
+    if (platform === "roku" || looksLikeRoku) {
+      console.log("[hb][roku]", JSON.stringify({
+        action, user_id: user.id, hasSessionId: !!sessionId,
+        platform, cleanPlatform, deviceId: cleanDeviceId,
+        userAgent: (userAgent || "").slice(0, 80), uaHeader: uaHeader.slice(0, 80),
+        appVersion, ip: ipAddress,
+      }));
+    }
+
 
     // Helper: verifica se admin pediu signout remoto após o início da sessão
     const checkForceSignout = async (sessionStartedAt: string | null): Promise<boolean> => {
