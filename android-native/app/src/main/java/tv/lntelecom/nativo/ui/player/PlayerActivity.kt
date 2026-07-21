@@ -91,8 +91,8 @@ class PlayerActivity : AppCompatActivity() {
     private var screenOffReceiver: BroadcastReceiver? = null
     private var shuttingDown = false
     // Enquanto o instalador do sistema estiver aberto, ignoramos sinais de
-    // "sair do app" (onUserLeaveHint, screen_off) pra não matar o processo
-    // antes do usuário ter chance de confirmar/instalar o APK.
+    // desligamento pra não matar o processo antes do usuário ter chance de
+    // confirmar/instalar o APK.
     // Alias local — a fonte da verdade é App.installingUpdate (global, pra
     // todas as Activities honrarem).
     private var installingUpdate: Boolean
@@ -252,20 +252,6 @@ class PlayerActivity : AppCompatActivity() {
             try { finishAffinity() } catch (_: Exception) {}
         }
         Handler(Looper.getMainLooper()).postDelayed({ System.exit(0) }, 150)
-    }
-
-    /**
-     * Disparado quando o usuário aperta Home (casinha) ou Recents no controle.
-     * Encerra o app antes do launcher aparecer, liberando RAM completamente.
-     * Mesmo padrão do legacy `MainActivity.java` (Capacitor).
-     */
-    override fun onUserLeaveHint() {
-        super.onUserLeaveHint()
-        if (installingUpdate) {
-            android.util.Log.i("LNTV", "onUserLeaveHint ignorado — instalador de update em foreground")
-            return
-        }
-        shutdownAndRelease("user_leave_hint")
     }
 
     private fun setupListOverlay() {
@@ -748,6 +734,7 @@ class PlayerActivity : AppCompatActivity() {
         // acionar SCREEN_OFF. Encerra o app imediatamente pra liberar RAM.
         if (keyCode == KeyEvent.KEYCODE_POWER || keyCode == KeyEvent.KEYCODE_SLEEP ||
             keyCode == KeyEvent.KEYCODE_SOFT_SLEEP) {
+            if (installingUpdate) return super.onKeyDown(keyCode, event)
             shutdownAndRelease("power_key")
             return true
         }
@@ -1317,8 +1304,8 @@ class PlayerActivity : AppCompatActivity() {
             val currentName = BuildConfig.VERSION_NAME
             val update = withContext(Dispatchers.IO) { updater.check(current, currentName) } ?: return@launch
             // Ativa o guard ANTES do download começar — se o processo for pro
-            // background durante o download (troca de foco, screen dim, etc.)
-            // não queremos que ShutdownHelper/onUserLeaveHint matem o app.
+            // background durante o download (screen dim, power, etc.)
+            // não queremos que os receivers/teclas de desligamento matem o app.
             installingUpdate = true
             Toast.makeText(
                 this@PlayerActivity,
