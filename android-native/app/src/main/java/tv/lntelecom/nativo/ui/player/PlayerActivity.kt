@@ -1318,6 +1318,12 @@ class PlayerActivity : AppCompatActivity() {
                 Toast.LENGTH_LONG
             ).show()
             val file = withContext(Dispatchers.IO) { updater.download(update) } ?: return@launch
+            installingUpdate = true
+            Toast.makeText(
+                this@PlayerActivity,
+                "Abrindo instalador…",
+                Toast.LENGTH_LONG
+            ).show()
             startActivity(Intent(this@PlayerActivity, UpdateInstallActivity::class.java).apply {
                 putExtra("apkPath", file.absolutePath)
             })
