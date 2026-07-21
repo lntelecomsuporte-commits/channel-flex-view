@@ -71,6 +71,8 @@ class ChannelListActivity : AppCompatActivity() {
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         if (App.installingUpdate) return
+        // Não encerra se estamos navegando internamente (startActivity+finish).
+        if (isFinishing) return
         shutdown?.shutdown("user_leave_hint")
     }
 
