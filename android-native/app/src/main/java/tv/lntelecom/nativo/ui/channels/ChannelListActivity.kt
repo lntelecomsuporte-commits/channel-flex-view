@@ -67,4 +67,14 @@ class ChannelListActivity : AppCompatActivity() {
             overridePendingTransition(0, 0)
         }
     }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (shutdown?.handleKeyDown(keyCode) == true) return true
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onDestroy() {
+        shutdown?.unregister()
+        super.onDestroy()
+    }
 }
