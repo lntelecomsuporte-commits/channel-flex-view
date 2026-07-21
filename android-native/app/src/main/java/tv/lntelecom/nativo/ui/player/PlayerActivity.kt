@@ -93,7 +93,11 @@ class PlayerActivity : AppCompatActivity() {
     // Enquanto o instalador do sistema estiver aberto, ignoramos sinais de
     // "sair do app" (onUserLeaveHint, screen_off) pra não matar o processo
     // antes do usuário ter chance de confirmar/instalar o APK.
-    private var installingUpdate = false
+    // Alias local — a fonte da verdade é App.installingUpdate (global, pra
+    // todas as Activities honrarem).
+    private var installingUpdate: Boolean
+        get() = App.installingUpdate
+        set(v) { App.installingUpdate = v }
     // Preferência de decoder da instância atual do ExoPlayer. Se o próximo
     // canal exigir preferência diferente, o player é recriado em loadCurrent().
     private var currentPreferSwDecoder = false
