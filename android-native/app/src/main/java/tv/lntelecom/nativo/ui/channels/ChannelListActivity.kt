@@ -27,11 +27,13 @@ class ChannelListActivity : AppCompatActivity() {
 
     private lateinit var b: ActivityChannelsBinding
     private lateinit var repo: ChannelsRepository
+    private var shutdown: ShutdownHelper? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         b = ActivityChannelsBinding.inflate(layoutInflater)
         setContentView(b.root)
+        shutdown = ShutdownHelper.install(this)
         b.title.text = "Carregando canais…"
         b.recycler.visibility = View.GONE
         b.progress.visibility = View.VISIBLE
