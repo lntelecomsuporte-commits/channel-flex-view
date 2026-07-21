@@ -38,5 +38,14 @@ class App : Application(), ImageLoaderFactory {
         // Chave pública local do backend self-hosted (mesma usada pelo Roku/servidor).
         const val ANON_KEY =
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc3MDA0OTQwLCJleHAiOjIwOTIzNjQ5NDB9.9BCUjjQPaZLLhZnJnpor4cfq7kO6IbjFpt78hPBGyow"
+
+        /**
+         * Flag global — quando true, TODAS as activities ignoram sinais de
+         * shutdown (screen_off, hdmi_unplug, power_key, user_leave_hint).
+         * Ativada antes de baixar/instalar update pra não matar o processo no
+         * meio do download nem quando o instalador do sistema abrir em outra task.
+         */
+        @Volatile
+        var installingUpdate: Boolean = false
     }
 }
