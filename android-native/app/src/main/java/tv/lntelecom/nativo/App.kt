@@ -41,7 +41,7 @@ class App : Application(), ImageLoaderFactory {
 
         /**
          * Flag global — quando true, TODAS as activities ignoram sinais de
-         * shutdown (screen_off, hdmi_unplug, power_key, user_leave_hint).
+         * shutdown (screen_off, hdmi_unplug, power_key).
          * Ativada antes de baixar/instalar update pra não matar o processo no
          * meio do download nem quando o instalador do sistema abrir em outra task.
          */

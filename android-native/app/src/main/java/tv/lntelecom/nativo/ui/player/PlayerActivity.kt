@@ -1304,8 +1304,8 @@ class PlayerActivity : AppCompatActivity() {
             val currentName = BuildConfig.VERSION_NAME
             val update = withContext(Dispatchers.IO) { updater.check(current, currentName) } ?: return@launch
             // Ativa o guard ANTES do download começar — se o processo for pro
-            // background durante o download (troca de foco, screen dim, etc.)
-            // não queremos que ShutdownHelper/onUserLeaveHint matem o app.
+            // background durante o download (screen dim, power, etc.)
+            // não queremos que os receivers/teclas de desligamento matem o app.
             installingUpdate = true
             Toast.makeText(
                 this@PlayerActivity,
