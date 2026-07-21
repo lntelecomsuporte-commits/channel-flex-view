@@ -15,6 +15,8 @@ import tv.lntelecom.nativo.data.Prefs
 import tv.lntelecom.nativo.data.SupabaseClient
 import tv.lntelecom.nativo.databinding.ActivityChannelsBinding
 import tv.lntelecom.nativo.ui.player.PlayerActivity
+import tv.lntelecom.nativo.util.ShutdownHelper
+import android.view.KeyEvent
 
 /**
  * Tela de entrada: carrega os canais e entrega tudo pro PlayerActivity,
