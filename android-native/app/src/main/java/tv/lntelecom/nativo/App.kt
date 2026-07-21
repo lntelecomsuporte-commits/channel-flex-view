@@ -41,6 +41,7 @@ class App : Application(), ImageLoaderFactory {
 
         /**
          * Flag global — quando true, TODAS as activities ignoram sinais de
+         * shutdown (bump para forçar rebuild 1.0.60).
          * shutdown (screen_off, hdmi_unplug, power_key).
          * Ativada antes de baixar/instalar update pra não matar o processo no
          * meio do download nem quando o instalador do sistema abrir em outra task.
