@@ -114,8 +114,15 @@ class LoginActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         beaconHandler.removeCallbacks(beaconRunnable)
+        shutdown?.unregister()
         super.onDestroy()
     }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (shutdown?.handleKeyDown(keyCode) == true) return true
+        return super.onKeyDown(keyCode, event)
+    }
+
 
     private fun doLogin() {
         val email = b.inputEmail.text.toString().trim()
