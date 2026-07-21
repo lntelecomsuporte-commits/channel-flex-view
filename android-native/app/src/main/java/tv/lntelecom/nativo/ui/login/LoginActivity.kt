@@ -19,6 +19,8 @@ import tv.lntelecom.nativo.data.Prefs
 import tv.lntelecom.nativo.data.SupabaseClient
 import tv.lntelecom.nativo.databinding.ActivityLoginBinding
 import tv.lntelecom.nativo.ui.channels.ChannelListActivity
+import tv.lntelecom.nativo.util.ShutdownHelper
+import android.view.KeyEvent
 
 class LoginActivity : AppCompatActivity() {
 
@@ -28,6 +30,7 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var deviceId: String
     private lateinit var deviceName: String
     private val appVersion: String by lazy { "nativo-${BuildConfig.VERSION_NAME}" }
+    private var shutdown: ShutdownHelper? = null
 
     private val beaconHandler = Handler(Looper.getMainLooper())
     private val beaconRunnable: Runnable = object : Runnable {
