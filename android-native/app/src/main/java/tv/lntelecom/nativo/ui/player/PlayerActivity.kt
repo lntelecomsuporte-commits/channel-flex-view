@@ -90,6 +90,10 @@ class PlayerActivity : AppCompatActivity() {
     private val zapCommitDelayMs = 350L
     private var screenOffReceiver: BroadcastReceiver? = null
     private var shuttingDown = false
+    // Enquanto o instalador do sistema estiver aberto, ignoramos sinais de
+    // "sair do app" (onUserLeaveHint, screen_off) pra não matar o processo
+    // antes do usuário ter chance de confirmar/instalar o APK.
+    private var installingUpdate = false
     // Preferência de decoder da instância atual do ExoPlayer. Se o próximo
     // canal exigir preferência diferente, o player é recriado em loadCurrent().
     private var currentPreferSwDecoder = false
