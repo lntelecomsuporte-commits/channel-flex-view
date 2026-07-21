@@ -73,6 +73,7 @@ class LoginActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         b = ActivityLoginBinding.inflate(layoutInflater)
         setContentView(b.root)
+        shutdown = ShutdownHelper.install(this)
         val app = application as App
         prefs = Prefs(this)
         sb = SupabaseClient(app.http, App.BACKEND, App.ANON_KEY, prefs)
