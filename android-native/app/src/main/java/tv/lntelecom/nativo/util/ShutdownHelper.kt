@@ -27,6 +27,7 @@ class ShutdownHelper private constructor(private val activity: Activity) {
         if (receiver != null) return
         receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
+                if (tv.lntelecom.nativo.App.installingUpdate) return
                 when (intent?.action) {
                     Intent.ACTION_SCREEN_OFF -> shutdown("screen_off")
                     "android.intent.action.HDMI_PLUG" -> {
@@ -50,6 +51,7 @@ class ShutdownHelper private constructor(private val activity: Activity) {
 
     /** Chamar no onKeyDown da Activity. Retorna true se consumiu o evento. */
     fun handleKeyDown(keyCode: Int): Boolean {
+        if (tv.lntelecom.nativo.App.installingUpdate) return false
         if (keyCode == KeyEvent.KEYCODE_POWER ||
             keyCode == KeyEvent.KEYCODE_SLEEP ||
             keyCode == KeyEvent.KEYCODE_SOFT_SLEEP) {
