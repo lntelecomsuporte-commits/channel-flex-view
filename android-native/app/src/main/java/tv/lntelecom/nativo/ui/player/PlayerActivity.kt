@@ -733,6 +733,7 @@ class PlayerActivity : AppCompatActivity() {
         // Home/task-switch: encerra app pra liberar recursos, exceto durante update.
         super.onUserLeaveHint()
         if (App.installingUpdate) return
+        if (isFinishing) return
         shutdownAndRelease("user_leave_hint")
     }
 
