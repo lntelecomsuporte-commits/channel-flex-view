@@ -229,6 +229,7 @@ class PlayerActivity : AppCompatActivity() {
         screenOffReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                    if (installingUpdate) return
                     shutdownAndRelease("screen_off")
                 }
             }
@@ -256,6 +257,10 @@ class PlayerActivity : AppCompatActivity() {
      */
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
+        if (installingUpdate) {
+            android.util.Log.i("LNTV", "onUserLeaveHint ignorado — instalador de update em foreground")
+            return
+        }
         shutdownAndRelease("user_leave_hint")
     }
 
