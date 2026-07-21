@@ -15,6 +15,8 @@ import tv.lntelecom.nativo.data.Prefs
 import tv.lntelecom.nativo.data.SupabaseClient
 import tv.lntelecom.nativo.databinding.ActivityChannelsBinding
 import tv.lntelecom.nativo.ui.player.PlayerActivity
+import tv.lntelecom.nativo.util.ShutdownHelper
+import android.view.KeyEvent
 
 /**
  * Tela de entrada: carrega os canais e entrega tudo pro PlayerActivity,
@@ -25,11 +27,13 @@ class ChannelListActivity : AppCompatActivity() {
 
     private lateinit var b: ActivityChannelsBinding
     private lateinit var repo: ChannelsRepository
+    private var shutdown: ShutdownHelper? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         b = ActivityChannelsBinding.inflate(layoutInflater)
         setContentView(b.root)
+        shutdown = ShutdownHelper.install(this)
         b.title.text = "Carregando canais…"
         b.recycler.visibility = View.GONE
         b.progress.visibility = View.VISIBLE
@@ -62,5 +66,15 @@ class ChannelListActivity : AppCompatActivity() {
             finish()
             overridePendingTransition(0, 0)
         }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (shutdown?.handleKeyDown(keyCode) == true) return true
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onDestroy() {
+        shutdown?.unregister()
+        super.onDestroy()
     }
 }

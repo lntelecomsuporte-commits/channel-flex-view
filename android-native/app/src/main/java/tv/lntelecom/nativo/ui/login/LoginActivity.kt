@@ -19,6 +19,8 @@ import tv.lntelecom.nativo.data.Prefs
 import tv.lntelecom.nativo.data.SupabaseClient
 import tv.lntelecom.nativo.databinding.ActivityLoginBinding
 import tv.lntelecom.nativo.ui.channels.ChannelListActivity
+import tv.lntelecom.nativo.util.ShutdownHelper
+import android.view.KeyEvent
 
 class LoginActivity : AppCompatActivity() {
 
@@ -28,6 +30,7 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var deviceId: String
     private lateinit var deviceName: String
     private val appVersion: String by lazy { "nativo-${BuildConfig.VERSION_NAME}" }
+    private var shutdown: ShutdownHelper? = null
 
     private val beaconHandler = Handler(Looper.getMainLooper())
     private val beaconRunnable: Runnable = object : Runnable {
@@ -70,6 +73,7 @@ class LoginActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         b = ActivityLoginBinding.inflate(layoutInflater)
         setContentView(b.root)
+        shutdown = ShutdownHelper.install(this)
         val app = application as App
         prefs = Prefs(this)
         sb = SupabaseClient(app.http, App.BACKEND, App.ANON_KEY, prefs)
@@ -110,8 +114,15 @@ class LoginActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         beaconHandler.removeCallbacks(beaconRunnable)
+        shutdown?.unregister()
         super.onDestroy()
     }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (shutdown?.handleKeyDown(keyCode) == true) return true
+        return super.onKeyDown(keyCode, event)
+    }
+
 
     private fun doLogin() {
         val email = b.inputEmail.text.toString().trim()
