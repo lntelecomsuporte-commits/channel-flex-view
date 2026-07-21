@@ -90,6 +90,10 @@ class PlayerActivity : AppCompatActivity() {
     private val zapCommitDelayMs = 350L
     private var screenOffReceiver: BroadcastReceiver? = null
     private var shuttingDown = false
+    // Enquanto o instalador do sistema estiver aberto, ignoramos sinais de
+    // "sair do app" (onUserLeaveHint, screen_off) pra não matar o processo
+    // antes do usuário ter chance de confirmar/instalar o APK.
+    private var installingUpdate = false
     // Preferência de decoder da instância atual do ExoPlayer. Se o próximo
     // canal exigir preferência diferente, o player é recriado em loadCurrent().
     private var currentPreferSwDecoder = false
@@ -225,6 +229,7 @@ class PlayerActivity : AppCompatActivity() {
         screenOffReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                    if (installingUpdate) return
                     shutdownAndRelease("screen_off")
                 }
             }
@@ -252,6 +257,10 @@ class PlayerActivity : AppCompatActivity() {
      */
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
+        if (installingUpdate) {
+            android.util.Log.i("LNTV", "onUserLeaveHint ignorado — instalador de update em foreground")
+            return
+        }
         shutdownAndRelease("user_leave_hint")
     }
 
@@ -1309,6 +1318,12 @@ class PlayerActivity : AppCompatActivity() {
                 Toast.LENGTH_LONG
             ).show()
             val file = withContext(Dispatchers.IO) { updater.download(update) } ?: return@launch
+            installingUpdate = true
+            Toast.makeText(
+                this@PlayerActivity,
+                "Abrindo instalador…",
+                Toast.LENGTH_LONG
+            ).show()
             startActivity(Intent(this@PlayerActivity, UpdateInstallActivity::class.java).apply {
                 putExtra("apkPath", file.absolutePath)
             })
