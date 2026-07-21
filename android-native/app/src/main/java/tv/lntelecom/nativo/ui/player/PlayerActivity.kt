@@ -729,6 +729,13 @@ class PlayerActivity : AppCompatActivity() {
         view.requestFocus()
     }
 
+    override fun onUserLeaveHint() {
+        // Home/task-switch: encerra app pra liberar recursos, exceto durante update.
+        super.onUserLeaveHint()
+        if (App.installingUpdate) return
+        shutdownAndRelease("user_leave_hint")
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         // Power/Sleep: alguns STBs/FireTV entregam a tecla ao app antes de
         // acionar SCREEN_OFF. Encerra o app imediatamente pra liberar RAM.
