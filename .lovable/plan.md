@@ -1,42 +1,45 @@
-## Objetivo
+## Situação
 
-Garantir que o app nativo encerre sozinho **em qualquer receptor** (Fire TV, TV Box genérica, Android TV, mini PC, etc.) quando o usuário desliga o aparelho — independentemente de o fabricante entregar `POWER`, `SLEEP`, `SCREEN_OFF` ou nada disso para o app.
+Você confirmou que os Rokus dos clientes já estão com a versão nova (que tem `HeartbeatTask.brs`), e quer ver eles nas estatísticas **com canal atual**. O código do Roku no repo já chama `session-heartbeat` corretamente com `platform: "roku"`, `sessionToken`, `deviceId`, `channelId/Name`, etc. — e a edge function já aceita `"roku"` na whitelist.
 
-## Estratégia: encerrar por perda de primeiro plano, não por tecla
+Se mesmo assim eles não aparecem no painel, uma destas 3 coisas está acontecendo:
 
-Hoje dependemos de sinais que **cada fabricante entrega de um jeito**:
+1. **Auth falhando** — token do Roku vencido/refresh quebrando → função devolve 401 silenciosamente e nada é gravado.
+2. **Request não chega** — problema de rede/DNS/certificado no lado Roku.
+3. **Grava mas o painel filtra fora** — improvável, o painel usa a mesma tabela.
 
-- Fire TV: aperta Power → desliga TV via HDMI-CEC, app continua rodando em background (nenhum evento chega).
-- TV Box Android puro: manda `KEYCODE_POWER` pro app antes de dormir.
-- Android TV oficial: manda `ACTION_SCREEN_OFF`.
-- Alguns receptores só disparam `onUserLeaveHint` quando vão pro launcher.
+Sem re-sideloadar Roku, o único caminho é **iluminar o server**: fazer a edge function `session-heartbeat` gritar nos logs sempre que algo com cara de Roku chegar (via `platform: "roku"` **ou** via User-Agent contendo "Roku"). Aí você olha `docker logs` no servidor e sabe em 30 segundos qual dos 3 casos é.
 
-Em vez de continuar caçando cada tecla, a regra passa a ser universal:
+## O que vou alterar
 
-> **Se o app deixou de estar visível/ativo em primeiro plano, encerra.**
+### `supabase/functions/session-heartbeat/index.ts`
 
-Isso cobre TODOS os cenários acima de uma vez só, porque em qualquer um deles o Android tira o app do foreground.
+Adicionar logs condicionais no início do handler, só quando o request cheira a Roku:
 
-## Plano de implementação
+- **Antes da checagem de auth**: se `User-Agent` bate `/roku/i` e vier sem `Authorization`, loga `[hb][roku] 401 sem Authorization ua=...`.
+- **Após `auth.getUser()`**: se falhar e UA for Roku, loga o `error.message` e o UA.
+- **Após ler o body**: se `platform === "roku"` **ou** UA-Roku, loga uma linha JSON com `action`, `user_id`, `hasSessionId`, `platform` bruto, `cleanPlatform`, `deviceId`, `userAgent` do body, `uaHeader`, `appVersion`, `ip`.
 
-1. **Criar um helper compartilhado** (`AppShutdown.kt` ou similar) com o `shutdownAndRelease()` atual — release do player, stop do heartbeat, `finishAndRemoveTask()` + `System.exit(0)` com 150 ms de delay, guard `shuttingDown` e suporte a "supressão temporária" (para instalador de update).
+Nenhuma mudança na lógica de inserção — só instrumentação. Baixo risco, zero impacto em web/android (logs só disparam pra Roku).
 
-2. **Aplicar o encerramento por ciclo de vida nas 3 Activities do app nativo** (`LoginActivity`, `ChannelListActivity`, `PlayerActivity`):
-   - Em `onStop()`, se a Activity saiu de primeiro plano e não é atualização em andamento, chamar `shutdownAndRelease("on_stop")`.
-   - Manter os gatilhos atuais (Power/Sleep, `SCREEN_OFF`, `onUserLeaveHint`) como reforço — se qualquer um chegar antes, encerra mais rápido.
+## Como diagnosticar depois de deployar
 
-3. **Proteger contra falsos positivos**
-   - Suprimir o shutdown enquanto o instalador de APK está aberto (flag já existe no legacy Capacitor — replicar).
-   - Suprimir durante transição interna entre Activities do próprio app (flag simples: setada antes do `startActivity` interno, limpa em `onResume` da próxima tela).
+No servidor, com a função nova rodando:
 
-4. **Não mexer no APK release (Capacitor)**
-   - Ele já encerra via `onUserLeaveHint` + `ACTION_SCREEN_OFF` + Power e está funcionando nos seus testes. Só encostar se você reportar caso onde ele também fica aberto.
+```bash
+docker logs -f supabase-edge-functions 2>&1 | grep '\[hb\]\[roku\]'
+```
 
-5. **Não mexer em Roku, Samsung/Tizen, frontend web nem backend.**
+Peça pra um cliente com Roku abrir o app. Em ~30s você vai ver uma dessas 3 saídas:
 
-## Resultado esperado
+- **Nada** → o request nunca chega. Problema de rede/DNS no Roku (ou app antigo mesmo).
+- **`401 sem Authorization` ou `auth.getUser falhou`** → token Roku ruim. Aí a correção é no fluxo de refresh do Roku (aí sim precisa update do app, sem escapatória).
+- **JSON com `action: "start"` mas sessão não aparece no painel** → tem erro no insert, veremos o `error.message` logo abaixo no log (que já é logado hoje pelo `error` return).
 
-- Fire TV: aperta Power, TV apaga via CEC, Android tira o app do foreground em segundos → `onStop` fecha o app.
-- TV Box com Power: fecha na hora pela tecla (comportamento atual) — antes mesmo do `onStop`.
-- Android TV: fecha via `SCREEN_OFF` (atual) ou `onStop` (fallback).
-- Qualquer receptor futuro: mesma regra vale sem precisar mapear tecla específica.
+Também vou te dar comandos pro servidor pra deploy da edge function + como filtrar os logs (padrão da memória `mem://preferences/deploy-commands`).
+
+## Fora de escopo
+
+- Não vou tocar em nenhum arquivo do Roku (`roku/**`).
+- Não vou tocar no painel — a tabela `user_sessions` já aceita `platform="roku"` e o painel já lê ela.
+- Se o diagnóstico apontar pra "app antigo" ou "refresh token quebrado no Roku", aí sim vamos precisar de um segundo passo mexendo em `roku/source/SupabaseAuth.brs` — mas só depois de confirmar pelos logs.
