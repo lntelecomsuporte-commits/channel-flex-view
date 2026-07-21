@@ -1316,13 +1316,21 @@ class PlayerActivity : AppCompatActivity() {
             val current = BuildConfig.VERSION_CODE
             val currentName = BuildConfig.VERSION_NAME
             val update = withContext(Dispatchers.IO) { updater.check(current, currentName) } ?: return@launch
+            // Ativa o guard ANTES do download começar — se o processo for pro
+            // background durante o download (troca de foco, screen dim, etc.)
+            // não queremos que ShutdownHelper/onUserLeaveHint matem o app.
+            installingUpdate = true
             Toast.makeText(
                 this@PlayerActivity,
                 "Atualização ${update.versionName} disponível — baixando…",
                 Toast.LENGTH_LONG
             ).show()
-            val file = withContext(Dispatchers.IO) { updater.download(update) } ?: return@launch
-            installingUpdate = true
+            val file = withContext(Dispatchers.IO) { updater.download(update) }
+            if (file == null) {
+                // Falhou o download — libera o guard pra voltar ao normal.
+                installingUpdate = false
+                return@launch
+            }
             Toast.makeText(
                 this@PlayerActivity,
                 "Abrindo instalador…",
