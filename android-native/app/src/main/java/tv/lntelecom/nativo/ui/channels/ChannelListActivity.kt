@@ -68,6 +68,12 @@ class ChannelListActivity : AppCompatActivity() {
         }
     }
 
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (App.installingUpdate) return
+        shutdownHelper?.shutdown("user_leave_hint")
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (shutdown?.handleKeyDown(keyCode) == true) return true
         return super.onKeyDown(keyCode, event)
