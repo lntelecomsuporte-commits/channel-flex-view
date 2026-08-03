@@ -112,7 +112,6 @@ const AdminPanel = () => {
     );
   }
 
-  const [innovaTesting, setInnovaTesting] = useState(false);
 
   const handleTestInnovatv = async () => {
     const id = channelForm.epg_channel_id.trim();
