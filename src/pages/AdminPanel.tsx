@@ -27,6 +27,8 @@ import FirewallManager from "@/components/admin/FirewallManager";
 import EpgChannelPicker from "@/components/admin/EpgChannelPicker";
 import EpgUrlPresetSelector from "@/components/admin/EpgUrlPresetSelector";
 import { getLocalFunctionUrl, LOCAL_SUPABASE_PUBLISHABLE_KEY } from "@/lib/localBackend";
+import { INNOVATV_BASE_URL, fetchInnovaTvPrograms } from "@/lib/innovatv";
+import { getCurrentAndNextPrograms } from "@/hooks/useEPG";
 
 const emptyChannelForm = {
   name: "", channel_number: "", stream_url: "", backup_stream_urls: "", logo_url: "", category_id: "", is_active: true,
@@ -48,6 +50,7 @@ const AdminPanel = () => {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name?: string } | null>(null);
+  const [innovaTesting, setInnovaTesting] = useState(false);
   const channelFormRef = useRef<HTMLDivElement>(null);
   const categoryFormRef = useRef<HTMLDivElement>(null);
 
@@ -110,6 +113,30 @@ const AdminPanel = () => {
     );
   }
 
+
+  const handleTestInnovatv = async () => {
+    const id = channelForm.epg_channel_id.trim();
+    if (!id) return;
+    setInnovaTesting(true);
+    try {
+      const programs = await fetchInnovaTvPrograms(id, channelForm.epg_url);
+      if (programs.length === 0) {
+        toast.error("Nenhum programa encontrado para esse ID");
+        return;
+      }
+      const { current, next } = getCurrentAndNextPrograms(programs);
+      const fmt = (p: { title: string; start_date: string } | null) =>
+        p ? `${new Date(p.start_date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} ${p.title}` : "—";
+      toast.success(`${programs.length} programas encontrados`, {
+        description: `Agora: ${fmt(current)}\nDepois: ${fmt(next)}`,
+      });
+    } catch (e) {
+      toast.error("Falha ao consultar a InnovaTV", { description: (e as Error).message });
+    } finally {
+      setInnovaTesting(false);
+    }
+  };
+
   const handleSaveChannel = async () => {
     if (!channelForm.name || !channelForm.stream_url || !channelForm.channel_number) {
       toast.error("Preencha nome, número e URL do stream");
@@ -142,6 +169,7 @@ const AdminPanel = () => {
     }
 
     const isXmltv = channelForm.epg_type === "xmltv";
+    const isInnova = channelForm.epg_type === "innovatv";
     const backupList = (channelForm.backup_stream_urls || "")
       .split(/\r?\n/)
       .map((s) => s.trim())
@@ -158,9 +186,13 @@ const AdminPanel = () => {
       logo_url: logoUrl,
       category_id: channelForm.category_id || null, is_active: channelForm.is_active,
       epg_type: channelForm.epg_type || null,
-      epg_url: isXmltv ? (normalizeGithub(channelForm.epg_url) || null) : null,
+      epg_url: isXmltv
+        ? (normalizeGithub(channelForm.epg_url) || null)
+        : isInnova
+          ? (channelForm.epg_url?.trim() || INNOVATV_BASE_URL)
+          : null,
       epg_alt_text: channelForm.epg_type === "alt_text" ? (channelForm.epg_alt_text || null) : null,
-      epg_channel_id: isXmltv ? (channelForm.epg_channel_id || null) : null,
+      epg_channel_id: (isXmltv || isInnova) ? (channelForm.epg_channel_id?.trim() || null) : null,
       epg_grab_logo: isXmltv ? channelForm.epg_grab_logo : false,
       epg_show_synopsis: channelForm.epg_show_synopsis,
       use_proxy_token: channelForm.use_proxy_token,
@@ -464,6 +496,7 @@ const AdminPanel = () => {
                           <SelectItem value="none">Nenhum</SelectItem>
                           <SelectItem value="alt_text">Texto Alternativo</SelectItem>
                           <SelectItem value="xmltv">XMLTV</SelectItem>
+                          <SelectItem value="innovatv">InnovaTV (API)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -519,7 +552,53 @@ const AdminPanel = () => {
                       </div>
                     </div>
                   )}
+
+                  {channelForm.epg_type === "innovatv" && (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>
+                          ID do canal na InnovaTV{" "}
+                          <span className="text-xs text-muted-foreground">
+                            — é o valor do parâmetro <code>id</code> da API (ex.: <code>BM&amp;CBM&amp;C News</code>, <code>hallo anime3</code>)
+                          </span>
+                        </Label>
+                        <div className="flex gap-2">
+                          <Input
+                            value={channelForm.epg_channel_id}
+                            onChange={(e) => setChannelForm((f) => ({ ...f, epg_channel_id: e.target.value }))}
+                            placeholder="hallo anime3"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={innovaTesting || !channelForm.epg_channel_id.trim()}
+                            onClick={handleTestInnovatv}
+                          >
+                            {innovaTesting ? "Testando…" : "Testar"}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          A URL da API é montada automaticamente com <code>date=-2,2</code> e fuso <code>America/Sao_Paulo</code>.
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>
+                          URL base da API <span className="text-xs text-muted-foreground">(opcional — deixe vazio para o padrão)</span>
+                        </Label>
+                        <Input
+                          value={channelForm.epg_url}
+                          onChange={(e) => setChannelForm((f) => ({ ...f, epg_url: e.target.value }))}
+                          placeholder={INNOVATV_BASE_URL}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox checked={channelForm.epg_show_synopsis} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, epg_show_synopsis: !!v }))} />
+                        <Label>Exibir sinopse (permite clicar em um programa para ver a descrição)</Label>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
 
                 <div className="flex items-center gap-2">
                   <Switch checked={channelForm.is_active} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, is_active: v }))} />
