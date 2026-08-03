@@ -491,19 +491,34 @@ async function consolidate(slugByUrl) {
     }
   }
 
+  // ── InnovaTV (API JSON) ──────────────────────────────────────────────
+  const innovaChannels = fetchInnovaChannels();
+  if (innovaChannels.length > 0) {
+    log(`📡 canais InnovaTV: ${innovaChannels.length}`);
+    const innovaByChannelId = await fetchInnovaPrograms(innovaChannels);
+    for (const [chanId, programs] of innovaByChannelId) {
+      byChannelStruct.set(chanId, programs);
+      for (let i = 0; i < programs.length; i++) {
+        allProgrammeXml.push(programToXmltv(chanId, programs[i], programs[i + 1]?.start_date));
+      }
+    }
+  }
+
   // Ordena os programas por horário (mesma ordem que o cliente faria)
   byChannelStruct.forEach((arr) => arr.sort((a, b) => a.start_date.localeCompare(b.start_date)));
 
   // Adiciona metadados dos nossos canais (display-name + icon do nosso logo, se houver)
   // Para canais sem entry no XML original (ex: canal só com logo nosso), cria <channel> mínimo.
   const ourChannelMeta = [];
-  for (const ch of channels) {
+  for (const ch of [...channels, ...innovaChannels]) {
     if (allChannelXml.has(ch.epg_channel_id)) continue;
+    if (ourChannelMeta.some((x) => x.includes(`id="${escapeXml(ch.epg_channel_id)}"`))) continue;
     const icon = ch.logo_url ? `<icon src="${escapeXml(ch.logo_url)}"/>` : "";
     ourChannelMeta.push(
       `<channel id="${escapeXml(ch.epg_channel_id)}"><display-name>${escapeXml(ch.name)}</display-name>${icon}</channel>`
     );
   }
+
 
   const out = [
     '<?xml version="1.0" encoding="UTF-8"?>',
