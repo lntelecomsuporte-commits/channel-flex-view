@@ -50,6 +50,7 @@ const AdminPanel = () => {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name?: string } | null>(null);
+  const [innovaTesting, setInnovaTesting] = useState(false);
   const channelFormRef = useRef<HTMLDivElement>(null);
   const categoryFormRef = useRef<HTMLDivElement>(null);
 
