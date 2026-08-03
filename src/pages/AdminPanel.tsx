@@ -112,6 +112,31 @@ const AdminPanel = () => {
     );
   }
 
+  const [innovaTesting, setInnovaTesting] = useState(false);
+
+  const handleTestInnovatv = async () => {
+    const id = channelForm.epg_channel_id.trim();
+    if (!id) return;
+    setInnovaTesting(true);
+    try {
+      const programs = await fetchInnovaTvPrograms(id, channelForm.epg_url);
+      if (programs.length === 0) {
+        toast.error("Nenhum programa encontrado para esse ID");
+        return;
+      }
+      const { current, next } = getCurrentAndNextPrograms(programs);
+      const fmt = (p: { title: string; start_date: string } | null) =>
+        p ? `${new Date(p.start_date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} ${p.title}` : "—";
+      toast.success(`${programs.length} programas encontrados`, {
+        description: `Agora: ${fmt(current)}\nDepois: ${fmt(next)}`,
+      });
+    } catch (e) {
+      toast.error("Falha ao consultar a InnovaTV", { description: (e as Error).message });
+    } finally {
+      setInnovaTesting(false);
+    }
+  };
+
   const handleSaveChannel = async () => {
     if (!channelForm.name || !channelForm.stream_url || !channelForm.channel_number) {
       toast.error("Preencha nome, número e URL do stream");
