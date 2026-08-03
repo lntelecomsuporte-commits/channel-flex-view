@@ -27,6 +27,8 @@ import FirewallManager from "@/components/admin/FirewallManager";
 import EpgChannelPicker from "@/components/admin/EpgChannelPicker";
 import EpgUrlPresetSelector from "@/components/admin/EpgUrlPresetSelector";
 import { getLocalFunctionUrl, LOCAL_SUPABASE_PUBLISHABLE_KEY } from "@/lib/localBackend";
+import { INNOVATV_BASE_URL, fetchInnovaTvPrograms } from "@/lib/innovatv";
+import { getCurrentAndNextPrograms } from "@/hooks/useEPG";
 
 const emptyChannelForm = {
   name: "", channel_number: "", stream_url: "", backup_stream_urls: "", logo_url: "", category_id: "", is_active: true,
