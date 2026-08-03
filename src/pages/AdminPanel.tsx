@@ -471,6 +471,7 @@ const AdminPanel = () => {
                           <SelectItem value="none">Nenhum</SelectItem>
                           <SelectItem value="alt_text">Texto Alternativo</SelectItem>
                           <SelectItem value="xmltv">XMLTV</SelectItem>
+                          <SelectItem value="innovatv">InnovaTV (API)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
