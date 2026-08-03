@@ -527,7 +527,53 @@ const AdminPanel = () => {
                       </div>
                     </div>
                   )}
+
+                  {channelForm.epg_type === "innovatv" && (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>
+                          ID do canal na InnovaTV{" "}
+                          <span className="text-xs text-muted-foreground">
+                            — é o valor do parâmetro <code>id</code> da API (ex.: <code>BM&amp;CBM&amp;C News</code>, <code>hallo anime3</code>)
+                          </span>
+                        </Label>
+                        <div className="flex gap-2">
+                          <Input
+                            value={channelForm.epg_channel_id}
+                            onChange={(e) => setChannelForm((f) => ({ ...f, epg_channel_id: e.target.value }))}
+                            placeholder="hallo anime3"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={innovaTesting || !channelForm.epg_channel_id.trim()}
+                            onClick={handleTestInnovatv}
+                          >
+                            {innovaTesting ? "Testando…" : "Testar"}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          A URL da API é montada automaticamente com <code>date=-2,2</code> e fuso <code>America/Sao_Paulo</code>.
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>
+                          URL base da API <span className="text-xs text-muted-foreground">(opcional — deixe vazio para o padrão)</span>
+                        </Label>
+                        <Input
+                          value={channelForm.epg_url}
+                          onChange={(e) => setChannelForm((f) => ({ ...f, epg_url: e.target.value }))}
+                          placeholder={INNOVATV_BASE_URL}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox checked={channelForm.epg_show_synopsis} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, epg_show_synopsis: !!v }))} />
+                        <Label>Exibir sinopse (permite clicar em um programa para ver a descrição)</Label>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
 
                 <div className="flex items-center gap-2">
                   <Switch checked={channelForm.is_active} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, is_active: v }))} />
