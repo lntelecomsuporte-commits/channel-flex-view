@@ -142,6 +142,7 @@ const AdminPanel = () => {
     }
 
     const isXmltv = channelForm.epg_type === "xmltv";
+    const isInnova = channelForm.epg_type === "innovatv";
     const backupList = (channelForm.backup_stream_urls || "")
       .split(/\r?\n/)
       .map((s) => s.trim())
