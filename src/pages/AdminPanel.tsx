@@ -159,9 +159,13 @@ const AdminPanel = () => {
       logo_url: logoUrl,
       category_id: channelForm.category_id || null, is_active: channelForm.is_active,
       epg_type: channelForm.epg_type || null,
-      epg_url: isXmltv ? (normalizeGithub(channelForm.epg_url) || null) : null,
+      epg_url: isXmltv
+        ? (normalizeGithub(channelForm.epg_url) || null)
+        : isInnova
+          ? (channelForm.epg_url?.trim() || INNOVATV_BASE_URL)
+          : null,
       epg_alt_text: channelForm.epg_type === "alt_text" ? (channelForm.epg_alt_text || null) : null,
-      epg_channel_id: isXmltv ? (channelForm.epg_channel_id || null) : null,
+      epg_channel_id: (isXmltv || isInnova) ? (channelForm.epg_channel_id?.trim() || null) : null,
       epg_grab_logo: isXmltv ? channelForm.epg_grab_logo : false,
       epg_show_synopsis: channelForm.epg_show_synopsis,
       use_proxy_token: channelForm.use_proxy_token,
