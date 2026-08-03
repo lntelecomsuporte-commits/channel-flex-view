@@ -1,45 +1,40 @@
-# Paridade de encerramento em todas as Activities (app nativo)
+# Novo tipo de EPG: InnovaTV (API JSON)
 
-Objetivo: garantir que apertar **Power** no controle (ou a TV entrar em stand-by / cabo HDMI cair) encerre o app em **qualquer tela**, não só na `PlayerActivity`.
+Adicionar um terceiro tipo de EPG no painel admin, além de "Texto Alternativo" e "XMLTV", para ler a API da InnovaTV:
 
-**Sem tratamento de `onStop`/perda de foco** — o usuário prefere evitar risco de fechamento acidental durante update do app, diálogos do sistema, notificações, etc.
+```text
+https://api.innovatv.tv.br/epg/api/epg_list/by_date?date=-2,2&id=<ID>&time_zone=America/Sao_Paulo
+```
 
-## Diagnóstico atual
+A API devolve um array JSON de programas com `start_ut`, `stop_ut`, `title`, `desc`, `pg` — verificado nos dois canais informados (BM&C News = `BM&CBM&C News`, Hallo Anime = `hallo anime3`).
 
-Hoje o `shutdownAndRelease()` (Power key + `ACTION_SCREEN_OFF` + HDMI unplug) só existe na `PlayerActivity`. Se o Fire TV estiver na tela de login, splash, lista de canais fora do player, ou qualquer outra Activity, apertar Power desliga a TV mas o app fica vivo em background.
+## Como fica no painel
 
-## O que fazer
+No bloco "Configuração de EPG" do cadastro de canal:
 
-1. **Criar `ShutdownHelper.kt`** (novo, em `android-native/app/src/main/java/.../util/`)
-   - Função `installGlobalShutdown(activity: Activity)`:
-     - Registra `BroadcastReceiver` pra `Intent.ACTION_SCREEN_OFF` e `ACTION_HDMI_PLUG` (unplug).
-     - Expõe `handleKeyDown(keyCode)` pra tratar `KEYCODE_POWER`, `KEYCODE_SLEEP`, `KEYCODE_SOFT_SLEEP`.
-     - Método `shutdown()`: `finishAndRemoveTask()` + `Handler(mainLooper).postDelayed({ System.exit(0) }, 150)`.
-     - `unregister()` chamado no `onDestroy` da Activity.
-   - **Não** trata `onStop`, `onPause`, `onUserLeaveHint` nem foco de janela.
+- Nova opção no seletor "Tipo de EPG": **InnovaTV (API)**.
+- Ao escolher, aparece um único campo: **ID do canal na InnovaTV** (ex.: `BM&CBM&C News`, `hallo anime3`). Sem necessidade de colar a URL inteira — ela é montada automaticamente.
+- Um botão "Testar" que consulta a API e mostra os próximos programas encontrados, para conferir se o ID está certo antes de salvar.
 
-2. **Aplicar em todas as Activities do app nativo** (Splash, Login, ChannelList, Settings, e qualquer outra que herde de `AppCompatActivity`):
-   - `onCreate`: `shutdown = ShutdownHelper.install(this)`
-   - `onKeyDown`: delega pro helper antes do `super`
-   - `onDestroy`: `shutdown.unregister()`
+## Como o EPG chega nas TVs
 
-3. **Refatorar `PlayerActivity`** pra usar o mesmo helper, removendo a duplicação atual (mantendo o comportamento idêntico ao de hoje).
-
-## Fora do escopo
-
-- Fechamento por `onStop` / perda de foco → **descartado** por risco de fechar durante update ou diálogos.
-- APK Capacitor (release) → já encerra corretamente, sem mudanças.
-- Roku / Tizen / frontend web → não afetados.
+O EPG consolidado (`/epg/lntv.xml` e `/epg/lntv.json`, gerado a cada 3h pelo `sync-epg.mjs`) já é a fonte única que Web, APK nativo, Roku e Tizen leem. Os canais InnovaTV entram nesse mesmo arquivo, então **nenhum aplicativo precisa ser alterado ou republicado** — nem APK, nem Roku, nem Samsung.
 
 ## Detalhes técnicos
 
-- Arquivos alterados: `android-native/app/src/main/java/.../PlayerActivity.kt` + cada Activity do módulo + novo `util/ShutdownHelper.kt`.
-- Não mexe em manifest, permissões ou dependências.
-- Bump de `versionCode` no `build.gradle` pra gerar nova release no GitHub Actions.
+1. **Banco**: nenhuma coluna nova. O tipo fica em `channels.epg_type = 'innovatv'`, o ID em `channels.epg_channel_id`, e `channels.epg_url` guarda a URL base da API (`https://api.innovatv.tv.br/epg/api/epg_list/by_date`) para permitir troca futura de host.
 
-## Como testar
+2. **`scripts/sync-epg.mjs`**:
+   - Nova função `fetchInnovaChannels()` — canais ativos com `epg_type = 'innovatv'`.
+   - Para cada um, GET em `<base>?date=-2,2&id=<epg_channel_id>&time_zone=America/Sao_Paulo` (com `encodeURIComponent` no ID, pois `&` e espaços aparecem nos IDs).
+   - Converte cada item para o formato interno: `title`, `start_date` = `new Date(start_ut * 1000).toISOString()`, `desc` (ignorando quando igual ao título), `rating` = `pg` quando diferente de `S/C`.
+   - Cacheia o JSON bruto em `public/epg/sources/innovatv-<slug>.json` com a mesma regra de idade (2h30) e respeita `--force`.
+   - Injeta os programas em `byChannelStruct` e gera também os `<programme>` XMLTV equivalentes, para que `lntv.xml` e `lntv.json` fiquem consistentes.
+   - Inclui um `<channel>` mínimo (display-name + logo) para esses canais.
+   - Ajusta a limpeza de órfãos para não apagar os arquivos `.json` das fontes InnovaTV.
 
-1. Instalar o APK no Fire TV.
-2. Em cada tela (splash, login, lista, player), apertar Power → TV apaga e app encerra (verificar via `adb shell dumpsys activity | grep lntv` que o processo sumiu).
-3. Abrir o app, ir pra lista de canais (fora do player), tirar o HDMI → app encerra.
-4. Deixar o app aberto e mandar uma notificação do sistema / abrir Quick Settings → app **continua rodando** (garantia de que foco não fecha).
+3. **`src/pages/AdminPanel.tsx`**: item `innovatv` no seletor, campo de ID + botão de teste, e salvamento gravando `epg_url` com a URL base e limpando `epg_alt_text`.
+
+4. **`src/hooks/useEPG.ts` / `useMultiEPG.ts`**: `getEpgSource` passa a reconhecer `innovatv` (sem fallback de proxy — esses canais só vêm do consolidado). O restante da leitura já funciona porque tudo é indexado por `epg_channel_id`.
+
+5. **`supabase/functions/epg-proxy`**: fallback opcional para quando o consolidado ainda não tiver rodado — aceita `?innovatv=<id>` e devolve o XMLTV convertido. Útil no preview/dev, onde não existe nginx local.
