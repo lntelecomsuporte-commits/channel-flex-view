@@ -195,6 +195,119 @@ function fetchOurChannels() {
   });
 }
 
+/* ───────────────────────── InnovaTV (API JSON) ───────────────────────── */
+
+const INNOVATV_BASE_URL = "https://api.innovatv.tv.br/epg/api/epg_list/by_date";
+
+function fetchInnovaChannels() {
+  const sql = `
+    SELECT id, name, channel_number, COALESCE(epg_url,''), epg_channel_id, COALESCE(logo_url,'')
+    FROM public.channels
+    WHERE is_active = true
+      AND epg_type = 'innovatv'
+      AND epg_channel_id IS NOT NULL AND epg_channel_id <> ''
+    ORDER BY channel_number ASC
+  `;
+  const raw = psql(sql).trim();
+  if (!raw) return [];
+  return raw.split("\n").map((line) => {
+    const [id, name, channel_number, epg_url, epg_channel_id, logo_url] = line.split("\t");
+    return { id, name, channel_number: parseInt(channel_number, 10), epg_url, epg_channel_id, logo_url };
+  });
+}
+
+function innovaUrl(channelId, baseUrl) {
+  const base = (baseUrl || "").trim() || INNOVATV_BASE_URL;
+  const params = new URLSearchParams({
+    date: "-2,2",
+    id: channelId,
+    time_zone: "America/Sao_Paulo",
+  });
+  return `${base}?${params.toString()}`;
+}
+
+function innovaSlug(channelId) {
+  const h = createHash("sha1").update(channelId).digest("hex").slice(0, 8);
+  const name = channelId.replace(/[^a-zA-Z0-9._-]/g, "").slice(-40);
+  return `innovatv-${name}-${h}.json`;
+}
+
+function innovaItemsToPrograms(items) {
+  if (!Array.isArray(items)) return [];
+  const out = [];
+  for (const raw of items) {
+    const startRaw = raw?.start_ut ?? raw?.start;
+    const startSec = typeof startRaw === "string" ? parseInt(startRaw, 10) : startRaw;
+    if (!startSec || !Number.isFinite(startSec)) continue;
+    const title = String(raw?.title || "").trim();
+    const desc = String(raw?.desc || "").trim();
+    const pg = String(raw?.pg || "").trim();
+    out.push({
+      title,
+      start_date: new Date(startSec * 1000).toISOString(),
+      desc: desc && desc !== title ? desc : null,
+      rating: pg && pg !== "S/C" && pg !== "-1" ? pg : null,
+    });
+  }
+  out.sort((a, b) => a.start_date.localeCompare(b.start_date));
+  return out;
+}
+
+/** Baixa (com cache de 2h30) os programas InnovaTV de cada canal. */
+async function fetchInnovaPrograms(channels) {
+  await mkdir(SOURCES_DIR, { recursive: true });
+  const byChannelId = new Map();
+
+  for (const ch of channels) {
+    const dest = join(SOURCES_DIR, innovaSlug(ch.epg_channel_id));
+    let json = null;
+
+    if (!FORCE && await fileExists(dest)) {
+      const st = await stat(dest);
+      const ageMin = (Date.now() - st.mtimeMs) / 60_000;
+      if (ageMin < 150) {
+        try {
+          json = JSON.parse(await readFile(dest, "utf8"));
+          log(`✓ innovatv ${ch.epg_channel_id} (cache ${Math.round(ageMin)}min)`);
+        } catch { json = null; }
+      }
+    }
+
+    if (!json) {
+      const url = innovaUrl(ch.epg_channel_id, ch.epg_url);
+      log(`⬇  innovatv ${ch.epg_channel_id}`);
+      const text = await fetchOnce(url, true);
+      if (!text) { log(`✗ falhou innovatv: ${ch.epg_channel_id}`); continue; }
+      try { json = JSON.parse(text); }
+      catch { log(`✗ resposta não-JSON innovatv ${ch.epg_channel_id} — ${text.slice(0, 120)}`); continue; }
+      await writeFile(dest, JSON.stringify(json), "utf8");
+    }
+
+    const programs = innovaItemsToPrograms(json);
+    if (programs.length === 0) { log(`   ⚠ innovatv ${ch.epg_channel_id}: 0 programas`); continue; }
+    byChannelId.set(ch.epg_channel_id, programs);
+    log(`   ${ch.epg_channel_id}: ${programs.length} programas`);
+  }
+
+  return byChannelId;
+}
+
+/** Converte um programa interno em <programme> XMLTV. */
+function programToXmltv(channelId, prog, nextStartIso) {
+  const fmt = (iso) => {
+    const d = new Date(iso);
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())} +0000`;
+  };
+  const stop = nextStartIso ? ` stop="${fmt(nextStartIso)}"` : "";
+  const desc = prog.desc ? `<desc lang="pt">${escapeXml(prog.desc)}</desc>` : "";
+  const rating = prog.rating
+    ? `<rating><value>${escapeXml(prog.rating)}</value></rating>`
+    : "";
+  return `<programme start="${fmt(prog.start_date)}"${stop} channel="${escapeXml(channelId)}"><title lang="pt">${escapeXml(prog.title)}</title>${desc}${rating}</programme>`;
+}
+
+
 async function syncSources(presetUrls) {
   await mkdir(SOURCES_DIR, { recursive: true });
   const slugByUrl = new Map();
