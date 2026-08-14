@@ -582,6 +582,51 @@ const AdminPanel = () => {
                     </div>
                   )}
 
+                  {channelForm.epg_type === "maspertv" && (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>
+                          ID da programação na MasperTV{" "}
+                          <span className="text-xs text-muted-foreground">
+                            — é o valor do parâmetro <code>id</code> da API (ex.: <code>93</code>)
+                          </span>
+                        </Label>
+                        <div className="flex gap-2">
+                          <Input
+                            value={channelForm.epg_channel_id}
+                            onChange={(e) => setChannelForm((f) => ({ ...f, epg_channel_id: e.target.value }))}
+                            placeholder="93"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={masperTesting || !channelForm.epg_channel_id.trim()}
+                            onClick={handleTestMaspertv}
+                          >
+                            {masperTesting ? "Testando…" : "Testar"}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          A URL é montada automaticamente como <code>?id=&lt;ID&gt;&amp;extra=1</code>.
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>
+                          URL base da API <span className="text-xs text-muted-foreground">(opcional — deixe vazio para o padrão)</span>
+                        </Label>
+                        <Input
+                          value={channelForm.epg_url}
+                          onChange={(e) => setChannelForm((f) => ({ ...f, epg_url: e.target.value }))}
+                          placeholder={MASPERTV_BASE_URL}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox checked={channelForm.epg_show_synopsis} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, epg_show_synopsis: !!v }))} />
+                        <Label>Exibir sinopse (permite clicar em um programa para ver a descrição)</Label>
+                      </div>
+                    </div>
+                  )}
+
                   {channelForm.epg_type === "innovatv" && (
                     <div className="space-y-4">
                       <div className="space-y-2">
