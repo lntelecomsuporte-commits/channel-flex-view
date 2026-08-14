@@ -101,7 +101,7 @@ export function getEpgSource(channel: {
     return null;
   }
   // InnovaTV vem SEMPRE do consolidado (/epg/lntv.json) — sem fallback de fonte.
-  if (effectiveType === "innovatv" || effectiveType === "maspertv") return null;
+  if (effectiveType === "innovatv") return null;
   // Legacy values (iptv_epg_org, open_epg, github_xml, epg_pw) all treated as xmltv now.
   const isEpgPw = effectiveType === "epg_pw";
   return {
