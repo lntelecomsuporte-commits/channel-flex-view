@@ -28,6 +28,7 @@ import EpgChannelPicker from "@/components/admin/EpgChannelPicker";
 import EpgUrlPresetSelector from "@/components/admin/EpgUrlPresetSelector";
 import { getLocalFunctionUrl, LOCAL_SUPABASE_PUBLISHABLE_KEY } from "@/lib/localBackend";
 import { INNOVATV_BASE_URL, fetchInnovaTvPrograms } from "@/lib/innovatv";
+import { MASPERTV_BASE_URL, fetchMasperTvPrograms } from "@/lib/maspertv";
 import { getCurrentAndNextPrograms } from "@/hooks/useEPG";
 
 const emptyChannelForm = {
@@ -51,6 +52,7 @@ const AdminPanel = () => {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name?: string } | null>(null);
   const [innovaTesting, setInnovaTesting] = useState(false);
+  const [masperTesting, setMasperTesting] = useState(false);
   const channelFormRef = useRef<HTMLDivElement>(null);
   const categoryFormRef = useRef<HTMLDivElement>(null);
 
@@ -137,6 +139,29 @@ const AdminPanel = () => {
     }
   };
 
+  const handleTestMaspertv = async () => {
+    const id = channelForm.epg_channel_id.trim();
+    if (!id) return;
+    setMasperTesting(true);
+    try {
+      const programs = await fetchMasperTvPrograms(id, channelForm.epg_url);
+      if (programs.length === 0) {
+        toast.error("Nenhum programa encontrado para esse ID");
+        return;
+      }
+      const { current, next } = getCurrentAndNextPrograms(programs);
+      const fmt = (p: { title: string; start_date: string } | null) =>
+        p ? `${new Date(p.start_date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} ${p.title}` : "\u2014";
+      toast.success(`${programs.length} programas encontrados`, {
+        description: `Agora: ${fmt(current)}\nDepois: ${fmt(next)}`,
+      });
+    } catch (e) {
+      toast.error("Falha ao consultar a MasperTV", { description: (e as Error).message });
+    } finally {
+      setMasperTesting(false);
+    }
+  };
+
   const handleSaveChannel = async () => {
     if (!channelForm.name || !channelForm.stream_url || !channelForm.channel_number) {
       toast.error("Preencha nome, número e URL do stream");
@@ -170,6 +195,7 @@ const AdminPanel = () => {
 
     const isXmltv = channelForm.epg_type === "xmltv";
     const isInnova = channelForm.epg_type === "innovatv";
+    const isMasper = channelForm.epg_type === "maspertv";
     const backupList = (channelForm.backup_stream_urls || "")
       .split(/\r?\n/)
       .map((s) => s.trim())
@@ -190,9 +216,11 @@ const AdminPanel = () => {
         ? (normalizeGithub(channelForm.epg_url) || null)
         : isInnova
           ? (channelForm.epg_url?.trim() || INNOVATV_BASE_URL)
-          : null,
+          : isMasper
+            ? (channelForm.epg_url?.trim() || MASPERTV_BASE_URL)
+            : null,
       epg_alt_text: channelForm.epg_type === "alt_text" ? (channelForm.epg_alt_text || null) : null,
-      epg_channel_id: (isXmltv || isInnova) ? (channelForm.epg_channel_id?.trim() || null) : null,
+      epg_channel_id: (isXmltv || isInnova || isMasper) ? (channelForm.epg_channel_id?.trim() || null) : null,
       epg_grab_logo: isXmltv ? channelForm.epg_grab_logo : false,
       epg_show_synopsis: channelForm.epg_show_synopsis,
       use_proxy_token: channelForm.use_proxy_token,
@@ -497,6 +525,7 @@ const AdminPanel = () => {
                           <SelectItem value="alt_text">Texto Alternativo</SelectItem>
                           <SelectItem value="xmltv">XMLTV</SelectItem>
                           <SelectItem value="innovatv">InnovaTV (API)</SelectItem>
+                          <SelectItem value="maspertv">MasperTV (API)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
