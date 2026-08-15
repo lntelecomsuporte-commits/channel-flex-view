@@ -147,8 +147,24 @@ Deno.serve(async (req) => {
 
     if (existing) {
       if (existing.user_id !== userId) {
-        return json({ error: "Este dispositivo está vinculado a outra conta. Contate o suporte." }, 409);
+        // O dono anterior ainda existe? Se o profile sumiu (cliente removido /
+        // troca de titularidade), o registro é órfão — libera o aparelho.
+        const { data: owner } = await adminClient
+          .from("profiles")
+          .select("user_id")
+          .eq("user_id", existing.user_id)
+          .maybeSingle();
+        if (owner) {
+          return json({ error: "Este dispositivo está vinculado a outra conta. Contate o suporte." }, 409);
+        }
+        console.log("Removendo vínculo órfão do device:", existing.device_id, existing.user_id);
+        await adminClient.from("user_devices").delete().eq("id", existing.id);
+        existing = null as unknown as typeof existing;
       }
+    }
+
+    if (existing) {
+
       if (!existing.is_active) {
         return json({ error: "Dispositivo bloqueado pelo administrador." }, 403);
       }
