@@ -35,10 +35,22 @@ async function serviceRestFetch(supabaseUrl: string, serviceRoleKey: string, pat
 }
 
 async function cleanupPublicUserData(supabaseUrl: string, serviceRoleKey: string, userId: string) {
-  // user_devices e pending_devices ANTES de profiles, pra liberar o aparelho pra outro usuário
+  // 1) Descobre os device_ids do usuário ANTES de apagar, pra limpar pending_devices
+  //    (pending_devices não tem coluna user_id — só device_id)
+  let deviceIds: string[] = [];
+  const devRes = await serviceRestFetch(
+    supabaseUrl,
+    serviceRoleKey,
+    `user_devices?select=device_id&user_id=eq.${encodeURIComponent(userId)}`,
+    "GET",
+  );
+  if (devRes.ok && Array.isArray(devRes.data)) {
+    deviceIds = (devRes.data as Array<{ device_id: string }>).map((d) => d.device_id).filter(Boolean);
+  }
+
+  // 2) user_devices ANTES de profiles, pra liberar o aparelho pra outro usuário
   const tables = [
     "user_devices",
-    "pending_devices",
     "user_category_access",
     "user_roles",
     "user_sessions",
@@ -49,7 +61,20 @@ async function cleanupPublicUserData(supabaseUrl: string, serviceRoleKey: string
     const res = await serviceRestFetch(supabaseUrl, serviceRoleKey, `${table}?user_id=eq.${encodeURIComponent(userId)}`, "DELETE");
     if (!res.ok) console.error(`cleanup ${table} failed:`, res.status, res.data);
   }
+
+  // 3) pending_devices pelos device_ids liberados
+  if (deviceIds.length > 0) {
+    const list = deviceIds.map((d) => `"${d.replace(/"/g, '\\"')}"`).join(",");
+    const res = await serviceRestFetch(
+      supabaseUrl,
+      serviceRoleKey,
+      `pending_devices?device_id=in.(${encodeURIComponent(list)})`,
+      "DELETE",
+    );
+    if (!res.ok) console.error("cleanup pending_devices failed:", res.status, res.data);
+  }
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
