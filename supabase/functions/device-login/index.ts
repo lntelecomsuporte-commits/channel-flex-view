@@ -138,17 +138,33 @@ Deno.serve(async (req) => {
     if (prof && !prof.is_active) return json({ error: "Conta inativa." }, 403);
 
     // 3) Verifica se device_id+platform já existe
-    const { data: existing } = await adminClient
+    const { data: existingRow } = await adminClient
       .from("user_devices")
       .select("*")
       .eq("device_id", device_id)
       .eq("platform", platform)
       .maybeSingle();
+    let existing = existingRow;
 
-    if (existing) {
-      if (existing.user_id !== userId) {
+    if (existing && existing.user_id !== userId) {
+      // O dono anterior ainda existe? Se o profile sumiu (cliente removido /
+      // troca de titularidade), o registro é órfão — libera o aparelho.
+      const { data: owner } = await adminClient
+        .from("profiles")
+        .select("user_id")
+        .eq("user_id", existing.user_id)
+        .maybeSingle();
+      if (owner) {
         return json({ error: "Este dispositivo está vinculado a outra conta. Contate o suporte." }, 409);
       }
+      console.log("Removendo vínculo órfão do device:", existing.device_id, existing.user_id);
+      await adminClient.from("user_devices").delete().eq("id", existing.id);
+      existing = null;
+    }
+
+    if (existing) {
+
+
       if (!existing.is_active) {
         return json({ error: "Dispositivo bloqueado pelo administrador." }, 403);
       }

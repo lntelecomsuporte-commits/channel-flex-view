@@ -5,6 +5,21 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Remove os aparelhos do usuário e libera os device_ids em pending_devices
+// (pending_devices não tem coluna user_id — o vínculo é pelo device_id).
+async function cleanupUserDevices(admin: ReturnType<typeof createClient>, userId: string) {
+  const { data: devs } = await admin.from("user_devices").select("device_id").eq("user_id", userId);
+  const deviceIds = ((devs || []) as Array<{ device_id: string }>).map((d) => d.device_id).filter(Boolean);
+  const { error } = await admin.from("user_devices").delete().eq("user_id", userId);
+  if (error) console.error("cleanup user_devices failed:", error);
+  if (deviceIds.length > 0) {
+    const { error: pErr } = await admin.from("pending_devices").delete().in("device_id", deviceIds);
+    if (pErr) console.error("cleanup pending_devices failed:", pErr);
+  }
+}
+
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -322,8 +337,8 @@ Deno.serve(async (req) => {
           // 3b) profile exists but auth missing → delete orphan profile and CREATE the auth user
           if (!authUserId && profileUserId) {
             console.log("Orphan profile without auth.user — deleting orphan and recreating");
-            await supabaseAdmin.from("user_devices").delete().eq("user_id", profileUserId);
-            await supabaseAdmin.from("pending_devices").delete().eq("user_id", profileUserId);
+            await cleanupUserDevices(supabaseAdmin, profileUserId);
+
             await supabaseAdmin.from("user_category_access").delete().eq("user_id", profileUserId);
             await supabaseAdmin.from("user_roles").delete().eq("user_id", profileUserId);
             await supabaseAdmin.from("user_favorites").delete().eq("user_id", profileUserId);
@@ -489,10 +504,12 @@ Deno.serve(async (req) => {
             .eq("user_id", profile.user_id);
 
           // Limpa todas as tabelas públicas relacionadas (não há FK cascade)
-          for (const table of ["user_devices", "pending_devices", "user_category_access", "user_roles", "user_sessions", "user_favorites", "profiles"]) {
+          await cleanupUserDevices(supabaseAdmin, profile.user_id);
+          for (const table of ["user_category_access", "user_roles", "user_sessions", "user_favorites", "profiles"]) {
             const { error: cleanupErr } = await supabaseAdmin.from(table).delete().eq("user_id", profile.user_id);
             if (cleanupErr) console.error(`cleanup ${table} failed:`, cleanupErr);
           }
+
 
           const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(profile.user_id);
           if (delErr && !String(delErr.message || "").toLowerCase().includes("not found")) {
