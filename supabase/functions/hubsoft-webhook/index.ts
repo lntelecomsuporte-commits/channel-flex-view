@@ -5,6 +5,21 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Remove os aparelhos do usuário e libera os device_ids em pending_devices
+// (pending_devices não tem coluna user_id — o vínculo é pelo device_id).
+async function cleanupUserDevices(admin: ReturnType<typeof createClient>, userId: string) {
+  const { data: devs } = await admin.from("user_devices").select("device_id").eq("user_id", userId);
+  const deviceIds = ((devs || []) as Array<{ device_id: string }>).map((d) => d.device_id).filter(Boolean);
+  const { error } = await admin.from("user_devices").delete().eq("user_id", userId);
+  if (error) console.error("cleanup user_devices failed:", error);
+  if (deviceIds.length > 0) {
+    const { error: pErr } = await admin.from("pending_devices").delete().in("device_id", deviceIds);
+    if (pErr) console.error("cleanup pending_devices failed:", pErr);
+  }
+}
+
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
