@@ -15,6 +15,16 @@ const TTL_SECONDS = 30 * 24 * 60 * 60;
 const FALLBACK_ORIGIN = "https://tv2.lntelecom.net";
 const REST_TIMEOUT_MS = 4_000;
 
+/** Converte logo_url relativa (/logos/5.png?v=123) em URL absoluta do servidor. */
+function absoluteLogo(logo: string | null | undefined, origin: string): string | null {
+  if (!logo) return null;
+  const trimmed = logo.trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+  return `${origin.replace(/\/$/, "")}/${trimmed.replace(/^\//, "")}`;
+}
+
 const REST_BASES = [
   Deno.env.get("LNTV_SUPABASE_INTERNAL_URL")?.replace(/\/$/, ""),
   "http://kong:8000",
