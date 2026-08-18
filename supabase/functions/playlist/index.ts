@@ -15,6 +15,16 @@ const TTL_SECONDS = 30 * 24 * 60 * 60;
 const FALLBACK_ORIGIN = "https://tv2.lntelecom.net";
 const REST_TIMEOUT_MS = 4_000;
 
+/** Converte logo_url relativa (/logos/5.png?v=123) em URL absoluta do servidor. */
+function absoluteLogo(logo: string | null | undefined, origin: string): string | null {
+  if (!logo) return null;
+  const trimmed = logo.trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+  return `${origin.replace(/\/$/, "")}/${trimmed.replace(/^\//, "")}`;
+}
+
 const REST_BASES = [
   Deno.env.get("LNTV_SUPABASE_INTERNAL_URL")?.replace(/\/$/, ""),
   "http://kong:8000",
@@ -237,7 +247,10 @@ Deno.serve(async (req) => {
         `&pt=${encodeURIComponent(profile.playlist_token)}`;
 
       const tvgId = ch.epg_channel_id ? ` tvg-id="${escAttr(ch.epg_channel_id)}"` : "";
-      const tvgLogo = ch.logo_url ? ` tvg-logo="${escAttr(ch.logo_url)}"` : "";
+      // Prefere a logo servida pelo próprio servidor (/logos/N.png?v=...).
+      // Como é caminho relativo, precisa virar URL absoluta para os players m3u.
+      const logoAbs = absoluteLogo(ch.logo_url, publicOrigin);
+      const tvgLogo = logoAbs ? ` tvg-logo="${escAttr(logoAbs)}"` : "";
       const tvgChno = ch.channel_number != null ? ` tvg-chno="${ch.channel_number}"` : "";
       const group = ch.category_id ? ` group-title="${escAttr(categoryName.get(ch.category_id))}"` : "";
       lines.push(`#EXTINF:-1${tvgId}${tvgLogo}${tvgChno}${group},${escAttr(ch.name)}`);
