@@ -237,7 +237,10 @@ Deno.serve(async (req) => {
         `&pt=${encodeURIComponent(profile.playlist_token)}`;
 
       const tvgId = ch.epg_channel_id ? ` tvg-id="${escAttr(ch.epg_channel_id)}"` : "";
-      const tvgLogo = ch.logo_url ? ` tvg-logo="${escAttr(ch.logo_url)}"` : "";
+      // Prefere a logo servida pelo próprio servidor (/logos/N.png?v=...).
+      // Como é caminho relativo, precisa virar URL absoluta para os players m3u.
+      const logoAbs = absoluteLogo(ch.logo_url, publicOrigin);
+      const tvgLogo = logoAbs ? ` tvg-logo="${escAttr(logoAbs)}"` : "";
       const tvgChno = ch.channel_number != null ? ` tvg-chno="${ch.channel_number}"` : "";
       const group = ch.category_id ? ` group-title="${escAttr(categoryName.get(ch.category_id))}"` : "";
       lines.push(`#EXTINF:-1${tvgId}${tvgLogo}${tvgChno}${group},${escAttr(ch.name)}`);
