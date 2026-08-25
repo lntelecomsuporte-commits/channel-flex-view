@@ -104,7 +104,7 @@ function looksLikeXmltv(text) {
   return head.includes("<tv") || head.includes("<channel") || head.includes("<programme");
 }
 
-async function fetchOnce(url, browserLike) {
+async function fetchOnce(url, browserLike, extraHeaders) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   const headers = browserLike
@@ -112,13 +112,16 @@ async function fetchOnce(url, browserLike) {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
         Accept: "*/*",
         "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+        ...(extraHeaders || {}),
       }
     : {
         "User-Agent": "Mozilla/5.0 (compatible; LNTV-EPG-Sync/1.0)",
         Accept: "application/xml, text/xml, */*",
+        ...(extraHeaders || {}),
       };
   try {
     const res = await fetch(url, { signal: ctrl.signal, headers, redirect: "follow" });
+
     if (!res.ok) { log(`   HTTP ${res.status} ${res.statusText}`); return null; }
     return await res.text();
   } catch (e) {
