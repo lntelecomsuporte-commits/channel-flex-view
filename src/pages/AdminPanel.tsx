@@ -54,6 +54,7 @@ const AdminPanel = () => {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name?: string } | null>(null);
   const [innovaTesting, setInnovaTesting] = useState(false);
+  const [nxtvTesting, setNxtvTesting] = useState(false);
   
   const channelFormRef = useRef<HTMLDivElement>(null);
   const categoryFormRef = useRef<HTMLDivElement>(null);
