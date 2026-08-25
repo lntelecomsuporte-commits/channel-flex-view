@@ -303,22 +303,25 @@ const NXTV_BASE_URL = "https://gateway.nxtv.com.br/api//epg";
 async function loadNxtvCreds() {
   let email = process.env.NXTV_USERNAME || process.env.NXTV_EMAIL || "";
   let password = process.env.NXTV_PASSWORD || "";
+  let appId = process.env.NXTV_APP_ID || "1";
   if (!email || !password) {
     for (const f of [".env.nxtv", ".env"]) {
       try {
         const txt = await readFile(join(PROJECT_ROOT, f), "utf8");
         for (const line of txt.split("\n")) {
-          const m = line.match(/^\s*(NXTV_USERNAME|NXTV_EMAIL|NXTV_PASSWORD)\s*=\s*(.*)\s*$/);
+          const m = line.match(/^\s*(NXTV_USERNAME|NXTV_EMAIL|NXTV_PASSWORD|NXTV_APP_ID)\s*=\s*(.*)\s*$/);
           if (!m) continue;
           const val = m[2].replace(/^["']|["']$/g, "").trim();
           if (m[1] === "NXTV_PASSWORD") password ||= val;
+          else if (m[1] === "NXTV_APP_ID") appId = val || appId;
           else email ||= val;
         }
       } catch { /* arquivo ausente */ }
       if (email && password) break;
     }
   }
-  return email && password ? { email, password } : null;
+  const app = Number.parseInt(appId, 10);
+  return email && password ? { email, password, app: Number.isFinite(app) ? app : 1 } : null;
 }
 
 let nxtvTokenCache = null;
