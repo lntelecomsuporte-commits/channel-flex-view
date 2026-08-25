@@ -28,6 +28,8 @@ import EpgChannelPicker from "@/components/admin/EpgChannelPicker";
 import EpgUrlPresetSelector from "@/components/admin/EpgUrlPresetSelector";
 import { getLocalFunctionUrl, LOCAL_SUPABASE_PUBLISHABLE_KEY } from "@/lib/localBackend";
 import { INNOVATV_BASE_URL, fetchInnovaTvPrograms } from "@/lib/innovatv";
+import { NXTV_BASE_URL, fetchNxtvPrograms } from "@/lib/nxtv";
+import NxtvChannelPicker from "@/components/admin/NxtvChannelPicker";
 
 import { getCurrentAndNextPrograms } from "@/hooks/useEPG";
 
