@@ -28,6 +28,8 @@ import EpgChannelPicker from "@/components/admin/EpgChannelPicker";
 import EpgUrlPresetSelector from "@/components/admin/EpgUrlPresetSelector";
 import { getLocalFunctionUrl, LOCAL_SUPABASE_PUBLISHABLE_KEY } from "@/lib/localBackend";
 import { INNOVATV_BASE_URL, fetchInnovaTvPrograms } from "@/lib/innovatv";
+import { NXTV_BASE_URL, fetchNxtvPrograms } from "@/lib/nxtv";
+import NxtvChannelPicker from "@/components/admin/NxtvChannelPicker";
 
 import { getCurrentAndNextPrograms } from "@/hooks/useEPG";
 
@@ -52,6 +54,7 @@ const AdminPanel = () => {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name?: string } | null>(null);
   const [innovaTesting, setInnovaTesting] = useState(false);
+  const [nxtvTesting, setNxtvTesting] = useState(false);
   
   const channelFormRef = useRef<HTMLDivElement>(null);
   const categoryFormRef = useRef<HTMLDivElement>(null);
@@ -139,6 +142,29 @@ const AdminPanel = () => {
     }
   };
 
+  const handleTestNxtv = async () => {
+    const id = channelForm.epg_channel_id.trim();
+    if (!id) return;
+    setNxtvTesting(true);
+    try {
+      const programs = await fetchNxtvPrograms(id, channelForm.epg_url);
+      if (programs.length === 0) {
+        toast.error("Nenhum programa encontrado para esse ID");
+        return;
+      }
+      const { current, next } = getCurrentAndNextPrograms(programs);
+      const fmt = (p: { title: string; start_date: string } | null) =>
+        p ? `${new Date(p.start_date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} ${p.title}` : "—";
+      toast.success(`${programs.length} programas encontrados`, {
+        description: `Agora: ${fmt(current)}\nDepois: ${fmt(next)}`,
+      });
+    } catch (e) {
+      toast.error("Falha ao consultar a NXTV", { description: (e as Error).message });
+    } finally {
+      setNxtvTesting(false);
+    }
+  };
+
 
   const handleSaveChannel = async () => {
     if (!channelForm.name || !channelForm.stream_url || !channelForm.channel_number) {
@@ -173,6 +199,7 @@ const AdminPanel = () => {
 
     const isXmltv = channelForm.epg_type === "xmltv";
     const isInnova = channelForm.epg_type === "innovatv";
+    const isNxtv = channelForm.epg_type === "nxtv";
     
     const backupList = (channelForm.backup_stream_urls || "")
       .split(/\r?\n/)
@@ -194,9 +221,11 @@ const AdminPanel = () => {
         ? (normalizeGithub(channelForm.epg_url) || null)
         : isInnova
           ? (channelForm.epg_url?.trim() || INNOVATV_BASE_URL)
-          : null,
+          : isNxtv
+            ? (channelForm.epg_url?.trim() || NXTV_BASE_URL)
+            : null,
       epg_alt_text: channelForm.epg_type === "alt_text" ? (channelForm.epg_alt_text || null) : null,
-      epg_channel_id: (isXmltv || isInnova) ? (channelForm.epg_channel_id?.trim() || null) : null,
+      epg_channel_id: (isXmltv || isInnova || isNxtv) ? (channelForm.epg_channel_id?.trim() || null) : null,
       epg_grab_logo: isXmltv ? channelForm.epg_grab_logo : false,
       epg_show_synopsis: channelForm.epg_show_synopsis,
       use_proxy_token: channelForm.use_proxy_token,
@@ -501,6 +530,8 @@ const AdminPanel = () => {
                           <SelectItem value="alt_text">Texto Alternativo</SelectItem>
                           <SelectItem value="xmltv">XMLTV</SelectItem>
                           <SelectItem value="innovatv">InnovaTV (API)</SelectItem>
+                          <SelectItem value="nxtv">NXTV (API)</SelectItem>
+                          
                           
                         </SelectContent>
                       </Select>
@@ -595,6 +626,47 @@ const AdminPanel = () => {
                           value={channelForm.epg_url}
                           onChange={(e) => setChannelForm((f) => ({ ...f, epg_url: e.target.value }))}
                           placeholder={INNOVATV_BASE_URL}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox checked={channelForm.epg_show_synopsis} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, epg_show_synopsis: !!v }))} />
+                        <Label>Exibir sinopse (permite clicar em um programa para ver a descrição)</Label>
+                      </div>
+                    </div>
+                  )}
+
+                  {channelForm.epg_type === "nxtv" && (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>
+                          Canal na NXTV{" "}
+                          <span className="text-xs text-muted-foreground">
+                            — informe o <code>channel_id</code> (ex.: <code>748</code>) ou clique em Buscar
+                          </span>
+                        </Label>
+                        <NxtvChannelPicker
+                          value={channelForm.epg_channel_id}
+                          onChange={(v) => setChannelForm((f) => ({ ...f, epg_channel_id: v }))}
+                          baseUrl={channelForm.epg_url}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={nxtvTesting || !channelForm.epg_channel_id.trim()}
+                          onClick={handleTestNxtv}
+                        >
+                          {nxtvTesting ? "Testando…" : "Testar"}
+                        </Button>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>
+                          URL da API <span className="text-xs text-muted-foreground">(opcional — deixe vazio para o padrão)</span>
+                        </Label>
+                        <Input
+                          value={channelForm.epg_url}
+                          onChange={(e) => setChannelForm((f) => ({ ...f, epg_url: e.target.value }))}
+                          placeholder={NXTV_BASE_URL}
                         />
                       </div>
                       <div className="flex items-center gap-2">

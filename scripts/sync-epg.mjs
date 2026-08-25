@@ -292,6 +292,114 @@ async function fetchInnovaPrograms(channels) {
   return byChannelId;
 }
 
+/* ───────────────────────── NXTV (API JSON) ───────────────────────── */
+
+const NXTV_BASE_URL = "https://gateway.nxtv.com.br/api//epg";
+
+function fetchNxtvChannels() {
+  const sql = `
+    SELECT id, name, channel_number, COALESCE(epg_url,''), epg_channel_id, COALESCE(logo_url,'')
+    FROM public.channels
+    WHERE is_active = true
+      AND epg_type = 'nxtv'
+      AND epg_channel_id IS NOT NULL AND epg_channel_id <> ''
+    ORDER BY channel_number ASC
+  `;
+  const raw = psql(sql).trim();
+  if (!raw) return [];
+  return raw.split("\n").map((line) => {
+    const [id, name, channel_number, epg_url, epg_channel_id, logo_url] = line.split("\t");
+    return { id, name, channel_number: parseInt(channel_number, 10), epg_url, epg_channel_id, logo_url };
+  });
+}
+
+function nxtvSlug(baseUrl) {
+  const h = createHash("sha1").update(baseUrl).digest("hex").slice(0, 8);
+  return `nxtv-${h}.json`;
+}
+
+function nxtvTimeToIso(value) {
+  if (!value) return null;
+  const s = String(value).trim();
+  const hasTz = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(s);
+  const d = new Date(hasTz ? s : `${s}-03:00`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+function nxtvProgramsToPrograms(programs) {
+  if (!Array.isArray(programs)) return [];
+  const out = [];
+  for (const raw of programs) {
+    const start = nxtvTimeToIso(raw?.start_time);
+    if (!start) continue;
+    const title = String(raw?.program_title || "").trim();
+    if (!title) continue;
+    const desc = String(raw?.program_description || "").trim();
+    out.push({ title, start_date: start, desc: desc && desc !== title ? desc : null, rating: null });
+  }
+  out.sort((a, b) => a.start_date.localeCompare(b.start_date));
+  return out;
+}
+
+/** Baixa o(s) feed(s) NXTV (cache 2h30) e mapeia epg_channel_id → programas. */
+async function fetchNxtvPrograms(channels) {
+  await mkdir(SOURCES_DIR, { recursive: true });
+  const byChannelId = new Map();
+
+  // Agrupa por URL base (normalmente uma só)
+  const byBase = new Map();
+  for (const ch of channels) {
+    const base = (ch.epg_url || "").trim() || NXTV_BASE_URL;
+    if (!byBase.has(base)) byBase.set(base, []);
+    byBase.get(base).push(ch);
+  }
+
+  for (const [base, chans] of byBase) {
+    const dest = join(SOURCES_DIR, nxtvSlug(base));
+    let json = null;
+
+    if (!FORCE && await fileExists(dest)) {
+      const st = await stat(dest);
+      const ageMin = (Date.now() - st.mtimeMs) / 60_000;
+      if (ageMin < 150) {
+        try { json = JSON.parse(await readFile(dest, "utf8")); log(`✓ nxtv feed (cache ${Math.round(ageMin)}min)`); }
+        catch { json = null; }
+      }
+    }
+
+    if (!json) {
+      log(`⬇  nxtv ${base}`);
+      const text = await fetchOnce(base, true);
+      if (!text) { log(`✗ falhou nxtv: ${base}`); continue; }
+      try { json = JSON.parse(text); }
+      catch { log(`✗ resposta não-JSON nxtv — ${text.slice(0, 120)}`); continue; }
+      await writeFile(dest, JSON.stringify(json), "utf8");
+    }
+
+    if (!Array.isArray(json)) { log(`✗ nxtv: formato inesperado em ${base}`); continue; }
+
+    const index = new Map();
+    for (const c of json) {
+      const id = String(c?.channel_id ?? "").trim().toLowerCase();
+      const title = String(c?.channel_title ?? "").trim().toLowerCase();
+      if (id) index.set(id, c);
+      if (title && !index.has(title)) index.set(title, c);
+    }
+
+    for (const ch of chans) {
+      const match = index.get(ch.epg_channel_id.trim().toLowerCase());
+      if (!match) { log(`   ⚠ nxtv ${ch.epg_channel_id}: não encontrado no feed`); continue; }
+      const programs = nxtvProgramsToPrograms(match?.schedule?.programs);
+      if (programs.length === 0) { log(`   ⚠ nxtv ${ch.epg_channel_id}: 0 programas`); continue; }
+      byChannelId.set(ch.epg_channel_id, programs);
+      log(`   nxtv ${ch.epg_channel_id}: ${programs.length} programas`);
+    }
+  }
+
+  return byChannelId;
+}
+
+
 
 /** Converte um programa interno em <programme> XMLTV. */
 function programToXmltv(channelId, prog, nextStartIso) {
@@ -505,6 +613,18 @@ async function consolidate(slugByUrl) {
     }
   }
 
+  // ── NXTV (API JSON) ──────────────────────────────────────────────────
+  const nxtvChannels = fetchNxtvChannels();
+  if (nxtvChannels.length > 0) {
+    log(`📡 canais NXTV: ${nxtvChannels.length}`);
+    const nxtvByChannelId = await fetchNxtvPrograms(nxtvChannels);
+    for (const [chanId, programs] of nxtvByChannelId) {
+      byChannelStruct.set(chanId, programs);
+      for (let i = 0; i < programs.length; i++) {
+        allProgrammeXml.push(programToXmltv(chanId, programs[i], programs[i + 1]?.start_date));
+      }
+    }
+  }
 
   // Ordena os programas por horário (mesma ordem que o cliente faria)
   byChannelStruct.forEach((arr) => arr.sort((a, b) => a.start_date.localeCompare(b.start_date)));
@@ -512,7 +632,7 @@ async function consolidate(slugByUrl) {
   // Adiciona metadados dos nossos canais (display-name + icon do nosso logo, se houver)
   // Para canais sem entry no XML original (ex: canal só com logo nosso), cria <channel> mínimo.
   const ourChannelMeta = [];
-  for (const ch of [...channels, ...innovaChannels]) {
+  for (const ch of [...channels, ...innovaChannels, ...nxtvChannels]) {
     if (allChannelXml.has(ch.epg_channel_id)) continue;
     if (ourChannelMeta.some((x) => x.includes(`id="${escapeXml(ch.epg_channel_id)}"`))) continue;
     const icon = ch.logo_url ? `<icon src="${escapeXml(ch.logo_url)}"/>` : "";
