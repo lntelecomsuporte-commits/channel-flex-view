@@ -10,6 +10,7 @@
  * Horários vêm SEM timezone e são horário de Brasília (UTC-3).
  */
 import type { EPGProgram } from "@/hooks/useEPG";
+import { getConsolidatedEpgJsonUrl } from "@/lib/epgCache";
 
 export const NXTV_BASE_URL = "https://gateway.nxtv.com.br/api//epg";
 
@@ -109,14 +110,25 @@ export async function fetchNxtvChannelList(baseUrl?: string): Promise<{ id: stri
 }
 
 
-/** Busca e converte o EPG de um canal NXTV (por channel_id OU channel_title). */
-export async function fetchNxtvPrograms(channelId: string, baseUrl?: string): Promise<EPGProgram[]> {
-  const feed = await fetchNxtvFeed(baseUrl);
-  const key = channelId.trim().toLowerCase();
-  const match = feed.find(
-    (c) => String(c.channel_id ?? "").trim().toLowerCase() === key ||
-           (c.channel_title || "").trim().toLowerCase() === key
-  );
-  if (!match) throw new Error(`Canal "${channelId}" não encontrado no feed NXTV`);
-  return nxtvProgramsToPrograms(match.schedule?.programs);
+/**
+ * Consulta a grade NXTV já baixada e autenticada pelo sync-epg no servidor.
+ * O navegador não chama /epg diretamente porque esse endpoint exige token.
+ */
+export async function fetchNxtvPrograms(channelId: string, _baseUrl?: string): Promise<EPGProgram[]> {
+  const res = await fetch(getConsolidatedEpgJsonUrl(), { cache: "no-cache" });
+  if (!res.ok) throw new Error(`EPG sincronizado indisponível (HTTP ${res.status})`);
+
+  const json = await res.json();
+  const byChannel = json?.byChannel;
+  if (!byChannel || typeof byChannel !== "object") {
+    throw new Error("Arquivo de EPG sincronizado em formato inválido");
+  }
+
+  const wanted = channelId.trim().toLowerCase();
+  const storedId = Object.keys(byChannel).find((id) => id.trim().toLowerCase() === wanted);
+  if (!storedId || !Array.isArray(byChannel[storedId])) {
+    throw new Error(`Canal "${channelId}" está sem grade no último sincronismo`);
+  }
+
+  return byChannel[storedId] as EPGProgram[];
 }
