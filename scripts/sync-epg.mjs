@@ -104,7 +104,7 @@ function looksLikeXmltv(text) {
   return head.includes("<tv") || head.includes("<channel") || head.includes("<programme");
 }
 
-async function fetchOnce(url, browserLike) {
+async function fetchOnce(url, browserLike, extraHeaders) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   const headers = browserLike
@@ -112,13 +112,16 @@ async function fetchOnce(url, browserLike) {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
         Accept: "*/*",
         "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+        ...(extraHeaders || {}),
       }
     : {
         "User-Agent": "Mozilla/5.0 (compatible; LNTV-EPG-Sync/1.0)",
         Accept: "application/xml, text/xml, */*",
+        ...(extraHeaders || {}),
       };
   try {
     const res = await fetch(url, { signal: ctrl.signal, headers, redirect: "follow" });
+
     if (!res.ok) { log(`   HTTP ${res.status} ${res.statusText}`); return null; }
     return await res.text();
   } catch (e) {
@@ -296,7 +299,56 @@ async function fetchInnovaPrograms(channels) {
 
 const NXTV_BASE_URL = "https://gateway.nxtv.com.br/api//epg";
 
+/* Credenciais (env ou /opt/lntv-frontend/.env.nxtv) */
+async function loadNxtvCreds() {
+  let email = process.env.NXTV_USERNAME || process.env.NXTV_EMAIL || "";
+  let password = process.env.NXTV_PASSWORD || "";
+  if (!email || !password) {
+    for (const f of [".env.nxtv", ".env"]) {
+      try {
+        const txt = await readFile(join(PROJECT_ROOT, f), "utf8");
+        for (const line of txt.split("\n")) {
+          const m = line.match(/^\s*(NXTV_USERNAME|NXTV_EMAIL|NXTV_PASSWORD)\s*=\s*(.*)\s*$/);
+          if (!m) continue;
+          const val = m[2].replace(/^["']|["']$/g, "").trim();
+          if (m[1] === "NXTV_PASSWORD") password ||= val;
+          else email ||= val;
+        }
+      } catch { /* arquivo ausente */ }
+      if (email && password) break;
+    }
+  }
+  return email && password ? { email, password } : null;
+}
+
+let nxtvTokenCache = null;
+async function nxtvToken(base) {
+  if (nxtvTokenCache) return nxtvTokenCache;
+  const creds = await loadNxtvCreds();
+  if (!creds) return null;
+  let origin = "https://gateway.nxtv.com.br";
+  try { origin = new URL(base).origin; } catch { /* usa default */ }
+  try {
+    const res = await fetch(`${origin}/api/auth`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(creds),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) { log(`✗ nxtv login HTTP ${res.status}: ${JSON.stringify(json)?.slice(0, 160)}`); return null; }
+    const token = json?.token || json?.access_token || json?.jwt || json?.data?.token || json?.user?.token;
+    if (!token) { log(`✗ nxtv login sem token na resposta: ${JSON.stringify(json)?.slice(0, 160)}`); return null; }
+    log("✓ nxtv autenticado");
+    nxtvTokenCache = String(token);
+    return nxtvTokenCache;
+  } catch (e) {
+    log(`✗ nxtv login erro: ${e.message}`);
+    return null;
+  }
+}
+
 function fetchNxtvChannels() {
+
   const sql = `
     SELECT id, name, channel_number, COALESCE(epg_url,''), epg_channel_id, COALESCE(logo_url,'')
     FROM public.channels
@@ -369,8 +421,11 @@ async function fetchNxtvPrograms(channels) {
 
     if (!json) {
       log(`⬇  nxtv ${base}`);
-      const text = await fetchOnce(base, true);
+      const token = await nxtvToken(base);
+      if (!token) log("   ⚠ nxtv sem credenciais/token — tentando sem autenticação");
+      const text = await fetchOnce(base, true, token ? { Authorization: `Bearer ${token}`, "x-access-token": token } : undefined);
       if (!text) { log(`✗ falhou nxtv: ${base}`); continue; }
+
       try { json = JSON.parse(text); }
       catch { log(`✗ resposta não-JSON nxtv — ${text.slice(0, 120)}`); continue; }
       await writeFile(dest, JSON.stringify(json), "utf8");
