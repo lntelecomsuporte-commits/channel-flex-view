@@ -437,21 +437,25 @@ async function fetchNxtvPrograms(channels) {
     if (!Array.isArray(json)) { log(`✗ nxtv: formato inesperado em ${base}`); continue; }
 
     const index = new Map();
+    const feedIds = [];
     for (const c of json) {
-      const id = String(c?.channel_id ?? "").trim().toLowerCase();
-      const title = String(c?.channel_title ?? "").trim().toLowerCase();
-      if (id) index.set(id, c);
+      const id = String(c?.channel_id ?? c?.id ?? "").trim().toLowerCase();
+      const title = String(c?.channel_title ?? c?.title ?? "").trim().toLowerCase();
+      if (id) { index.set(id, c); feedIds.push(`${id}${title ? ` (${title})` : ""}`); }
       if (title && !index.has(title)) index.set(title, c);
     }
+    log(`   nxtv feed: ${json.length} canais com grade`);
+    await writeFile(join(SOURCES_DIR, "nxtv-feed-ids.txt"), feedIds.join("\n"), "utf8");
 
     for (const ch of chans) {
       const match = index.get(ch.epg_channel_id.trim().toLowerCase());
-      if (!match) { log(`   ⚠ nxtv ${ch.epg_channel_id}: não encontrado no feed`); continue; }
+      if (!match) { log(`   ⚠ nxtv ${ch.epg_channel_id}: sem grade no feed (o gateway não publica EPG para este canal)`); continue; }
       const programs = nxtvProgramsToPrograms(match?.schedule?.programs);
       if (programs.length === 0) { log(`   ⚠ nxtv ${ch.epg_channel_id}: 0 programas`); continue; }
       byChannelId.set(ch.epg_channel_id, programs);
       log(`   nxtv ${ch.epg_channel_id}: ${programs.length} programas`);
     }
+
   }
 
   return byChannelId;
