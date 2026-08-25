@@ -67,14 +67,47 @@ export async function fetchNxtvFeed(baseUrl?: string): Promise<NxtvChannel[]> {
   return Array.isArray(json) ? (json as NxtvChannel[]) : [];
 }
 
-/** Lista simplificada de canais disponíveis no feed (para o seletor do admin). */
-export async function fetchNxtvChannelList(baseUrl?: string): Promise<{ id: string; name: string }[]> {
-  const feed = await fetchNxtvFeed(baseUrl);
-  return feed
-    .map((c) => ({ id: String(c.channel_id ?? "").trim(), name: (c.channel_title || "").trim() || String(c.channel_id ?? "") }))
+/** Endpoint público de catálogo (não exige token) — usado como fallback do seletor. */
+export function nxtvCatalogUrl(baseUrl?: string): string {
+  const url = (baseUrl || "").trim() || NXTV_BASE_URL;
+  try {
+    const u = new URL(url);
+    return `${u.origin}/api/channels/catalog?app=1`;
+  } catch {
+    return "https://gateway.nxtv.com.br/api/channels/catalog?app=1";
+  }
+}
+
+/** Lista de canais via catálogo público (id + título). */
+export async function fetchNxtvCatalogList(baseUrl?: string): Promise<{ id: string; name: string }[]> {
+  const res = await fetch(nxtvCatalogUrl(baseUrl), { headers: { Accept: "application/json" } });
+  if (!res.ok) throw new Error(`HTTP ${res.status} no catálogo NXTV`);
+  const json = await res.json();
+  const arr = Array.isArray(json) ? json : [];
+  return arr
+    .map((c: { id?: unknown; title?: unknown; subtitle?: unknown }) => ({
+      id: String(c?.id ?? "").trim(),
+      name: String(c?.title || c?.subtitle || c?.id || "").trim(),
+    }))
     .filter((c) => c.id)
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }));
 }
+
+/** Lista simplificada de canais (feed EPG; se falhar, catálogo público). */
+export async function fetchNxtvChannelList(baseUrl?: string): Promise<{ id: string; name: string }[]> {
+  try {
+    const feed = await fetchNxtvFeed(baseUrl);
+    const list = feed
+      .map((c) => ({ id: String(c.channel_id ?? "").trim(), name: (c.channel_title || "").trim() || String(c.channel_id ?? "") }))
+      .filter((c) => c.id)
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }));
+    if (list.length) return list;
+  } catch (e) {
+    console.warn("[nxtv] feed /epg indisponível, usando catálogo público:", e);
+  }
+  return fetchNxtvCatalogList(baseUrl);
+}
+
 
 /** Busca e converte o EPG de um canal NXTV (por channel_id OU channel_title). */
 export async function fetchNxtvPrograms(channelId: string, baseUrl?: string): Promise<EPGProgram[]> {
