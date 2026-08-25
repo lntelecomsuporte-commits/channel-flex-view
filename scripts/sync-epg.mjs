@@ -613,6 +613,18 @@ async function consolidate(slugByUrl) {
     }
   }
 
+  // ── NXTV (API JSON) ──────────────────────────────────────────────────
+  const nxtvChannels = fetchNxtvChannels();
+  if (nxtvChannels.length > 0) {
+    log(`📡 canais NXTV: ${nxtvChannels.length}`);
+    const nxtvByChannelId = await fetchNxtvPrograms(nxtvChannels);
+    for (const [chanId, programs] of nxtvByChannelId) {
+      byChannelStruct.set(chanId, programs);
+      for (let i = 0; i < programs.length; i++) {
+        allProgrammeXml.push(programToXmltv(chanId, programs[i], programs[i + 1]?.start_date));
+      }
+    }
+  }
 
   // Ordena os programas por horário (mesma ordem que o cliente faria)
   byChannelStruct.forEach((arr) => arr.sort((a, b) => a.start_date.localeCompare(b.start_date)));
@@ -620,7 +632,7 @@ async function consolidate(slugByUrl) {
   // Adiciona metadados dos nossos canais (display-name + icon do nosso logo, se houver)
   // Para canais sem entry no XML original (ex: canal só com logo nosso), cria <channel> mínimo.
   const ourChannelMeta = [];
-  for (const ch of [...channels, ...innovaChannels]) {
+  for (const ch of [...channels, ...innovaChannels, ...nxtvChannels]) {
     if (allChannelXml.has(ch.epg_channel_id)) continue;
     if (ourChannelMeta.some((x) => x.includes(`id="${escapeXml(ch.epg_channel_id)}"`))) continue;
     const icon = ch.logo_url ? `<icon src="${escapeXml(ch.logo_url)}"/>` : "";
