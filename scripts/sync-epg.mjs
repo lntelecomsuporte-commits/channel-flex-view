@@ -299,7 +299,56 @@ async function fetchInnovaPrograms(channels) {
 
 const NXTV_BASE_URL = "https://gateway.nxtv.com.br/api//epg";
 
+/* Credenciais (env ou /opt/lntv-frontend/.env.nxtv) */
+async function loadNxtvCreds() {
+  let email = process.env.NXTV_USERNAME || process.env.NXTV_EMAIL || "";
+  let password = process.env.NXTV_PASSWORD || "";
+  if (!email || !password) {
+    for (const f of [".env.nxtv", ".env"]) {
+      try {
+        const txt = await readFile(join(PROJECT_ROOT, f), "utf8");
+        for (const line of txt.split("\n")) {
+          const m = line.match(/^\s*(NXTV_USERNAME|NXTV_EMAIL|NXTV_PASSWORD)\s*=\s*(.*)\s*$/);
+          if (!m) continue;
+          const val = m[2].replace(/^["']|["']$/g, "").trim();
+          if (m[1] === "NXTV_PASSWORD") password ||= val;
+          else email ||= val;
+        }
+      } catch { /* arquivo ausente */ }
+      if (email && password) break;
+    }
+  }
+  return email && password ? { email, password } : null;
+}
+
+let nxtvTokenCache = null;
+async function nxtvToken(base) {
+  if (nxtvTokenCache) return nxtvTokenCache;
+  const creds = await loadNxtvCreds();
+  if (!creds) return null;
+  let origin = "https://gateway.nxtv.com.br";
+  try { origin = new URL(base).origin; } catch { /* usa default */ }
+  try {
+    const res = await fetch(`${origin}/api/auth`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(creds),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) { log(`✗ nxtv login HTTP ${res.status}: ${JSON.stringify(json)?.slice(0, 160)}`); return null; }
+    const token = json?.token || json?.access_token || json?.jwt || json?.data?.token || json?.user?.token;
+    if (!token) { log(`✗ nxtv login sem token na resposta: ${JSON.stringify(json)?.slice(0, 160)}`); return null; }
+    log("✓ nxtv autenticado");
+    nxtvTokenCache = String(token);
+    return nxtvTokenCache;
+  } catch (e) {
+    log(`✗ nxtv login erro: ${e.message}`);
+    return null;
+  }
+}
+
 function fetchNxtvChannels() {
+
   const sql = `
     SELECT id, name, channel_number, COALESCE(epg_url,''), epg_channel_id, COALESCE(logo_url,'')
     FROM public.channels
