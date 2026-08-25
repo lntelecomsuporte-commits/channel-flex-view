@@ -20,16 +20,21 @@ export default function NxtvChannelPicker({ value, onChange, baseUrl }: Props) {
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [search, setSearch] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const load = async () => {
-    if (loaded || loading) return;
+    if (loading || (loaded && channels.length)) return;
     setLoading(true);
+    setError(null);
     try {
-      setChannels(await fetchNxtvChannelList(baseUrl));
+      const list = await fetchNxtvChannelList(baseUrl);
+      setChannels(list);
       setLoaded(true);
+      if (!list.length) setError("Nenhum canal retornado pela NXTV.");
     } catch (e) {
       console.error("[NxtvChannelPicker]", e);
       setChannels([]);
+      setError(e instanceof Error ? e.message : "Falha ao carregar canais da NXTV");
     } finally {
       setLoading(false);
     }
@@ -60,7 +65,7 @@ export default function NxtvChannelPicker({ value, onChange, baseUrl }: Props) {
           <Command shouldFilter={false}>
             <CommandInput placeholder="Buscar canal por nome ou ID..." value={search} onValueChange={setSearch} />
             <CommandList className="max-h-[300px]">
-              <CommandEmpty>{loading ? "Carregando canais…" : "Nenhum canal encontrado"}</CommandEmpty>
+              <CommandEmpty>{loading ? "Carregando canais…" : error || "Nenhum canal encontrado"}</CommandEmpty>
               <CommandGroup heading={`${filtered.length} canais`}>
                 {filtered.slice(0, 200).map((ch) => (
                   <CommandItem
