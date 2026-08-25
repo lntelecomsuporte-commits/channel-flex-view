@@ -634,6 +634,47 @@ const AdminPanel = () => {
                       </div>
                     </div>
                   )}
+
+                  {channelForm.epg_type === "nxtv" && (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>
+                          Canal na NXTV{" "}
+                          <span className="text-xs text-muted-foreground">
+                            — informe o <code>channel_id</code> (ex.: <code>748</code>) ou clique em Buscar
+                          </span>
+                        </Label>
+                        <NxtvChannelPicker
+                          value={channelForm.epg_channel_id}
+                          onChange={(v) => setChannelForm((f) => ({ ...f, epg_channel_id: v }))}
+                          baseUrl={channelForm.epg_url}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={nxtvTesting || !channelForm.epg_channel_id.trim()}
+                          onClick={handleTestNxtv}
+                        >
+                          {nxtvTesting ? "Testando…" : "Testar"}
+                        </Button>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>
+                          URL da API <span className="text-xs text-muted-foreground">(opcional — deixe vazio para o padrão)</span>
+                        </Label>
+                        <Input
+                          value={channelForm.epg_url}
+                          onChange={(e) => setChannelForm((f) => ({ ...f, epg_url: e.target.value }))}
+                          placeholder={NXTV_BASE_URL}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox checked={channelForm.epg_show_synopsis} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, epg_show_synopsis: !!v }))} />
+                        <Label>Exibir sinopse (permite clicar em um programa para ver a descrição)</Label>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
 
