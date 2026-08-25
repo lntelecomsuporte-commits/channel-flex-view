@@ -421,8 +421,11 @@ async function fetchNxtvPrograms(channels) {
 
     if (!json) {
       log(`⬇  nxtv ${base}`);
-      const text = await fetchOnce(base, true);
+      const token = await nxtvToken(base);
+      if (!token) log("   ⚠ nxtv sem credenciais/token — tentando sem autenticação");
+      const text = await fetchOnce(base, true, token ? { Authorization: `Bearer ${token}`, "x-access-token": token } : undefined);
       if (!text) { log(`✗ falhou nxtv: ${base}`); continue; }
+
       try { json = JSON.parse(text); }
       catch { log(`✗ resposta não-JSON nxtv — ${text.slice(0, 120)}`); continue; }
       await writeFile(dest, JSON.stringify(json), "utf8");
