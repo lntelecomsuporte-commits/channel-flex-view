@@ -461,7 +461,148 @@ async function fetchNxtvPrograms(channels) {
   return byChannelId;
 }
 
+/* ───────────────────────── Hallo (raspa programacao.php) ───────────────────────── */
 
+const HALLO_BASE_URL = "https://hallo.tv.br/programacao.php";
+// Páginas de 6h: t=0 é a janela atual; t=1..8 cobrem as próximas ~48h.
+const HALLO_T_MAX = 8;
+
+function fetchHalloChannels() {
+  const sql = `
+    SELECT id, name, channel_number, COALESCE(epg_url,''), epg_channel_id, COALESCE(logo_url,'')
+    FROM public.channels
+    WHERE is_active = true
+      AND epg_type = 'hallo'
+      AND epg_channel_id IS NOT NULL AND epg_channel_id <> ''
+    ORDER BY channel_number ASC
+  `;
+  const raw = psql(sql).trim();
+  if (!raw) return [];
+  return raw.split("\n").map((line) => {
+    const [id, name, channel_number, epg_url, epg_channel_id, logo_url] = line.split("\t");
+    return { id, name, channel_number: parseInt(channel_number, 10), epg_url, epg_channel_id, logo_url };
+  });
+}
+
+/** "26/08 17:37" (+ stop "18:01") em horário de Brasília → ISO UTC. */
+function halloTimeToIso(dayMonth, time, refStartDate) {
+  const tm = String(time || "").match(/^(\d{2}):(\d{2})$/);
+  if (!tm) return null;
+  let day, month;
+  if (dayMonth) {
+    const dm = String(dayMonth).match(/^(\d{2})\/(\d{2})$/);
+    if (!dm) return null;
+    day = parseInt(dm[1], 10);
+    month = parseInt(dm[2], 10);
+  } else if (refStartDate) {
+    day = refStartDate.day;
+    month = refStartDate.month;
+  } else {
+    return null;
+  }
+  const now = new Date();
+  let year = now.getUTCFullYear();
+  // Virada de ano: se a data ficou mais de 30 dias no passado, é do ano seguinte.
+  const probe = new Date(Date.UTC(year, month - 1, day));
+  if (probe.getTime() < now.getTime() - 30 * 86400_000) year++;
+  const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${tm[1]}:${tm[2]}:00-03:00`;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/**
+ * Extrai os programas de uma página da grade.
+ * Cada célula tem data-prog="{...JSON HTML-escapado...}" com
+ * title, desc, rating, start ("26/08 17:37"), stop ("18:01") e channel.
+ */
+function halloParsePage(html) {
+  const out = [];
+  const re = /data-prog="([\s\S]*?)"/g;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    let prog;
+    try { prog = JSON.parse(decodeXmlEntities(m[1])); }
+    catch { continue; }
+    const title = String(prog?.title || "").trim();
+    const channel = String(prog?.channel || "").trim();
+    if (!title || !channel) continue;
+    const startM = String(prog?.start || "").match(/^(\d{2}\/\d{2})\s+(\d{2}:\d{2})$/);
+    if (!startM) continue;
+    const startIso = halloTimeToIso(startM[1], startM[2]);
+    if (!startIso) continue;
+    const desc = String(prog?.desc || "").trim();
+    const rating = String(prog?.rating || "").trim();
+    out.push({
+      channel,
+      title,
+      start_date: startIso,
+      desc: desc && desc !== title ? desc : null,
+      rating: rating && rating !== "S/C" && rating !== "-" ? rating : null,
+    });
+  }
+  return out;
+}
+
+/** Baixa (cache 2h30) as páginas da grade e devolve Map nomeDoCanal → programas. */
+async function fetchHalloPrograms(channels) {
+  await mkdir(SOURCES_DIR, { recursive: true });
+  const dest = join(SOURCES_DIR, "hallo-grade.json");
+  let all = null;
+
+  if (!FORCE && await fileExists(dest)) {
+    const st = await stat(dest);
+    const ageMin = (Date.now() - st.mtimeMs) / 60_000;
+    if (ageMin < 150) {
+      try {
+        all = JSON.parse(await readFile(dest, "utf8"));
+        log(`✓ hallo grade (cache ${Math.round(ageMin)}min)`);
+      } catch { all = null; }
+    }
+  }
+
+  if (!all) {
+    all = [];
+    for (let t = 0; t <= HALLO_T_MAX; t++) {
+      const url = `${HALLO_BASE_URL}?t=${t}`;
+      log(`⬇  hallo ${url}`);
+      const text = await fetchOnce(url, true);
+      if (!text) { log(`✗ falhou hallo t=${t}`); continue; }
+      const progs = halloParsePage(text);
+      log(`   hallo t=${t}: ${progs.length} programas`);
+      all.push(...progs);
+    }
+    if (all.length > 0) await writeFile(dest, JSON.stringify(all), "utf8");
+  }
+
+  // Agrupa por canal (nome normalizado), removendo duplicados de mesma start_date
+  const byName = new Map();
+  const seen = new Set();
+  for (const p of all) {
+    const key = `${p.channel.toLowerCase()}|${p.start_date}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const norm = p.channel.toLowerCase();
+    let arr = byName.get(norm);
+    if (!arr) { arr = []; byName.set(norm, arr); }
+    arr.push(p);
+  }
+
+  const byChannelId = new Map();
+  for (const ch of channels) {
+    const wanted = ch.epg_channel_id.trim().toLowerCase();
+    const programs = byName.get(wanted);
+    if (!programs || programs.length === 0) {
+      const available = [...byName.keys()].join(", ");
+      log(`   ⚠ hallo ${ch.epg_channel_id}: não encontrado na grade (disponíveis: ${available || "nenhum"})`);
+      continue;
+    }
+    programs.sort((a, b) => a.start_date.localeCompare(b.start_date));
+    byChannelId.set(ch.epg_channel_id, programs);
+    log(`   hallo ${ch.epg_channel_id}: ${programs.length} programas`);
+  }
+
+  return byChannelId;
+}
 
 /** Converte um programa interno em <programme> XMLTV. */
 function programToXmltv(channelId, prog, nextStartIso) {
