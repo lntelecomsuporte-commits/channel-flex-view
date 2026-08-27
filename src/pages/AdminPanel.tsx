@@ -704,6 +704,41 @@ const AdminPanel = () => {
                       </div>
                     </div>
                   )}
+
+                  {channelForm.epg_type === "hallo" && (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>
+                          Nome do canal no Hallo{" "}
+                          <span className="text-xs text-muted-foreground">
+                            — exatamente como aparece em <code>hallo.tv.br/programacao.php</code> (ex.: <code>Hallo Anime</code>, <code>Hallo Classic</code>)
+                          </span>
+                        </Label>
+                        <div className="flex gap-2">
+                          <Input
+                            value={channelForm.epg_channel_id}
+                            onChange={(e) => setChannelForm((f) => ({ ...f, epg_channel_id: e.target.value }))}
+                            placeholder="Hallo Anime"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={halloTesting || !channelForm.epg_channel_id.trim()}
+                            onClick={handleTestHallo}
+                          >
+                            {halloTesting ? "Testando…" : "Testar"}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          O servidor raspa a grade do site a cada 3h (janela atual + ~48h). O botão Testar lê o último sincronismo — rode o sync-epg após salvar.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox checked={channelForm.epg_show_synopsis} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, epg_show_synopsis: !!v }))} />
+                        <Label>Exibir sinopse (permite clicar em um programa para ver a descrição)</Label>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
 
