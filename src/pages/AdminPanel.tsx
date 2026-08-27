@@ -225,6 +225,7 @@ const AdminPanel = () => {
     const isXmltv = channelForm.epg_type === "xmltv";
     const isInnova = channelForm.epg_type === "innovatv";
     const isNxtv = channelForm.epg_type === "nxtv";
+    const isHallo = channelForm.epg_type === "hallo";
     
     const backupList = (channelForm.backup_stream_urls || "")
       .split(/\r?\n/)
@@ -248,9 +249,11 @@ const AdminPanel = () => {
           ? (channelForm.epg_url?.trim() || INNOVATV_BASE_URL)
           : isNxtv
             ? (channelForm.epg_url?.trim() || NXTV_BASE_URL)
-            : null,
+            : isHallo
+              ? (channelForm.epg_url?.trim() || HALLO_BASE_URL)
+              : null,
       epg_alt_text: channelForm.epg_type === "alt_text" ? (channelForm.epg_alt_text || null) : null,
-      epg_channel_id: (isXmltv || isInnova || isNxtv) ? (channelForm.epg_channel_id?.trim() || null) : null,
+      epg_channel_id: (isXmltv || isInnova || isNxtv || isHallo) ? (channelForm.epg_channel_id?.trim() || null) : null,
       epg_grab_logo: isXmltv ? channelForm.epg_grab_logo : false,
       epg_show_synopsis: channelForm.epg_show_synopsis,
       use_proxy_token: channelForm.use_proxy_token,
@@ -556,6 +559,7 @@ const AdminPanel = () => {
                           <SelectItem value="xmltv">XMLTV</SelectItem>
                           <SelectItem value="innovatv">InnovaTV (API)</SelectItem>
                           <SelectItem value="nxtv">NXTV (API)</SelectItem>
+                          <SelectItem value="hallo">Hallo (site)</SelectItem>
                           
                           
                         </SelectContent>
