@@ -829,6 +829,19 @@ async function consolidate(slugByUrl) {
     }
   }
 
+  // ── Hallo (raspa hallo.tv.br/programacao.php) ────────────────────────
+  const halloChannels = fetchHalloChannels();
+  if (halloChannels.length > 0) {
+    log(`📡 canais Hallo: ${halloChannels.length}`);
+    const halloByChannelId = await fetchHalloPrograms(halloChannels);
+    for (const [chanId, programs] of halloByChannelId) {
+      byChannelStruct.set(chanId, programs);
+      for (let i = 0; i < programs.length; i++) {
+        allProgrammeXml.push(programToXmltv(chanId, programs[i], programs[i + 1]?.start_date));
+      }
+    }
+  }
+
   // Ordena os programas por horário (mesma ordem que o cliente faria)
   byChannelStruct.forEach((arr) => arr.sort((a, b) => a.start_date.localeCompare(b.start_date)));
 
