@@ -848,7 +848,7 @@ async function consolidate(slugByUrl) {
   // Adiciona metadados dos nossos canais (display-name + icon do nosso logo, se houver)
   // Para canais sem entry no XML original (ex: canal só com logo nosso), cria <channel> mínimo.
   const ourChannelMeta = [];
-  for (const ch of [...channels, ...innovaChannels, ...nxtvChannels]) {
+  for (const ch of [...channels, ...innovaChannels, ...nxtvChannels, ...halloChannels]) {
     if (allChannelXml.has(ch.epg_channel_id)) continue;
     if (ourChannelMeta.some((x) => x.includes(`id="${escapeXml(ch.epg_channel_id)}"`))) continue;
     const icon = ch.logo_url ? `<icon src="${escapeXml(ch.logo_url)}"/>` : "";

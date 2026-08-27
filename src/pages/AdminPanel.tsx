@@ -56,6 +56,7 @@ const AdminPanel = () => {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name?: string } | null>(null);
   const [innovaTesting, setInnovaTesting] = useState(false);
   const [nxtvTesting, setNxtvTesting] = useState(false);
+  const [halloTesting, setHalloTesting] = useState(false);
   
   const channelFormRef = useRef<HTMLDivElement>(null);
   const categoryFormRef = useRef<HTMLDivElement>(null);
@@ -163,6 +164,29 @@ const AdminPanel = () => {
       toast.error("Falha ao consultar a NXTV", { description: (e as Error).message });
     } finally {
       setNxtvTesting(false);
+    }
+  };
+
+  const handleTestHallo = async () => {
+    const id = channelForm.epg_channel_id.trim();
+    if (!id) return;
+    setHalloTesting(true);
+    try {
+      const programs = await fetchHalloPrograms(id);
+      if (programs.length === 0) {
+        toast.error("Nenhum programa encontrado para esse canal");
+        return;
+      }
+      const { current, next } = getCurrentAndNextPrograms(programs);
+      const fmt = (p: { title: string; start_date: string } | null) =>
+        p ? `${new Date(p.start_date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} ${p.title}` : "—";
+      toast.success(`${programs.length} programas encontrados`, {
+        description: `Agora: ${fmt(current)}\nDepois: ${fmt(next)}`,
+      });
+    } catch (e) {
+      toast.error("Falha ao consultar a grade Hallo", { description: (e as Error).message });
+    } finally {
+      setHalloTesting(false);
     }
   };
 
