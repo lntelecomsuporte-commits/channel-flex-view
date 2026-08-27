@@ -29,6 +29,7 @@ import EpgUrlPresetSelector from "@/components/admin/EpgUrlPresetSelector";
 import { getLocalFunctionUrl, LOCAL_SUPABASE_PUBLISHABLE_KEY } from "@/lib/localBackend";
 import { INNOVATV_BASE_URL, fetchInnovaTvPrograms } from "@/lib/innovatv";
 import { NXTV_BASE_URL, fetchNxtvPrograms } from "@/lib/nxtv";
+import { HALLO_BASE_URL, fetchHalloPrograms } from "@/lib/hallo";
 import NxtvChannelPicker from "@/components/admin/NxtvChannelPicker";
 
 import { getCurrentAndNextPrograms } from "@/hooks/useEPG";
@@ -55,6 +56,7 @@ const AdminPanel = () => {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name?: string } | null>(null);
   const [innovaTesting, setInnovaTesting] = useState(false);
   const [nxtvTesting, setNxtvTesting] = useState(false);
+  const [halloTesting, setHalloTesting] = useState(false);
   
   const channelFormRef = useRef<HTMLDivElement>(null);
   const categoryFormRef = useRef<HTMLDivElement>(null);
@@ -165,6 +167,29 @@ const AdminPanel = () => {
     }
   };
 
+  const handleTestHallo = async () => {
+    const id = channelForm.epg_channel_id.trim();
+    if (!id) return;
+    setHalloTesting(true);
+    try {
+      const programs = await fetchHalloPrograms(id);
+      if (programs.length === 0) {
+        toast.error("Nenhum programa encontrado para esse canal");
+        return;
+      }
+      const { current, next } = getCurrentAndNextPrograms(programs);
+      const fmt = (p: { title: string; start_date: string } | null) =>
+        p ? `${new Date(p.start_date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} ${p.title}` : "—";
+      toast.success(`${programs.length} programas encontrados`, {
+        description: `Agora: ${fmt(current)}\nDepois: ${fmt(next)}`,
+      });
+    } catch (e) {
+      toast.error("Falha ao consultar a grade Hallo", { description: (e as Error).message });
+    } finally {
+      setHalloTesting(false);
+    }
+  };
+
 
   const handleSaveChannel = async () => {
     if (!channelForm.name || !channelForm.stream_url || !channelForm.channel_number) {
@@ -200,6 +225,7 @@ const AdminPanel = () => {
     const isXmltv = channelForm.epg_type === "xmltv";
     const isInnova = channelForm.epg_type === "innovatv";
     const isNxtv = channelForm.epg_type === "nxtv";
+    const isHallo = channelForm.epg_type === "hallo";
     
     const backupList = (channelForm.backup_stream_urls || "")
       .split(/\r?\n/)
@@ -223,9 +249,11 @@ const AdminPanel = () => {
           ? (channelForm.epg_url?.trim() || INNOVATV_BASE_URL)
           : isNxtv
             ? (channelForm.epg_url?.trim() || NXTV_BASE_URL)
-            : null,
+            : isHallo
+              ? (channelForm.epg_url?.trim() || HALLO_BASE_URL)
+              : null,
       epg_alt_text: channelForm.epg_type === "alt_text" ? (channelForm.epg_alt_text || null) : null,
-      epg_channel_id: (isXmltv || isInnova || isNxtv) ? (channelForm.epg_channel_id?.trim() || null) : null,
+      epg_channel_id: (isXmltv || isInnova || isNxtv || isHallo) ? (channelForm.epg_channel_id?.trim() || null) : null,
       epg_grab_logo: isXmltv ? channelForm.epg_grab_logo : false,
       epg_show_synopsis: channelForm.epg_show_synopsis,
       use_proxy_token: channelForm.use_proxy_token,
@@ -531,6 +559,7 @@ const AdminPanel = () => {
                           <SelectItem value="xmltv">XMLTV</SelectItem>
                           <SelectItem value="innovatv">InnovaTV (API)</SelectItem>
                           <SelectItem value="nxtv">NXTV (API)</SelectItem>
+                          <SelectItem value="hallo">Hallo (site)</SelectItem>
                           
                           
                         </SelectContent>
@@ -668,6 +697,41 @@ const AdminPanel = () => {
                           onChange={(e) => setChannelForm((f) => ({ ...f, epg_url: e.target.value }))}
                           placeholder={NXTV_BASE_URL}
                         />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox checked={channelForm.epg_show_synopsis} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, epg_show_synopsis: !!v }))} />
+                        <Label>Exibir sinopse (permite clicar em um programa para ver a descrição)</Label>
+                      </div>
+                    </div>
+                  )}
+
+                  {channelForm.epg_type === "hallo" && (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>
+                          Nome do canal no Hallo{" "}
+                          <span className="text-xs text-muted-foreground">
+                            — exatamente como aparece em <code>hallo.tv.br/programacao.php</code> (ex.: <code>Hallo Anime</code>, <code>Hallo Classic</code>)
+                          </span>
+                        </Label>
+                        <div className="flex gap-2">
+                          <Input
+                            value={channelForm.epg_channel_id}
+                            onChange={(e) => setChannelForm((f) => ({ ...f, epg_channel_id: e.target.value }))}
+                            placeholder="Hallo Anime"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={halloTesting || !channelForm.epg_channel_id.trim()}
+                            onClick={handleTestHallo}
+                          >
+                            {halloTesting ? "Testando…" : "Testar"}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          O servidor raspa a grade do site a cada 3h (janela atual + ~48h). O botão Testar lê o último sincronismo — rode o sync-epg após salvar.
+                        </p>
                       </div>
                       <div className="flex items-center gap-2">
                         <Checkbox checked={channelForm.epg_show_synopsis} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, epg_show_synopsis: !!v }))} />

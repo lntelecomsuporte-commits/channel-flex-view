@@ -100,8 +100,8 @@ export function getEpgSource(channel: {
   if (!effectiveType || effectiveType === "none" || effectiveType === "alt_text" || !channel.epg_url) {
     return null;
   }
-  // InnovaTV/NXTV vêm SEMPRE do consolidado (/epg/lntv.json) — sem fallback de fonte.
-  if (effectiveType === "innovatv" || effectiveType === "nxtv") return null;
+  // InnovaTV/NXTV/Hallo vêm SEMPRE do consolidado (/epg/lntv.json) — sem fallback de fonte.
+  if (effectiveType === "innovatv" || effectiveType === "nxtv" || effectiveType === "hallo") return null;
   // Legacy values (iptv_epg_org, open_epg, github_xml, epg_pw) all treated as xmltv now.
   const isEpgPw = effectiveType === "epg_pw";
   return {
