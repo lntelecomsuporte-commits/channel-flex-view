@@ -43,6 +43,13 @@ node scripts/sync-epg.mjs --force
 ## Timezone
 UI exibe horário local com offset -3 (Brasília). Datas vêm em ISO do parser XMLTV.
 
+## Tipos de EPG (channels.epg_type)
+- `xmltv` — URL XMLTV baixada pelo sync (presets/avulsas)
+- `innovatv` — API JSON api.innovatv.tv.br (epg_channel_id = parâmetro `id`)
+- `nxtv` — gateway.nxtv.com.br, exige login (`.env.nxtv` no servidor, campo `app:1`)
+- `hallo` — raspa hallo.tv.br/programacao.php (JSON embutido em `data-prog` no HTML; t=0..8 = janela atual + ~48h; epg_channel_id = NOME do canal no site, ex.: "Hallo Anime"). Site NÃO publica XML; InnovaTV tem os canais Hallo mas só com títulos placeholder "Program" (inútil).
+- innovatv/nxtv/hallo vêm SEMPRE do consolidado lntv.json — useEPG.getEpgSource retorna null pra eles.
+
 ## Pasta nginx
 ```nginx
 location /epg/ {
