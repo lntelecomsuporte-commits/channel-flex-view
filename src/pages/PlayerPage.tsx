@@ -257,6 +257,18 @@ const PlayerPage = () => {
   }, [currentChannel?.id, unlockedAdult, currentIndex, categories]);
 
   const playerRef = useRef<VideoPlayerHandle>(null);
+
+  // Enquanto transmite pra TV, silencia/pausa a reprodução local no celular.
+  useEffect(() => {
+    const video = playerRef.current?.getVideoElement();
+    if (!video) return;
+    if (castingToTv) {
+      video.muted = true;
+      video.pause();
+    } else {
+      video.play().catch(() => {});
+    }
+  }, [castingToTv]);
   const comboRef = useRef<string[]>([]);
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const COMBO_SEQUENCE = ["L", "L", "L", "R", "R", "L"];
