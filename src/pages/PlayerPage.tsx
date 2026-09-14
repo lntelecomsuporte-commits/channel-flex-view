@@ -17,6 +17,7 @@ import SynopsisModal from "@/components/player/SynopsisModal";
 import StatsOverlay from "@/components/player/StatsOverlay";
 import FavoritesBar from "@/components/player/FavoritesBar";
 import ChannelSearch from "@/components/player/ChannelSearch";
+import CastButton from "@/components/player/CastButton";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useSessionHeartbeat } from "@/hooks/useSessionHeartbeat";
 import { isSelectKey, isPageNextKey, isPagePrevKey, isMenuKey } from "@/lib/remoteKeys";
@@ -129,6 +130,7 @@ const PlayerPage = () => {
   }, [channels]);
 
   const [showOSD, setShowOSD] = useState(true);
+  const [castingToTv, setCastingToTv] = useState(false);
   const [showFavoritesBar, setShowFavoritesBar] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showChannelList, setShowChannelList] = useState(false);
@@ -255,6 +257,18 @@ const PlayerPage = () => {
   }, [currentChannel?.id, unlockedAdult, currentIndex, categories]);
 
   const playerRef = useRef<VideoPlayerHandle>(null);
+
+  // Enquanto transmite pra TV, silencia/pausa a reprodução local no celular.
+  useEffect(() => {
+    const video = playerRef.current?.getVideoElement();
+    if (!video) return;
+    if (castingToTv) {
+      video.muted = true;
+      video.pause();
+    } else {
+      video.play().catch(() => {});
+    }
+  }, [castingToTv]);
   const comboRef = useRef<string[]>([]);
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const COMBO_SEQUENCE = ["L", "L", "L", "R", "R", "L"];
@@ -908,6 +922,24 @@ const PlayerPage = () => {
                 <p className="text-6xl mb-4">🔞</p>
                 <p>Conteúdo restrito — digite o PIN parental</p>
               </div>
+            </div>
+          )}
+          {/* Transmitir para TV (Chromecast / AirPlay) — só navegador e PWA */}
+          <CastButton
+            channel={{
+              id: currentChannel.id,
+              name: currentChannel.name,
+              stream_url: currentChannel.stream_url,
+              logo_url: (currentChannel as any).logo_url ?? null,
+              use_proxy_token: (currentChannel as any).use_proxy_token ?? false,
+            }}
+            getVideoElement={() => playerRef.current?.getVideoElement() ?? null}
+            onCastingChange={setCastingToTv}
+          />
+          {castingToTv && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-background/90 text-center">
+              <p className="text-lg font-semibold">Transmitindo na TV</p>
+              <p className="text-sm text-muted-foreground">{currentChannel.name}</p>
             </div>
           )}
           {/* Pre-aquece o próximo canal (UP) e o anterior (DOWN) — corta o zap */}
