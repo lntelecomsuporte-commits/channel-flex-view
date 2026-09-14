@@ -17,6 +17,7 @@ import SynopsisModal from "@/components/player/SynopsisModal";
 import StatsOverlay from "@/components/player/StatsOverlay";
 import FavoritesBar from "@/components/player/FavoritesBar";
 import ChannelSearch from "@/components/player/ChannelSearch";
+import CastButton from "@/components/player/CastButton";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useSessionHeartbeat } from "@/hooks/useSessionHeartbeat";
 import { isSelectKey, isPageNextKey, isPagePrevKey, isMenuKey } from "@/lib/remoteKeys";
@@ -129,6 +130,7 @@ const PlayerPage = () => {
   }, [channels]);
 
   const [showOSD, setShowOSD] = useState(true);
+  const [castingToTv, setCastingToTv] = useState(false);
   const [showFavoritesBar, setShowFavoritesBar] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showChannelList, setShowChannelList] = useState(false);
