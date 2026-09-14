@@ -910,6 +910,24 @@ const PlayerPage = () => {
               </div>
             </div>
           )}
+          {/* Transmitir para TV (Chromecast / AirPlay) — só navegador e PWA */}
+          <CastButton
+            channel={{
+              id: currentChannel.id,
+              name: currentChannel.name,
+              stream_url: currentChannel.stream_url,
+              logo_url: (currentChannel as any).logo_url ?? null,
+              use_proxy_token: (currentChannel as any).use_proxy_token ?? false,
+            }}
+            getVideoElement={() => playerRef.current?.getVideoElement() ?? null}
+            onCastingChange={setCastingToTv}
+          />
+          {castingToTv && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-background/90 text-center">
+              <p className="text-lg font-semibold">Transmitindo na TV</p>
+              <p className="text-sm text-muted-foreground">{currentChannel.name}</p>
+            </div>
+          )}
           {/* Pre-aquece o próximo canal (UP) e o anterior (DOWN) — corta o zap */}
           <ChannelPrefetch
             nextStreamUrl={
