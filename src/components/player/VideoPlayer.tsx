@@ -21,6 +21,13 @@ const detectEngine = (url: string, sourceUrl = url, forcedContentType = ""): "hl
   return "native";
 };
 
+/** Web/PWA em Safari (iOS/macOS): permite AirPlay no <video>.
+ *  No APK/TV nada muda — segue com remote playback desabilitado. */
+const allowRemotePlayback =
+  typeof navigator !== "undefined" &&
+  !Capacitor.isNativePlatform() &&
+  /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent);
+
 const isHlsManifestUrl = (url: string): boolean => {
   try {
     const pathname = new URL(url).pathname;
@@ -674,9 +681,9 @@ const HlsVideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(({ stream
         style={{ backgroundColor: "#000" }}
         poster=""
         controls={false}
-        controlsList="nodownload noplaybackrate noremoteplayback"
+        controlsList="nodownload noplaybackrate"
         disablePictureInPicture
-        disableRemotePlayback
+        {...(allowRemotePlayback ? {} : { disableRemotePlayback: true })}
         playsInline
         muted={muted}
         x-webkit-airplay="allow"
