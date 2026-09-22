@@ -30,6 +30,8 @@ import { getLocalFunctionUrl, LOCAL_SUPABASE_PUBLISHABLE_KEY } from "@/lib/local
 import { INNOVATV_BASE_URL, fetchInnovaTvPrograms } from "@/lib/innovatv";
 import { NXTV_BASE_URL, fetchNxtvPrograms } from "@/lib/nxtv";
 import NxtvChannelPicker from "@/components/admin/NxtvChannelPicker";
+import ChannelConfigEditor from "@/components/admin/ChannelConfigEditor";
+
 
 import { getCurrentAndNextPrograms } from "@/hooks/useEPG";
 
