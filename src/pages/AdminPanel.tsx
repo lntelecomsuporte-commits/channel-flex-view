@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Trash2, LogOut, Tv, Layers, Users, Link, Activity, Download, Shield } from "lucide-react";
+import { Plus, Trash2, LogOut, Tv, Layers, Users, Link, Activity, Download, Shield, FileCode } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -30,6 +30,8 @@ import { getLocalFunctionUrl, LOCAL_SUPABASE_PUBLISHABLE_KEY } from "@/lib/local
 import { INNOVATV_BASE_URL, fetchInnovaTvPrograms } from "@/lib/innovatv";
 import { NXTV_BASE_URL, fetchNxtvPrograms } from "@/lib/nxtv";
 import NxtvChannelPicker from "@/components/admin/NxtvChannelPicker";
+import ChannelConfigEditor from "@/components/admin/ChannelConfigEditor";
+
 
 import { getCurrentAndNextPrograms } from "@/hooks/useEPG";
 
@@ -47,6 +49,8 @@ const AdminPanel = () => {
   const navigate = useNavigate();
 
   const [channelForm, setChannelForm] = useState({ ...emptyChannelForm });
+  const [channelsView, setChannelsView] = useState<"list" | "config">("list");
+
   const [extraEpgUrls, setExtraEpgUrls] = useState<string[]>([]);
   const [categoryForm, setCategoryForm] = useState({ name: "", position: "", includedCategoryIds: [] as string[], requiresPin: false });
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
@@ -447,7 +451,19 @@ const AdminPanel = () => {
           </TabsList>
 
           <TabsContent value="channels">
+            <div className="mb-4 flex gap-2">
+              <Button variant={channelsView === "list" ? "default" : "outline"} size="sm" onClick={() => setChannelsView("list")}>
+                <Tv className="h-4 w-4 mr-1" /> Lista
+              </Button>
+              <Button variant={channelsView === "config" ? "default" : "outline"} size="sm" onClick={() => setChannelsView("config")}>
+                <FileCode className="h-4 w-4 mr-1" /> Config Editor
+              </Button>
+            </div>
+
+            {channelsView === "list" ? (
+            <>
             <Card className="mb-6" ref={channelFormRef}>
+
               <CardHeader><CardTitle>{editingChannelId ? "Editar Canal" : "Novo Canal"}</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -802,7 +818,12 @@ const AdminPanel = () => {
                 )}
               </CardContent>
             </Card>
+            </>
+            ) : (
+              <ChannelConfigEditor channels={channels} categories={categories} />
+            )}
           </TabsContent>
+
 
           <TabsContent value="categories">
             <Card className="mb-6" ref={categoryFormRef}>
