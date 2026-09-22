@@ -802,7 +802,12 @@ const AdminPanel = () => {
                 )}
               </CardContent>
             </Card>
+            </>
+            ) : (
+              <ChannelConfigEditor channels={channels} categories={categories} />
+            )}
           </TabsContent>
+
 
           <TabsContent value="categories">
             <Card className="mb-6" ref={categoryFormRef}>
