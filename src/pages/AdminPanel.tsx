@@ -49,6 +49,8 @@ const AdminPanel = () => {
   const navigate = useNavigate();
 
   const [channelForm, setChannelForm] = useState({ ...emptyChannelForm });
+  const [channelsView, setChannelsView] = useState<"list" | "config">("list");
+
   const [extraEpgUrls, setExtraEpgUrls] = useState<string[]>([]);
   const [categoryForm, setCategoryForm] = useState({ name: "", position: "", includedCategoryIds: [] as string[], requiresPin: false });
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
