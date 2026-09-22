@@ -447,7 +447,19 @@ const AdminPanel = () => {
           </TabsList>
 
           <TabsContent value="channels">
+            <div className="mb-4 flex gap-2">
+              <Button variant={channelsView === "list" ? "default" : "outline"} size="sm" onClick={() => setChannelsView("list")}>
+                <Tv className="h-4 w-4 mr-1" /> Lista
+              </Button>
+              <Button variant={channelsView === "config" ? "default" : "outline"} size="sm" onClick={() => setChannelsView("config")}>
+                <FileCode className="h-4 w-4 mr-1" /> Config Editor
+              </Button>
+            </div>
+
+            {channelsView === "list" ? (
+            <>
             <Card className="mb-6" ref={channelFormRef}>
+
               <CardHeader><CardTitle>{editingChannelId ? "Editar Canal" : "Novo Canal"}</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
