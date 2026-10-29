@@ -12,9 +12,13 @@ const secret = "test-only-stream-secret";
 
 function setup(options: { blocked?: boolean; active?: boolean; channelActive?: boolean; stream?: string } = {}) {
   let handler: (request: Request) => Promise<Response> = async () => new Response(null, { status: 500 });
-  const fetchMock = vi.fn(async () => new Response("#EXTM3U\n#EXTINF:6,\nsegment.ts\n", {
-    headers: { "content-type": "application/vnd.apple.mpegurl" },
-  }));
+  const fetchMock = vi.fn(async (url: URL) => {
+    const response = new Response("#EXTM3U\n#EXTINF:6,\nsegment.ts\n", {
+      headers: { "content-type": "application/vnd.apple.mpegurl" },
+    });
+    Object.defineProperty(response, "url", { value: url.href });
+    return response;
+  });
   const from = vi.fn((table: string) => {
     const data = table === "profiles"
       ? { user_id: "user-1", is_active: options.active ?? true, is_blocked: options.blocked ?? false }
@@ -27,7 +31,7 @@ function setup(options: { blocked?: boolean; active?: boolean; channelActive?: b
     return query;
   });
   new Function("Deno", "createClient", "fetch", "crypto", js)(
-    { env: { get: (name: string) => name === "STREAM_TOKEN_SECRET" ? secret : "test-env" }, serve: (fn: typeof handler) => { handler = fn; } },
+    { env: { get: (name: string) => name === "STREAM_TOKEN_SECRET" ? secret : name === "PUBLIC_PROXY_BASE_URL" ? "https://tv2.lntelecom.net" : "test-env" }, serve: (fn: typeof handler) => { handler = fn; } },
     () => ({ from }), fetchMock, webcrypto,
   );
   return { handler, fetchMock, from };
