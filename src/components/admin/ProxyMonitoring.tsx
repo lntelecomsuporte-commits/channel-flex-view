@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseLocal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Activity, Globe, Tv2, User, Wifi, RefreshCw, ChevronDown } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -33,8 +33,19 @@ const isRoutableClientIp = (ip: string | null | undefined) => {
   return true;
 };
 
+// Load on entry; subsequent monitoring requests must be explicitly requested.
+const monitoringQueryOptions = {
+  staleTime: Infinity,
+  refetchInterval: false,
+  refetchOnWindowFocus: false,
+  refetchOnReconnect: false,
+  refetchOnMount: "always",
+  retry: false,
+} as const;
+
 const useProxyAccess = () =>
   useQuery({
+    ...monitoringQueryOptions,
     queryKey: ["proxy-access-log"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -46,14 +57,15 @@ const useProxyAccess = () =>
       if (error) throw error;
       return (data ?? []) as ProxyAccess[];
     },
-    refetchInterval: 10_000,
   });
 
 const useProfilesMap = () =>
   useQuery({
+    ...monitoringQueryOptions,
     queryKey: ["profiles-map"],
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("user_id, username, display_name");
+      const { data, error } = await supabase.from("profiles").select("user_id, username, display_name");
+      if (error) throw error;
       const map = new Map<string, { username: string | null; display_name: string | null }>();
       (data ?? []).forEach((p) => map.set(p.user_id, { username: p.username, display_name: p.display_name }));
       return map;
@@ -62,6 +74,7 @@ const useProfilesMap = () =>
 
 const useActiveSessions = () =>
   useQuery({
+    ...monitoringQueryOptions,
     queryKey: ["active-sessions-monitoring"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -72,7 +85,6 @@ const useActiveSessions = () =>
       if (error) throw error;
       return data ?? [];
     },
-    refetchInterval: 10_000,
   });
 
 // Últimas sessões (30d) — usadas para enriquecer o histórico do proxy
@@ -80,6 +92,7 @@ const useActiveSessions = () =>
 // é o do nginx interno, ex.: 172.18.0.1).
 const useRecentSessionsByUser = () =>
   useQuery({
+    ...monitoringQueryOptions,
     queryKey: ["recent-sessions-by-user"],
     queryFn: async () => {
       let statsUniqueIps: number | null = null;
@@ -107,8 +120,7 @@ const useRecentSessionsByUser = () =>
           .order("last_heartbeat_at", { ascending: false })
           .range(from, to);
         if (error) {
-          console.error("[monitoring] page", page, "error:", error);
-          break;
+          throw error;
         }
         if (!data || data.length === 0) break;
         totalRows += data.length;
@@ -153,7 +165,6 @@ const useRecentSessionsByUser = () =>
       console.log("[monitoring] sessions scanned:", totalRows, "unique IPs:", uniqueIps, "rpc:", statsUniqueIps, "frontend:", sessionIps.size);
       return { byUser: map, uniqueIps, ipDetails };
     },
-    refetchInterval: 30_000,
   });
 
 const formatBytes = (bytes: number) => {
@@ -169,29 +180,46 @@ const formatBytes = (bytes: number) => {
 };
 
 const ProxyMonitoring = () => {
-  const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   const [detailView, setDetailView] = useState<null | "online" | "proxy" | "ips">(null);
-  const { data: logs, isLoading } = useProxyAccess();
-  const { data: profiles } = useProfilesMap();
-  const { data: sessions } = useActiveSessions();
-  const { data: recentSessionsData } = useRecentSessionsByUser();
+  const logsQuery = useProxyAccess();
+  const profilesQuery = useProfilesMap();
+  const sessionsQuery = useActiveSessions();
+  const recentSessionsQuery = useRecentSessionsByUser();
+  const { data: logs, isLoading } = logsQuery;
+  const { data: profiles } = profilesQuery;
+  const { data: sessions } = sessionsQuery;
+  const { data: recentSessionsData } = recentSessionsQuery;
+  const isFetching = logsQuery.isFetching || profilesQuery.isFetching || sessionsQuery.isFetching || recentSessionsQuery.isFetching;
+  const hasError = logsQuery.isError || profilesQuery.isError || sessionsQuery.isError || recentSessionsQuery.isError;
+  const completedAt = Math.max(logsQuery.dataUpdatedAt, profilesQuery.dataUpdatedAt, sessionsQuery.dataUpdatedAt, recentSessionsQuery.dataUpdatedAt);
+  const allSucceeded = logsQuery.isSuccess && profilesQuery.isSuccess && sessionsQuery.isSuccess && recentSessionsQuery.isSuccess;
+
+  useEffect(() => {
+    if (!isFetching && allSucceeded && completedAt > 0) setLastUpdatedAt(completedAt);
+  }, [isFetching, allSucceeded, completedAt]);
+
   const recentSessions = recentSessionsData?.byUser;
   const uniqueClientIps30d = recentSessionsData?.uniqueIps ?? 0;
   const ipDetails = recentSessionsData?.ipDetails;
 
   const handleRefresh = async () => {
+    if (isRefreshing || isFetching) return;
     setIsRefreshing(true);
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["proxy-access-log"] }),
-      queryClient.invalidateQueries({ queryKey: ["profiles-map"] }),
-      queryClient.invalidateQueries({ queryKey: ["active-sessions-monitoring"] }),
-      queryClient.invalidateQueries({ queryKey: ["recent-sessions-by-user"] }),
-    ]);
-    setIsRefreshing(false);
+    try {
+      await Promise.all([
+        logsQuery.refetch(),
+        profilesQuery.refetch(),
+        sessionsQuery.refetch(),
+        recentSessionsQuery.refetch(),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
-  const now = Date.now();
+  const now = lastUpdatedAt ?? completedAt || Date.now();
   const ACTIVE_WINDOW_MS = 45_000;
 
   // Todos os usuários online (com heartbeat recente), assistindo ou não
@@ -433,22 +461,29 @@ const ProxyMonitoring = () => {
       {/* Usuários online */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between gap-2">
+          <CardTitle className="flex flex-wrap items-center justify-between gap-3">
             <span className="flex items-center gap-2">
               <User className="h-4 w-4 text-primary" /> Usuários online agora
             </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={isRefreshing || isLoading}
-            >
-              <RefreshCw className={`h-4 w-4 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Atualizar
-            </Button>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-xs font-normal text-muted-foreground" role="status">
+                {lastUpdatedAt ? `Atualizado às ${new Date(lastUpdatedAt).toLocaleTimeString("pt-BR")}` : isFetching ? "Carregando..." : "Ainda não atualizado"}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={isRefreshing || isFetching}
+                aria-busy={isRefreshing || isFetching}
+              >
+                <RefreshCw className={`h-4 w-4 mr-1.5 ${isRefreshing || isFetching ? 'animate-spin motion-reduce:animate-none' : ''}`} />
+                Atualizar
+              </Button>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {hasError && <p role="alert" className="text-destructive text-sm mb-3">Não foi possível atualizar todos os dados. Clique em Atualizar para tentar novamente.</p>}
           {!onlineUsers.length ? (
             <p className="text-muted-foreground text-sm">Nenhum usuário online no momento.</p>
           ) : (
