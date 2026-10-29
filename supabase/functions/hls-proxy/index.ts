@@ -536,6 +536,9 @@ Deno.serve(async (request) => {
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders });
     }
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      return new Response("Method not allowed", { status: 405, headers: corsHeaders });
+    }
 
   const requestUrl = new URL(request.url);
   let target = requestUrl.searchParams.get("url");
@@ -552,7 +555,9 @@ Deno.serve(async (request) => {
   let userId: string | null = null;
   let authCtx: AuthCtx;
 
-  if (playlistToken && ch) {
+  // A assinatura do navegador tem prioridade: nunca transforma o modo
+  // "Ocultar URL" em redirect mesmo se vier um pt junto na requisição.
+  if (playlistToken && ch && !st) {
     try {
       const { data: profile } = await adminClient
         .from("profiles")
@@ -650,6 +655,31 @@ Deno.serve(async (request) => {
 
   if (isPrivateHostname(upstreamUrl.hostname)) {
     return new Response("URL blocked by proxy policy", { status: 403, headers: corsHeaders });
+  }
+
+  // Listas já instaladas continuam usando exatamente ch + pt no mesmo path.
+  // Valida conta/canal acima e redireciona ANTES de abrir o vídeo ou reescrever
+  // manifests. Variantes/segmentos cifrados de manifests antigos também são
+  // aceitos: depois do redirect, o player acessa o provedor diretamente.
+  // Nunca cachear: uma nova sintonia deve ler a URL atual e o bloqueio atual.
+  if (authCtx.playlist && userId) {
+    if (!uCipher && request.method === "GET") {
+      upsertM3uSession(
+        userId,
+        getClientIp(request),
+        request.headers.get("user-agent") ?? "",
+        authCtx.playlist.ch,
+        authCtx.channelName ?? null,
+      ).catch(() => {});
+    }
+    return new Response(null, {
+      status: 302,
+      headers: {
+        ...corsHeaders,
+        "Location": upstreamUrl.href,
+        "Cache-Control": "no-store, private, max-age=0",
+      },
+    });
   }
   // Se a URL tem extensão de mídia, libera direto. Senão, validamos depois pelo content-type upstream.
   const hasMediaExtension = isMediaRequest(upstreamUrl.pathname);
