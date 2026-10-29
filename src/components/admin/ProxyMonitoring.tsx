@@ -43,15 +43,18 @@ const monitoringQueryOptions = {
   retry: false,
 } as const;
 
+const ONLINE_WINDOW_MS = 90_000;
+const PROXY_WINDOW_MS = 180_000;
+
 const useProxyAccess = () =>
   useQuery({
     ...monitoringQueryOptions,
-    queryKey: ["proxy-access-log"],
+    queryKey: ["proxy-access-log-monitoring-live"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("proxy_access_log")
         .select("*")
-        .gte("last_seen_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+        .gte("last_seen_at", new Date(Date.now() - PROXY_WINDOW_MS).toISOString())
         .order("last_seen_at", { ascending: false })
         .limit(2000);
       if (error) throw error;
@@ -81,50 +84,32 @@ const useActiveSessions = () =>
         .from("user_sessions")
         .select("id, user_id, current_channel_id, current_channel_name, ip_address, client_ipv4, client_ipv6, user_agent, last_heartbeat_at, started_at, is_watching")
         .is("ended_at", null)
-        .gte("last_heartbeat_at", new Date(Date.now() - 90_000).toISOString());
+        .gte("last_heartbeat_at", new Date(Date.now() - ONLINE_WINDOW_MS).toISOString());
       if (error) throw error;
       return data ?? [];
     },
   });
 
-// Últimas sessões (30d) — usadas para enriquecer o histórico do proxy
-// com o IPv4/IPv6/UA reais do cliente (o IP gravado no proxy_access_log
-// é o do nginx interno, ex.: 172.18.0.1).
+// Only live sessions enrich client IP/UA details; no historical scan or RPC.
 const useRecentSessionsByUser = () =>
   useQuery({
     ...monitoringQueryOptions,
-    queryKey: ["recent-sessions-by-user"],
+    queryKey: ["recent-sessions-by-user-monitoring-live"],
     queryFn: async () => {
-      let statsUniqueIps: number | null = null;
-      const { data: stats, error: statsError } = await supabase.rpc("get_monitoring_stats_30d" as any);
-      if (!statsError && Array.isArray(stats) && stats[0]?.unique_ips != null) {
-        statsUniqueIps = Number(stats[0].unique_ips) || 0;
-      } else if (statsError) {
-        console.warn("[monitoring] get_monitoring_stats_30d unavailable:", statsError.message);
-      }
-
-      // Busca paginada para mapear o IP/UA mais recente por usuário e contar IPs únicos.
       const map = new Map<string, { client_ipv4: string | null; client_ipv6: string | null; ip_address: string | null; user_agent: string | null; last_heartbeat_at: string }>();
       const sessionIps = new Set<string>();
       const ipDetails = new Map<string, { ip: string; sessions: number; users: Set<string>; last_seen: string; user_agent: string | null }>();
-      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      const pageSize = 1000;
-      let totalRows = 0;
-      for (let page = 0; page < 20; page++) {
-        const from = page * pageSize;
-        const to = from + pageSize - 1;
+      const since = new Date(Date.now() - ONLINE_WINDOW_MS).toISOString();
         const { data, error } = await supabase
           .from("user_sessions")
           .select("user_id, ip_address, client_ipv4, client_ipv6, user_agent, last_heartbeat_at")
+          .is("ended_at", null)
           .gte("last_heartbeat_at", since)
-          .order("last_heartbeat_at", { ascending: false })
-          .range(from, to);
+          .order("last_heartbeat_at", { ascending: false });
         if (error) {
           throw error;
         }
-        if (!data || data.length === 0) break;
-        totalRows += data.length;
-        data.forEach((s: any) => {
+        (data ?? []).forEach((s) => {
           const candidates = [s.client_ipv4, s.client_ipv6, s.ip_address].filter(Boolean) as string[];
           candidates.forEach((ip) => {
             if (!isRoutableClientIp(ip)) return;
@@ -159,11 +144,7 @@ const useRecentSessionsByUser = () =>
             });
           }
         });
-        if (data.length < pageSize) break;
-      }
-      const uniqueIps = Math.max(statsUniqueIps ?? 0, sessionIps.size);
-      console.log("[monitoring] sessions scanned:", totalRows, "unique IPs:", uniqueIps, "rpc:", statsUniqueIps, "frontend:", sessionIps.size);
-      return { byUser: map, uniqueIps, ipDetails };
+      return { byUser: map, uniqueIps: sessionIps.size, ipDetails };
     },
   });
 
@@ -201,7 +182,7 @@ const ProxyMonitoring = () => {
   }, [isFetching, allSucceeded, completedAt]);
 
   const recentSessions = recentSessionsData?.byUser;
-  const uniqueClientIps30d = recentSessionsData?.uniqueIps ?? 0;
+  const uniqueClientIps = recentSessionsData?.uniqueIps ?? 0;
   const ipDetails = recentSessionsData?.ipDetails;
 
   const handleRefresh = async () => {
@@ -220,7 +201,6 @@ const ProxyMonitoring = () => {
   };
 
   const now = lastUpdatedAt ?? (completedAt || Date.now());
-  const ACTIVE_WINDOW_MS = 45_000;
 
   // Todos os usuários online (com heartbeat recente), assistindo ou não
   const onlineUsersMap = (sessions ?? [])
@@ -263,7 +243,7 @@ const ProxyMonitoring = () => {
   // proxy_access_log. Assim, se o usuário está num canal HTTPS (que toca
   // direto, sem proxy), ele NÃO aparece aqui mesmo que tenha passado pelo
   // proxy minutos antes em outro canal.
-  const proxyRecentSince = now - ACTIVE_WINDOW_MS * 4; // ~3min
+  const proxyRecentSince = now - PROXY_WINDOW_MS;
   const proxyActiveKeys = new Set(
     (logs ?? [])
       .filter((l) => new Date(l.last_seen_at).getTime() >= proxyRecentSince)
@@ -274,9 +254,8 @@ const ProxyMonitoring = () => {
     .filter((s) => s.is_watching && s.channel_name)
     .filter((s) => proxyActiveKeys.has(`${s.user_id}|${s.channel_name}`));
 
-  // Agrega histórico (30d) por usuário+canal
-  const since30d = now - 30 * 24 * 60 * 60 * 1000;
-  const recent = (logs ?? []).filter((l) => new Date(l.last_seen_at).getTime() >= since30d);
+  // Aggregate only the same live proxy window used by the query.
+  const recent = (logs ?? []).filter((l) => new Date(l.last_seen_at).getTime() >= proxyRecentSince);
   const aggMap = new Map<string, {
     id: string;
     proxy_ip: string;
@@ -327,7 +306,7 @@ const ProxyMonitoring = () => {
     return p?.display_name || p?.username || uid.slice(0, 8);
   };
 
-  const totalBytes24h = recent.reduce((acc, l) => acc + Number(l.bytes_transferred), 0);
+  const totalBytesRecent = recent.reduce((acc, l) => acc + Number(l.bytes_transferred), 0);
 
   return (
     <div className="space-y-6">
@@ -366,8 +345,8 @@ const ProxyMonitoring = () => {
                 <Globe className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">IPs únicos (30d)</p>
-                <p className="text-2xl font-bold text-foreground">{uniqueClientIps30d}</p>
+                <p className="text-xs text-muted-foreground">IPs online agora</p>
+                <p className="text-2xl font-bold text-foreground">{uniqueClientIps}</p>
               </div>
             </CardContent>
           </Card>
@@ -378,8 +357,8 @@ const ProxyMonitoring = () => {
               <Wifi className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Tráfego proxy (30d)</p>
-              <p className="text-2xl font-bold text-foreground">{formatBytes(totalBytes24h)}</p>
+              <p className="text-xs text-muted-foreground">Tráfego proxy (3 min)</p>
+              <p className="text-2xl font-bold text-foreground">{formatBytes(totalBytesRecent)}</p>
             </div>
           </CardContent>
         </Card>
@@ -392,7 +371,7 @@ const ProxyMonitoring = () => {
             <DialogTitle>
               {detailView === "online" && `Usuários online agora (${onlineUsers.length})`}
               {detailView === "proxy" && `Ativos no proxy agora (${activeList.length})`}
-              {detailView === "ips" && `IPs únicos nos últimos 30 dias (${uniqueClientIps30d})`}
+              {detailView === "ips" && `IPs online agora (${uniqueClientIps})`}
             </DialogTitle>
           </DialogHeader>
           {detailView === "online" && (
@@ -622,14 +601,14 @@ const ProxyMonitoring = () => {
         </CardContent>
       </Card>
 
-      {/* Histórico 24h */}
+      {/* Recent proxy activity */}
       <Card>
         <CardHeader>
-          <CardTitle>Histórico (últimos 30 dias)</CardTitle>
+          <CardTitle>Acessos ao proxy (últimos 3 minutos)</CardTitle>
         </CardHeader>
         <CardContent>
           {!history.length ? (
-            <p className="text-muted-foreground text-sm">Sem registros nos últimos 30 dias.</p>
+            <p className="text-muted-foreground text-sm">Sem registros nos últimos 3 minutos.</p>
           ) : (
             <div className="space-y-2">
               {history.map((row) => {
