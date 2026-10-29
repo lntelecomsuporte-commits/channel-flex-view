@@ -219,7 +219,7 @@ const ProxyMonitoring = () => {
     }
   };
 
-  const now = lastUpdatedAt ?? completedAt || Date.now();
+  const now = lastUpdatedAt ?? (completedAt || Date.now());
   const ACTIVE_WINDOW_MS = 45_000;
 
   // Todos os usuários online (com heartbeat recente), assistindo ou não
