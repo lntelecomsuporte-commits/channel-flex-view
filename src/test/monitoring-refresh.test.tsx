@@ -155,4 +155,27 @@ describe("manual monitoring refresh", () => {
     await settle();
     expect(screen.queryByText("Canal atual")).not.toBeInTheDocument();
   });
+
+  it("requires a proxy hit for the current user and channel within 3 minutes", async () => {
+    const now = Date.now();
+    backend.sessions = [
+      { id: "live", user_id: "live-user", current_channel_name: "Canal atual", is_watching: true, ended_at: null, last_heartbeat_at: new Date(now - 30_000).toISOString() },
+    ];
+    const log = { id: "hit", user_id: "live-user", channel_name: "Canal atual", request_count: 1, bytes_transferred: 0, first_seen_at: new Date(now - 60_000).toISOString(), last_seen_at: new Date(now - 60_000).toISOString() };
+    backend.logs = [log];
+    await openMonitoring();
+    fireEvent.click(screen.getByRole("button", { name: /No proxy agora/ }));
+    expect(screen.getByRole("heading", { name: "Ativos no proxy agora (1)" })).toBeInTheDocument();
+
+    for (const hit of [
+      { ...log, channel_name: "Outro canal" },
+      { ...log, user_id: "outro-user" },
+      { ...log, last_seen_at: new Date(now - 181_000).toISOString() },
+    ]) {
+      backend.logs = [hit];
+      await act(async () => { await client.refetchQueries(); });
+      await settle();
+      expect(screen.getByRole("heading", { name: "Ativos no proxy agora (0)" })).toBeInTheDocument();
+    }
+  });
 });
