@@ -34,6 +34,7 @@ import ChannelConfigEditor from "@/components/admin/ChannelConfigEditor";
 
 
 import { getCurrentAndNextPrograms } from "@/hooks/useEPG";
+import { resolveLogoUrl } from "@/lib/logoUrl";
 
 const emptyChannelForm = {
   name: "", channel_number: "", stream_url: "", backup_stream_urls: "", logo_url: "", category_id: "", is_active: true,
@@ -243,6 +244,22 @@ const AdminPanel = () => {
       payload.logo_source_url = null;
     }
     // Se for /logos/... (local), NÃO sobrescreve logo_source_url — preserva a fonte salva no banco.
+
+    // Edição sem mexer na logo: preserva a logo servida localmente (/logos/N.png)
+    // e a fonte salva — não regrava a URL externa nem apaga a logo.
+    if (editingChannelId) {
+      const orig = channels?.find((c) => c.id === editingChannelId) as any;
+      if (orig) {
+        const origSrc = (orig.logo_source_url as string | null) || "";
+        const origLu = (orig.logo_url as string | null) ?? "";
+        const origFormValue = origSrc || (origLu.startsWith("/logos/") ? "" : origLu);
+        const grabbedFromEpg = logoUrl !== (channelForm.logo_url || null);
+        if (!grabbedFromEpg && (channelForm.logo_url || "").trim() === origFormValue.trim()) {
+          delete payload.logo_url;
+          delete payload.logo_source_url;
+        }
+      }
+    }
 
     let error;
     if (editingChannelId) {
@@ -778,7 +795,23 @@ const AdminPanel = () => {
                       <div key={ch.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
                         <div className="flex items-center gap-3">
                           <span className="channel-badge text-sm">{ch.channel_number}</span>
-                          {ch.logo_url && <img src={ch.logo_url} alt="" className="h-8 w-8 rounded object-contain bg-muted" />}
+                          {ch.logo_url && (
+                            <img
+                              src={resolveLogoUrl(ch.logo_url) ?? undefined}
+                              alt=""
+                              className="h-8 w-8 rounded object-contain bg-muted"
+                              onError={(e) => {
+                                const img = e.currentTarget;
+                                const fallback = resolveLogoUrl((ch as any).logo_source_url);
+                                if (fallback && img.src !== fallback && !img.dataset.fb) {
+                                  img.dataset.fb = "1";
+                                  img.src = fallback;
+                                } else {
+                                  img.style.visibility = "hidden";
+                                }
+                              }}
+                            />
+                          )}
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="font-medium text-foreground">{ch.name}</p>
