@@ -34,6 +34,7 @@ import ChannelConfigEditor from "@/components/admin/ChannelConfigEditor";
 
 
 import { getCurrentAndNextPrograms } from "@/hooks/useEPG";
+import { resolveLogoUrl } from "@/lib/logoUrl";
 
 const emptyChannelForm = {
   name: "", channel_number: "", stream_url: "", backup_stream_urls: "", logo_url: "", category_id: "", is_active: true,
