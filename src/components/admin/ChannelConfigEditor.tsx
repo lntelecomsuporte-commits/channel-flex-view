@@ -77,13 +77,16 @@ const ChannelConfigEditor = ({ channels, categories }: Props) => {
         if (!categoryId) missingCats.add(c.category_name);
       }
 
+      const existing = c.id ? (channels ?? []).find((ch) => ch.id === c.id) as (Channel & { logo_source_url?: string | null }) | undefined : undefined;
+      const existingLogoText = existing ? (existing.logo_source_url || existing.logo_url || null) : null;
+      const logoUnchanged = !!existing && (c.logo_url || null) === existingLogoText;
       const isExternalLogo = !!c.logo_url && !c.logo_url.startsWith("/logos/");
       const payload: Record<string, unknown> = {
         name: c.name,
         channel_number: c.channel_number,
         stream_url: c.stream_url,
         backup_stream_urls: c.backup_stream_urls,
-        logo_url: c.logo_url,
+        ...(logoUnchanged ? {} : { logo_url: c.logo_url }),
         category_id: categoryId,
         is_active: c.is_active,
         is_adult: c.is_adult,
@@ -97,7 +100,8 @@ const ChannelConfigEditor = ({ channels, categories }: Props) => {
         force_proxy_native: c.force_proxy_native,
         prefer_sw_decoder: c.prefer_sw_decoder,
       };
-      if (isExternalLogo) payload.logo_source_url = c.logo_url;
+      if (logoUnchanged) { /* mantém logo local baixada pelo sync-logos */ }
+      else if (isExternalLogo) payload.logo_source_url = c.logo_url;
       else if (!c.logo_url) payload.logo_source_url = null;
 
       if (c.id) {
