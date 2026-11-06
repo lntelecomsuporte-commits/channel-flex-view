@@ -9,6 +9,10 @@ import { ptBR } from "date-fns/locale";
 import { useEffect, useState } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { deviceLabel, filterSessions, groupByUser, sortSessions, type OnlineSortKey } from "@/lib/onlineSessions";
 
 type ProxyAccess = {
   id: string;
@@ -86,7 +90,7 @@ const useActiveSessions = () =>
     queryFn: async () => {
       const { data, error } = await supabase
         .from("user_sessions")
-        .select("id, user_id, current_channel_id, current_channel_name, ip_address, client_ipv4, client_ipv6, user_agent, last_heartbeat_at, started_at, is_watching")
+        .select("id, user_id, current_channel_id, current_channel_name, ip_address, client_ipv4, client_ipv6, user_agent, last_heartbeat_at, started_at, is_watching, platform")
         .is("ended_at", null)
         .or(liveSessionFilter());
       if (error) throw error;
@@ -167,6 +171,9 @@ const ProxyMonitoring = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   const [detailView, setDetailView] = useState<null | "online" | "proxy" | "ips">(null);
+  const [sortBy, setSortBy] = useState<OnlineSortKey>("recent");
+  const [grouped, setGrouped] = useState(false);
+  const [search, setSearch] = useState("");
   const logsQuery = useProxyAccess();
   const profilesQuery = useProfilesMap();
   const sessionsQuery = useActiveSessions();
@@ -214,6 +221,7 @@ const ProxyMonitoring = () => {
       client_ipv4: (s as any).client_ipv4 as string | null,
       client_ipv6: (s as any).client_ipv6 as string | null,
       user_agent: (s as any).user_agent as string | null,
+      platform: ((s as any).platform ?? null) as string | null,
       started_at: (s as any).started_at as string | null,
       channel_name: s.current_channel_name,
       is_watching: s.is_watching,
@@ -233,6 +241,7 @@ const ProxyMonitoring = () => {
       client_ipv4: string | null;
       client_ipv6: string | null;
       user_agent: string | null;
+      platform: string | null;
       started_at: string | null;
       channel_name: string | null;
       is_watching: boolean;
@@ -481,9 +490,9 @@ const ProxyMonitoring = () => {
           {hasError && <p role="alert" className="text-destructive text-sm mb-3">Não foi possível atualizar todos os dados. Clique em Atualizar para tentar novamente.</p>}
           {!onlineUsers.length ? (
             <p className="text-muted-foreground text-sm">Nenhum usuário online no momento.</p>
-          ) : (
-            <div className="space-y-2">
-              {onlineUsers.map((s) => (
+          ) : (() => {
+            const visible = sortSessions(filterSessions(onlineUsers, search, getUserLabel), sortBy, getUserLabel);
+            const renderSession = (s: typeof onlineUsers[number], showUser = true) => (
                 <Collapsible key={s.id}>
                   <div className="rounded-lg bg-secondary">
                     <CollapsibleTrigger className="w-full flex items-center justify-between p-3 text-left hover:bg-secondary/70 transition-colors rounded-lg group">
@@ -496,7 +505,8 @@ const ProxyMonitoring = () => {
                         </div>
                         <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
                           <span className="flex items-center gap-1"><Globe className="h-3 w-3" /> {s.client_ipv4 || s.client_ipv6 || s.ip_address}</span>
-                          <span className="flex items-center gap-1"><User className="h-3 w-3" /> {getUserLabel(s.user_id)}</span>
+                          {showUser && <span className="flex items-center gap-1"><User className="h-3 w-3" /> {getUserLabel(s.user_id)}</span>}
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">{deviceLabel(s)}</Badge>
                           <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" />
                         </div>
                       </div>
@@ -543,9 +553,54 @@ const ProxyMonitoring = () => {
                     </CollapsibleContent>
                   </div>
                 </Collapsible>
-              ))}
-            </div>
-          )}
+            );
+            return (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar nome, canal, IP ou receptor" className="h-9 max-w-xs" />
+                  <Select value={sortBy} onValueChange={(v) => setSortBy(v as OnlineSortKey)}>
+                    <SelectTrigger className="h-9 w-48" aria-label="Classificar por"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="recent">Mais recentes</SelectItem>
+                      <SelectItem value="name">Nome</SelectItem>
+                      <SelectItem value="channel">Canal</SelectItem>
+                      <SelectItem value="ip">IP</SelectItem>
+                      <SelectItem value="device">Modelo do receptor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Switch checked={grouped} onCheckedChange={setGrouped} /> Agrupar por cliente
+                  </label>
+                </div>
+                {!visible.length ? (
+                  <p className="text-muted-foreground text-sm">Nenhum resultado para a busca.</p>
+                ) : grouped ? (
+                  <div className="space-y-2">
+                    {groupByUser(visible).map((g) => (
+                      <Collapsible key={g.user_id}>
+                        <div className="rounded-lg border border-border">
+                          <CollapsibleTrigger className="w-full flex items-center justify-between p-3 text-left hover:bg-secondary/50 rounded-lg group">
+                            <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+                              <User className="h-4 w-4 text-primary" /> {getUserLabel(g.user_id)}
+                            </span>
+                            <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                              {g.sessions.length} {g.sessions.length === 1 ? "ponto" : "pontos"} online
+                              <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" />
+                            </span>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <div className="space-y-2 p-2 pt-0">{g.sessions.map((s) => renderSession(s, false))}</div>
+                          </CollapsibleContent>
+                        </div>
+                      </Collapsible>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-2">{visible.map((s) => renderSession(s))}</div>
+                )}
+              </div>
+            );
+          })()}
         </CardContent>
       </Card>
 
