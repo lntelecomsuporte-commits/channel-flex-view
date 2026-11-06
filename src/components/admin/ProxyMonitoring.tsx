@@ -317,6 +317,10 @@ const ProxyMonitoring = () => {
     const p = profiles?.get(uid);
     return p?.display_name || p?.username || uid.slice(0, 8);
   };
+  const getUserText = (uid: string) => {
+    const p = profiles?.get(uid);
+    return p?.display_name || p?.username || uid.slice(0, 8);
+  };
 
   const totalBytesRecent = recent.reduce((acc, l) => acc + Number(l.bytes_transferred), 0);
 
@@ -491,7 +495,7 @@ const ProxyMonitoring = () => {
           {!onlineUsers.length ? (
             <p className="text-muted-foreground text-sm">Nenhum usuário online no momento.</p>
           ) : (() => {
-            const visible = sortSessions(filterSessions(onlineUsers, search, getUserLabel), sortBy, getUserLabel);
+            const visible = sortSessions(filterSessions(onlineUsers, search, getUserText), sortBy, getUserText);
             const renderSession = (s: typeof onlineUsers[number], showUser = true) => (
                 <Collapsible key={s.id}>
                   <div className="rounded-lg bg-secondary">
