@@ -16,54 +16,53 @@ sub init()
     m.allowedChannels = []
     m.currentPlayingCh = invalid
     m.sessionId = ""
+    m.hbState = HbNewState()
+    m.hbTask = invalid
     m.adultPin = "1234"
     m.pinOkUntil = 0
     m.unlockedAdult = {}
     m.pinCategoryIds = {}
     m.hbTimer.observeField("fire", "OnHeartbeat")
+    m.hbTimer.control = "start"
     LoadAll()
     StartSession()
 end sub
 
 sub StartSession()
-    task = createObject("roSGNode", "HeartbeatTask")
-    task.action = "start"
-    task.isWatching = false
-    task.observeField("result", "OnSessionStarted")
-    task.control = "RUN"
-    m.startTask = task
-end sub
-
-sub OnSessionStarted(evt as Object)
-    res = evt.getData()
-    if res = invalid then return
-    if res.forceSignout = true
-        m.top.forceSignout = true
-        return
-    end if
-    if res.id <> invalid then m.sessionId = res.id
-    m.hbTimer.control = "start"
+    OnHeartbeat(invalid)
 end sub
 
 sub OnHeartbeat(evt as Object)
-    if m.sessionId = "" then return
+    action = HbNextAction(m.hbState)
+    if action = "" then return
     task = createObject("roSGNode", "HeartbeatTask")
-    task.action = "heartbeat"
-    task.sessionId = m.sessionId
+    task.action = action
+    task.sessionId = m.hbState.sessionId
     task.isWatching = (m.player <> invalid)
     if m.currentPlayingCh <> invalid
         if m.currentPlayingCh.id <> invalid then task.channelId = m.currentPlayingCh.id
         if m.currentPlayingCh.name <> invalid then task.channelName = m.currentPlayingCh.name
     end if
     task.observeField("result", "OnHeartbeatDone")
+    ' Keep the Task alive until its asynchronous response is observed.
+    m.hbTask = task
     task.control = "RUN"
 end sub
 
 sub OnHeartbeatDone(evt as Object)
     res = evt.getData()
+    if m.hbTask = invalid then return
+    action = m.hbTask.action
+    m.hbTask.unobserveField("result")
+    m.hbTask = invalid
+    sendPending = HbAcceptResult(m.hbState, action, res)
+    m.sessionId = m.hbState.sessionId
     if res <> invalid and res.forceSignout = true
+        m.hbTimer.control = "stop"
         m.top.forceSignout = true
+        return
     end if
+    if sendPending then OnHeartbeat(invalid)
 end sub
 
 sub LoadAll()

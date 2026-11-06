@@ -6,3 +6,4 @@
 - Keep hls-proxy routing self-contained in its entrypoint because self-hosted deployment copies that file individually.
 - Admin capabilities are permission keys checked by `has_admin_permission` in the database and by manage-users per action; the panel only hides UI, so new sensitive actions need a key enforced server-side too.
 - Roku login uses the normalized full GetChannelClientId with the existing device endpoints; only the active login scene persists successful sessions, so stopped background activation tasks cannot overwrite a manual login.
+- Roku heartbeats reuse login device identity and retain one asynchronous Task at a time; failed starts retry on the timer and queued channel changes flush after success to keep monitoring accurate without overlapping requests.

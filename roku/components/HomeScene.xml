@@ -13,6 +13,8 @@
   <script type="text/brightscript" uri="pkg:/source/EpgClient.brs" />
   <script type="text/brightscript" uri="pkg:/source/UpdateCheck.brs" />
   <script type="text/brightscript" uri="pkg:/source/Heartbeat.brs" />
+  <script type="text/brightscript" uri="pkg:/source/DeviceAuth.brs" />
+  <script type="text/brightscript" uri="pkg:/source/HeartbeatState.brs" />
   <children>
     <Rectangle width="1920" height="1080" color="0x0a0a0aff" />
 
@@ -26,6 +28,6 @@
     <Label id="updateBanner" text="" font="font:MediumBoldSystemFont"
            color="0xfbbf24ff" translation="[60, 1020]" visible="false" />
 
-    <Timer id="hbTimer" repeat="true" duration="60" />
+    <Timer id="hbTimer" repeat="true" duration="30" />
   </children>
 </component>

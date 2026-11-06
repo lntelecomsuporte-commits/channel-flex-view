@@ -17,39 +17,45 @@ function HbInvoke(action as String, payload as Object) as Object
 end function
 
 function HbStart(channelId as Dynamic, channelName as Dynamic, isWatching as Boolean) as Object
-    di = CreateObject("roDeviceInfo")
-    ai = CreateObject("roAppInfo")
-    payload = {
-        sessionToken: NewSessionToken()
-        userAgent: "Roku/" + GetRokuModel()
-        isWatching: isWatching
-        platform: "roku"
-        deviceId: di.GetChannelClientId()
-        deviceName: di.GetModelDisplayName()
-        appVersion: ai.GetVersion()
-    }
+    payload = HbStartPayload(RokuDevicePayload(), NewSessionToken(), channelId, channelName, isWatching)
+    return HbRequestStart(payload)
+end function
+
+function HbStartPayload(device as Object, token as String, channelId as Dynamic, channelName as Dynamic, isWatching as Boolean) as Object
+    payload = { sessionToken: token, userAgent: "Roku/" + device.device_name, isWatching: isWatching, platform: "roku", deviceId: device.device_id, deviceName: device.device_name, appVersion: device.app_version }
     if channelId <> invalid then payload.channelId = channelId
     if channelName <> invalid then payload.channelName = channelName
+    return payload
+end function
+
+function HbRequestStart(payload as Object) as Object
     res = HbInvoke("start", payload)
     if res.ok and res.body <> invalid
         if res.body.forceSignout = true then return { forceSignout: true }
-        if res.body.id <> invalid then return { id: res.body.id }
+        if res.body.id <> invalid and res.body.id <> "" then return { ok: true, id: res.body.id, status: res.status }
     end if
-    return { id: invalid }
+    HbLogFailure("start", res)
+    return { ok: false, id: invalid, status: res.status }
 end function
 
 function HbBeat(sessionId as String, channelId as Dynamic, channelName as Dynamic, isWatching as Boolean) as Object
     if sessionId = invalid or sessionId = "" then return { ok: false }
-    di = CreateObject("roDeviceInfo")
-    payload = { sessionId: sessionId, isWatching: isWatching, platform: "roku", deviceId: di.GetChannelClientId() }
+    device = RokuDevicePayload()
+    payload = { sessionId: sessionId, isWatching: isWatching, platform: "roku", deviceId: device.device_id }
     if channelId <> invalid then payload.channelId = channelId
     if channelName <> invalid then payload.channelName = channelName
     res = HbInvoke("heartbeat", payload)
     if res.ok and res.body <> invalid and res.body.forceSignout = true
         return { forceSignout: true }
     end if
-    return { ok: res.ok }
+    if not res.ok then HbLogFailure("heartbeat", res)
+    return { ok: res.ok, status: res.status }
 end function
+
+sub HbLogFailure(action as String, res as Object)
+    ' Never print response bodies, tokens, user IDs or device IDs.
+    print "[LNTV][heartbeat] action="; action; " status="; res.status
+end sub
 
 sub HbEnd(sessionId as String)
     if sessionId = invalid or sessionId = "" then return
@@ -64,6 +70,6 @@ end function
 function GetRokuModel() as String
     di = CreateObject("roDeviceInfo")
     os = di.GetOsVersion()
-    osStr = os.major + "." + os.minor + "." + os.revision + "." + os.build
+    osStr = os.major.toStr() + "." + os.minor.toStr() + "." + os.revision.toStr() + "." + os.build.toStr()
     return di.GetModel() + "/" + osStr
 end function

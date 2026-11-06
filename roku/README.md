@@ -9,6 +9,7 @@ App Roku do LN TV (BrightScript + SceneGraph). Consome o mesmo backend do APK An
 - Código completo do aparelho na tela de login (`GetChannelClientId`, sem símbolos, em maiúsculas).
 - Enquanto o login estiver aberto, anuncia o Roku a cada 15 segundos em **Aparelhos aguardando login**; após vínculo pelo painel, faz login automático.
 - Login manual usa `device-login` para registrar o Roku em **Dispositivos Vinculados**, respeitando bloqueios e limites do cadastro.
+- Presença no Monitoramento via `session-heartbeat` a cada 30 segundos; registra o canal imediatamente e tenta novamente se a criação da sessão falhar.
 - Lista de categorias respeitando `category_includes` (hierarquia) e `user_category_access` (Hubsoft + degustação)
 - Lista de canais ordenada por `channel_number`
 - Favoritos (★) — adicionar/remover com botão **info** do controle
@@ -20,7 +21,6 @@ App Roku do LN TV (BrightScript + SceneGraph). Consome o mesmo backend do APK An
 
 - EPG (programa atual + barra de progresso + sinopse)
 - PIN adulto (`profiles.adult_pin`)
-- Heartbeat / kick global (`session-heartbeat`, `force_signout_at`)
 - Busca de canais
 - Stats overlay
 - Canais YouTube
@@ -40,6 +40,10 @@ Instale o pacote novo no Roku e abra a tela de login. No painel, atualize **Apar
 Os serviços `device-announce`, `device-auto-login` e `device-login` já precisam estar disponíveis no servidor. Esta atualização não altera banco, painel nem aplicativos Android.
 
 Testes da lógica de ativação (fora do aparelho, com respostas simuladas): `node scripts/test-roku.mjs`. O comando usa o interpretador `brs` via `bunx`; opcionalmente defina `BRS_BIN` para um interpretador já instalado. A instalação e o vínculo reais ainda precisam ser conferidos em um Roku.
+
+### Conferir presença no Monitoramento
+
+Após instalar o ZIP atualizado, reproduza um canal e clique em **Atualizar** no Monitoramento. Confira o usuário em **Online agora** (não em **Ativos no proxy**, pois o Roku normalmente reproduz direto da fonte). Se não aparecer, o console de desenvolvimento do Roku registra `[LNTV][heartbeat] action=... status=...` sem expor tokens. Status 0 indica falha de rede/tempo limite; 400 indica rejeição pelo servidor e requer conferir os logs de `session-heartbeat` no servidor. Os testes simulados não substituem essa validação no aparelho real.
 
 ## Build local
 
