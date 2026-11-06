@@ -17,10 +17,17 @@ vi.mock("@/lib/supabaseLocal", () => ({
       const filters: Record<string, unknown> = {};
       backend.queries.push({ table, filters });
       const rows = table === "user_sessions" ? backend.sessions : table === "proxy_access_log" ? backend.logs : [];
+      const matchesOr = (row: Record<string, unknown>, expr: string) => {
+        const m = expr.match(/^last_heartbeat_at\.gte\.([^,]+),and\(platform\.eq\.m3u,last_heartbeat_at\.gte\.([^)]+)\)$/);
+        if (!m) throw new Error(`unexpected or filter ${expr}`);
+        const hb = String(row.last_heartbeat_at);
+        return hb >= m[1] || (row.platform === "m3u" && hb >= m[2]);
+      };
       const query: Record<string, unknown> = {
         then: (resolve: (value: unknown) => unknown) => Promise.resolve({
           data: rows.filter(row => Object.entries(filters).every(([key, value]) =>
-            key === "ended_at" ? row[key] === value : String(row[key]) >= String(value))),
+            key === "or" ? matchesOr(row, String(value))
+            : key === "ended_at" ? row[key] === value : String(row[key]) >= String(value))),
           error: backend.fail ? new Error("Unavailable") : null,
         }).then(resolve),
       };
@@ -29,6 +36,7 @@ vi.mock("@/lib/supabaseLocal", () => ({
         filters[column] = value;
         return query;
       };
+      query.or = (expr: string) => { filters.or = expr; return query; };
       return query;
     },
     rpc: async () => {
@@ -117,13 +125,16 @@ describe("manual monitoring refresh", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("queries only unfinished sessions from the last 90 seconds, including IP enrichment", async () => {
+  it("queries unfinished sessions from the last 90 seconds, or 6 hours for M3U, including IP enrichment", async () => {
     const now = Date.now();
     await openMonitoring();
     const queries = backend.queries.filter(q => q.table === "user_sessions");
     expect(queries).toHaveLength(2);
     for (const q of queries) {
-      expect(q.filters).toEqual({ ended_at: null, last_heartbeat_at: new Date(now - 90_000).toISOString() });
+      expect(q.filters).toEqual({
+        ended_at: null,
+        or: `last_heartbeat_at.gte.${new Date(now - 90_000).toISOString()},and(platform.eq.m3u,last_heartbeat_at.gte.${new Date(now - 6 * 3600_000).toISOString()})`,
+      });
     }
     expect(backend.calls).not.toContain("get_monitoring_stats_30d");
   });
@@ -154,6 +165,21 @@ describe("manual monitoring refresh", () => {
     fireEvent.click(screen.getByRole("button", { name: "Atualizar" }));
     await settle();
     expect(screen.queryByText("Canal atual")).not.toBeInTheDocument();
+  });
+
+  it("keeps an M3U viewer visible for up to 6 hours after the last tune", async () => {
+    const now = Date.now();
+    backend.sessions = [
+      { id: "m3u", user_id: "m3u-user", platform: "m3u", current_channel_name: "Canal M3U", is_watching: true, ended_at: null, last_heartbeat_at: new Date(now - 5 * 3600_000).toISOString() },
+      { id: "app", user_id: "app-user", platform: "android", current_channel_name: "Canal App", is_watching: true, ended_at: null, last_heartbeat_at: new Date(now - 5 * 3600_000).toISOString() },
+    ];
+    await openMonitoring();
+    expect(screen.getByText("Canal M3U")).toBeInTheDocument();
+    expect(screen.queryByText("Canal App")).not.toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(3600_000 + 1000); });
+    fireEvent.click(screen.getByRole("button", { name: "Atualizar" }));
+    await settle();
+    expect(screen.queryByText("Canal M3U")).not.toBeInTheDocument();
   });
 
   it("requires a proxy hit for the current user and channel within 3 minutes", async () => {

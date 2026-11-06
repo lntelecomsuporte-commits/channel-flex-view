@@ -45,6 +45,10 @@ const monitoringQueryOptions = {
 
 const ONLINE_WINDOW_MS = 90_000;
 const PROXY_WINDOW_MS = 180_000;
+// M3U lists have no heartbeat: a tune stays visible up to 6h or until the next tune.
+export const M3U_WINDOW_MS = 6 * 60 * 60_000;
+const liveSessionFilter = () =>
+  `last_heartbeat_at.gte.${new Date(Date.now() - ONLINE_WINDOW_MS).toISOString()},and(platform.eq.m3u,last_heartbeat_at.gte.${new Date(Date.now() - M3U_WINDOW_MS).toISOString()})`;
 
 const useProxyAccess = () =>
   useQuery({
@@ -84,7 +88,7 @@ const useActiveSessions = () =>
         .from("user_sessions")
         .select("id, user_id, current_channel_id, current_channel_name, ip_address, client_ipv4, client_ipv6, user_agent, last_heartbeat_at, started_at, is_watching")
         .is("ended_at", null)
-        .gte("last_heartbeat_at", new Date(Date.now() - ONLINE_WINDOW_MS).toISOString());
+        .or(liveSessionFilter());
       if (error) throw error;
       return data ?? [];
     },
@@ -99,12 +103,11 @@ const useRecentSessionsByUser = () =>
       const map = new Map<string, { client_ipv4: string | null; client_ipv6: string | null; ip_address: string | null; user_agent: string | null; last_heartbeat_at: string }>();
       const sessionIps = new Set<string>();
       const ipDetails = new Map<string, { ip: string; sessions: number; users: Set<string>; last_seen: string; user_agent: string | null }>();
-      const since = new Date(Date.now() - ONLINE_WINDOW_MS).toISOString();
         const { data, error } = await supabase
           .from("user_sessions")
           .select("user_id, ip_address, client_ipv4, client_ipv6, user_agent, last_heartbeat_at")
           .is("ended_at", null)
-          .gte("last_heartbeat_at", since)
+          .or(liveSessionFilter())
           .order("last_heartbeat_at", { ascending: false });
         if (error) {
           throw error;

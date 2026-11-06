@@ -485,7 +485,9 @@ const upsertM3uSession = async (
     const ipv4 = ip && /^(\d{1,3}\.){3}\d{1,3}$/.test(ip) ? ip : null;
     const ipv6 = ip && ip.includes(":") ? ip : null;
     const nowIso = new Date().toISOString();
-    const cutoff = new Date(Date.now() - 5 * 60_000).toISOString();
+    // M3U não tem heartbeat: a sessão vale até 6h após a última sintonia.
+    // Trocar de canal reaproveita a mesma sessão (atualiza canal e horário).
+    const cutoff = new Date(Date.now() - 6 * 60 * 60_000).toISOString();
 
     const { data: existing } = await adminClient
       .from("user_sessions")
