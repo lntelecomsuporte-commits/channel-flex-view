@@ -8,12 +8,74 @@ sub init()
     m.loginBusy = false
     m.kbDialog = invalid
     m.loginTask = invalid
+    m.activationTask = invalid
     m.emailValue = m.top.findNode("emailValue")
     m.passValue = m.top.findNode("passValue")
     m.emailBox = m.top.findNode("emailBox")
     m.passBox = m.top.findNode("passBox")
     m.status = m.top.findNode("status")
+    m.activationStatus = m.top.findNode("activationStatus")
+    m.devicePayload = RokuDevicePayload()
+    m.top.findNode("deviceCode").text = m.devicePayload.device_id
+    m.activationTimer = m.top.findNode("activationTimer")
+    m.activationTimer.observeField("fire", "PollDevice")
     UpdateActive()
+    if Len(m.devicePayload.device_id) >= 6
+        m.activationTimer.control = "start"
+        PollDevice()
+    else
+        m.activationStatus.text = "Não foi possível identificar este aparelho."
+    end if
+end sub
+
+sub OnActiveChanged()
+    if m.top.active then return
+    if m.activationTimer <> invalid then m.activationTimer.control = "stop"
+    StopActivationTask()
+    if m.loginTask <> invalid
+        m.loginTask.unobserveField("result")
+        m.loginTask.control = "STOP"
+        m.loginTask = invalid
+    end if
+    if m.kbDialog <> invalid then m.kbDialog.close = true
+end sub
+
+sub StopActivationTask()
+    if m.activationTask = invalid then return
+    m.activationTask.unobserveField("result")
+    m.activationTask.control = "STOP"
+    m.activationTask = invalid
+end sub
+
+sub PollDevice()
+    if not m.top.active or m.loginBusy or m.activationTask <> invalid then return
+    task = createObject("roSGNode", "DeviceActivationTask")
+    task.payload = m.devicePayload
+    task.observeField("result", "OnActivationResult")
+    m.activationTask = task
+    task.control = "RUN"
+end sub
+
+sub OnActivationResult(evt as Object)
+    res = evt.getData()
+    m.activationTask = invalid
+    if not m.top.active or m.loginBusy then return
+    if res = invalid then return
+    if res.ok
+        CompleteDeviceLogin(res)
+    else if res.pending = true
+        m.activationStatus.text = "Aguardando vínculo"
+    else if res.error <> invalid
+        m.activationStatus.text = res.error
+    else
+        m.activationStatus.text = "Sem conexão com o servidor. Tentando novamente..."
+    end if
+end sub
+
+sub CompleteDeviceLogin(res as Object)
+    RokuSaveDeviceSession(res)
+    m.top.active = false
+    m.top.loginOk = true
 end sub
 
 sub UpdateActive()
@@ -116,6 +178,7 @@ end sub
 sub OnKbClosed(evt as Object)
     print "[LOGIN] keyboard closed field="; m.keyboardField; " emailLen="; Len(m.email); " passLen="; Len(m.password)
     m.kbDialog = invalid
+    if not m.top.active then return
     m.top.setFocus(true)
     if m.openPasswordAfterClose
         m.openPasswordAfterClose = false
@@ -129,23 +192,25 @@ sub OnKbClosed(evt as Object)
 end sub
 
 sub DoLogin()
-    if m.loginBusy then return
+    if not m.top.active or m.loginBusy then return
     if m.email = "" or m.password = ""
         m.status.text = "Preencha os dois campos"
         return
     end if
     m.loginBusy = true
+    StopActivationTask()
     m.status.text = "Entrando..."
-    print "[LOGIN] attempting email="; m.email; " passLen="; Len(m.password)
     task = createObject("roSGNode", "LoginTask")
     task.email = m.email
     task.password = m.password
+    task.payload = m.devicePayload
     task.observeField("result", "OnLoginResult")
     m.loginTask = task
     task.control = "RUN"
 end sub
 
 sub OnLoginResult(evt as Object)
+    if not m.top.active then return
     res = evt.getData()
     if res = invalid
         m.status.text = "Falha no login"
@@ -158,13 +223,13 @@ sub OnLoginResult(evt as Object)
         m.loginBusy = false
         m.loginTask = invalid
         print "[LOGIN] success"
-        m.top.loginOk = true
+        CompleteDeviceLogin(res)
     else
         err = res.error
         if res.status <> invalid then err = err + " [HTTP " + res.status.toStr() + "]"
         m.status.text = err
         m.loginBusy = false
         m.loginTask = invalid
-        print "[LOGIN] fail: status="; res.status; " body="; res.raw
+        print "[LOGIN] fail: status="; res.status
     end if
 end sub

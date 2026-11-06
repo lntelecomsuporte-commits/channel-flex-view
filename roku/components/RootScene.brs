@@ -17,6 +17,10 @@ sub OnMemoryWarning(evt as Object)
 end sub
 
 sub ShowLogin()
+    if m.login <> invalid
+        m.login.active = false
+        m.top.removeChild(m.login)
+    end if
     if m.home <> invalid then m.top.removeChild(m.home)
     m.home = invalid
     m.login = createObject("roSGNode", "LoginScene")
@@ -26,7 +30,10 @@ sub ShowLogin()
 end sub
 
 sub ShowHome()
-    if m.login <> invalid then m.top.removeChild(m.login)
+    if m.login <> invalid
+        m.login.active = false
+        m.top.removeChild(m.login)
+    end if
     m.login = invalid
     m.home = createObject("roSGNode", "HomeScene")
     m.top.appendChild(m.home)

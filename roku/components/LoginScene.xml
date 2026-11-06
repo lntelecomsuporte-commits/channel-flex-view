@@ -2,12 +2,14 @@
 <component name="LoginScene" extends="Group">
   <interface>
     <field id="loginOk" type="boolean" alwaysNotify="true" />
+    <field id="active" type="boolean" value="true" onChange="OnActiveChanged" />
   </interface>
   <script type="text/brightscript" uri="pkg:/components/LoginScene.brs" />
   <script type="text/brightscript" uri="pkg:/source/SupabaseAuth.brs" />
   <script type="text/brightscript" uri="pkg:/source/SupabaseRest.brs" />
   <script type="text/brightscript" uri="pkg:/source/Config.brs" />
   <script type="text/brightscript" uri="pkg:/source/Utils.brs" />
+  <script type="text/brightscript" uri="pkg:/source/DeviceAuth.brs" />
   <children>
     <Rectangle width="1920" height="1080" color="0x0a0a0aff" />
     <Poster id="logo" uri="pkg:/images/logo.png" width="400" height="160"
@@ -39,8 +41,12 @@
     <Label id="status" text="" font="font:SmallSystemFont"
            color="0xfca5a5ff" translation="[680, 810]" width="560" horizAlign="center" />
 
-    <Label id="hint" text="Pressione OK para abrir o teclado"
-           font="font:SmallSystemFont" color="0x6b7280ff"
-           translation="[680, 900]" width="560" horizAlign="center" />
+    <Label text="CÓDIGO DO APARELHO" font="font:SmallSystemFont"
+           color="0x9ca3afff" translation="[480, 880]" width="960" horizAlign="center" />
+    <Label id="deviceCode" text="" font="font:MediumBoldSystemFont"
+           color="0xffffffff" translation="[320, 925]" width="1280" horizAlign="center" />
+    <Label id="activationStatus" text="" font="font:SmallSystemFont"
+           color="0x9ca3afff" translation="[480, 980]" width="960" horizAlign="center" />
+    <Timer id="activationTimer" duration="15" repeat="true" />
   </children>
 </component>

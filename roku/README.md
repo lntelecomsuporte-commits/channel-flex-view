@@ -6,6 +6,9 @@ App Roku do LN TV (BrightScript + SceneGraph). Consome o mesmo backend do APK An
 
 - Login com e-mail e senha (mesmos cadastros do APK / web)
 - Sessão persistente em `roRegistry` (não pede login toda vez)
+- Código completo do aparelho na tela de login (`GetChannelClientId`, sem símbolos, em maiúsculas).
+- Enquanto o login estiver aberto, anuncia o Roku a cada 15 segundos em **Aparelhos aguardando login**; após vínculo pelo painel, faz login automático.
+- Login manual usa `device-login` para registrar o Roku em **Dispositivos Vinculados**, respeitando bloqueios e limites do cadastro.
 - Lista de categorias respeitando `category_includes` (hierarquia) e `user_category_access` (Hubsoft + degustação)
 - Lista de canais ordenada por `channel_number`
 - Favoritos (★) — adicionar/remover com botão **info** do controle
@@ -29,6 +32,14 @@ App Roku do LN TV (BrightScript + SceneGraph). Consome o mesmo backend do APK An
 3. Faz upload do `lntv-roku.zip` em **Upload** → **Install**
 
 Pronto, app aparece no menu inicial do Roku.
+
+### Conferir a ativação no painel
+
+Instale o pacote novo no Roku e abra a tela de login. No painel, atualize **Aparelhos aguardando login**, confira o código exibido na TV e vincule ao assinante. O Roku entra na conta no próximo ciclo (15 segundos, mais o tempo de resposta do servidor). Se o aparelho/conta estiver bloqueado, continua no login com o aviso. Após entrar, a tela para os anúncios. O login com e-mail e senha continua disponível e registra o mesmo código de aparelho.
+
+Os serviços `device-announce`, `device-auto-login` e `device-login` já precisam estar disponíveis no servidor. Esta atualização não altera banco, painel nem aplicativos Android.
+
+Testes da lógica de ativação (fora do aparelho, com respostas simuladas): `node scripts/test-roku.mjs`. O comando usa o interpretador `brs` via `bunx`; opcionalmente defina `BRS_BIN` para um interpretador já instalado. A instalação e o vínculo reais ainda precisam ser conferidos em um Roku.
 
 ## Build local
 
