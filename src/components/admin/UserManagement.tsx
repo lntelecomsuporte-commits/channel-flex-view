@@ -835,7 +835,7 @@ const UserManagement = ({ can = () => true, isMaster = false }: { can?: (p: stri
                     {can("users.playlist") && <Button variant="ghost" size="sm" onClick={() => setPlaylistUser(p as Profile)} title="Gerar playlist M3U/HLS">
                       <ListVideo className="h-4 w-4 text-primary" />
                     </Button>}
-                    {can("users.block") && !prot && <Button variant="ghost" size="sm" onClick={() => handleForceSignout(p.id, p.display_name)} title="Deslogar usuário (forçar logout remoto)">
+                    {can("users.signout") && !prot && <Button variant="ghost" size="sm" onClick={() => handleForceSignout(p.id, p.display_name)} title="Deslogar usuário (forçar logout remoto)">
                       <LogOut className="h-4 w-4 text-amber-500" />
                     </Button>}
                     {can("users.block") && !prot && <Button variant="ghost" size="sm" onClick={() => handleToggleBlock(p.id, p.is_blocked)} title={p.is_blocked ? "Desbloquear" : "Bloquear"}>
