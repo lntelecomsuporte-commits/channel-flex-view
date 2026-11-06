@@ -418,20 +418,33 @@ const ProxyMonitoring = () => {
               {(!ipDetails || ipDetails.size === 0) && <p className="text-muted-foreground text-sm">Nenhum IP registrado.</p>}
               {ipDetails && Array.from(ipDetails.values())
                 .sort((a, b) => (a.last_seen < b.last_seen ? 1 : -1))
-                .map((info) => (
-                  <div key={info.ip} className="p-3 rounded-lg bg-secondary text-sm space-y-1">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <span className="font-mono font-medium text-foreground">{info.ip}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(info.last_seen), { addSuffix: true, locale: ptBR })}
-                      </span>
+                .map((info) => {
+                  const userNames = Array.from(info.users).map((uid) => {
+                    const profile = profiles?.get(uid);
+                    return profile?.display_name || profile?.username || uid.slice(0, 8);
+                  });
+
+                  return (
+                    <div key={info.ip} className="p-3 rounded-lg bg-secondary text-sm space-y-1">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="font-mono font-medium text-foreground">{info.ip}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatDistanceToNow(new Date(info.last_seen), { addSuffix: true, locale: ptBR })}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                        <User className="h-3 w-3 mt-0.5 shrink-0" />
+                        <span className="text-foreground break-words">
+                          {userNames.length > 0 ? userNames.join(", ") : "Usuário não identificado"}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground flex flex-wrap gap-3">
+                        <span>{info.sessions} sessões</span>
+                        <span>{info.users.size} usuário(s)</span>
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground flex flex-wrap gap-3">
-                      <span>{info.sessions} sessões</span>
-                      <span>{info.users.size} usuário(s)</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
             </div>
           )}
         </DialogContent>
