@@ -217,6 +217,8 @@ Deno.serve(async (req) => {
       .select("id, started_at")
       .eq("id", sessionId)
       .eq("user_id", user.id)
+      // Expired/ended sessions must be recreated, not refreshed invisibly.
+      .is("ended_at", null)
       .maybeSingle();
 
     if (sessionError) return json({ error: sessionError.message }, 400);
