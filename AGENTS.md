@@ -8,3 +8,4 @@
 - Roku login uses the normalized full GetChannelClientId with the existing device endpoints; only the active login scene persists successful sessions, so stopped background activation tasks cannot overwrite a manual login.
 - Roku heartbeats reuse login device identity and retain one asynchronous Task at a time; failed starts retry on the timer and queued channel changes flush after success to keep monitoring accurate without overlapping requests.
 - Session heartbeats must reject ended sessions with 404 so clients recreate active presence instead of refreshing rows excluded from monitoring.
+- session-heartbeat reads body fields ignoring case and underscores because Roku BrightScript lowercases associative-array keys.

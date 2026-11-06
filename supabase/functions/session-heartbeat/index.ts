@@ -91,8 +91,29 @@ Deno.serve(async (req) => {
       return json({ error: "Unauthorized" }, 401);
     }
 
-    const { action, sessionId, sessionToken, userAgent, channelId, channelName, isWatching, clientIpv4, clientIpv6, deviceId, platform, deviceName, appVersion } =
-      await req.json();
+    // Roku BrightScript lowercases associative-array keys (sessionToken -> "sessiontoken"),
+    // so body fields are matched ignoring case and underscores.
+    const rawBody = await req.json().catch(() => ({}));
+    const normalizedBody: Record<string, unknown> = {};
+    if (rawBody && typeof rawBody === "object") {
+      for (const [k, v] of Object.entries(rawBody as Record<string, unknown>)) {
+        normalizedBody[k.toLowerCase().replace(/_/g, "")] = v;
+      }
+    }
+    const field = (name: string): any => normalizedBody[name.toLowerCase()];
+    const action = field("action");
+    const sessionId = field("sessionId");
+    const sessionToken = field("sessionToken");
+    const userAgent = field("userAgent");
+    const channelId = field("channelId");
+    const channelName = field("channelName");
+    const isWatching = field("isWatching");
+    const clientIpv4 = field("clientIpv4");
+    const clientIpv6 = field("clientIpv6");
+    const deviceId = field("deviceId");
+    const platform = field("platform");
+    const deviceName = field("deviceName");
+    const appVersion = field("appVersion");
     const ipAddress = getClientIp(req);
     const cIpv4 = sanitizeIp(clientIpv4);
     const cIpv6 = sanitizeIp(clientIpv6);
@@ -134,7 +155,7 @@ Deno.serve(async (req) => {
         .from("user_sessions")
         .insert({
           user_id: user.id,
-          session_token: sessionToken,
+          session_token: typeof sessionToken === "string" && sessionToken ? sessionToken : crypto.randomUUID(),
           user_agent: typeof userAgent === "string" ? userAgent.slice(0, 500) : null,
           current_channel_id: channelId ?? null,
           current_channel_name: channelName ?? null,

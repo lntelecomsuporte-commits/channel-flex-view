@@ -30,7 +30,7 @@ function setup(ended: boolean) {
   };
   new Function("Deno", "createClient", js)(
     { env: { get: () => "test-only" }, serve: (fn: typeof handler) => { handler = fn; } },
-    () => ({ from, auth: { getUser: async () => ({ data: { user: { id: "user-1" } }, error: null }) } }),
+    () => ({ from, rpc: async () => ({ data: 3, error: null }), auth: { getUser: async () => ({ data: { user: { id: "user-1" } }, error: null }) } }),
   );
   const invoke = (body: Record<string, unknown>) => handler(new Request("https://tv2.lntelecom.net/functions/v1/session-heartbeat", {
     method: "POST", headers: { Authorization: "Bearer test-only", "Content-Type": "application/json" }, body: JSON.stringify(body),
@@ -54,6 +54,16 @@ describe("Monitoring session recovery", () => {
     const response = await invoke({ action: "heartbeat", sessionId: "session-1", channelId: "rpc-id", channelName: "RPC", isWatching: true });
     expect(response.status).toBe(200);
     expect(update).toHaveBeenCalledWith(expect.objectContaining({ current_channel_id: "rpc-id", current_channel_name: "RPC", is_watching: true }));
+  });
+
+  it("accepts Roku lowercase keys when starting and refreshing a session", async () => {
+    const { invoke, update } = setup(false);
+    const started = await invoke({ action: "start", sessiontoken: "roku-1", useragent: "Roku/Express", platform: "roku", deviceid: "ABCD12EF", channelid: "rpc-id", iswatching: true });
+    expect(started.status).toBe(200);
+    expect(await started.json()).toEqual({ id: "new-session" });
+    const beat = await invoke({ action: "heartbeat", sessionid: "session-1", channelid: "rpc-id", channelname: "RPC", iswatching: true, platform: "roku", deviceid: "ABCD12EF" });
+    expect(beat.status).toBe(200);
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ current_channel_id: "rpc-id", current_channel_name: "RPC", is_watching: true, device_id: "ABCD12EF" }));
   });
 
   it("does not update another user's session", async () => {
