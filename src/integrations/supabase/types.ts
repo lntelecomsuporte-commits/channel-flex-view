@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_permissions: {
+        Row: {
+          permissions: string[]
+          preset_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          permissions?: string[]
+          preset_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          permissions?: string[]
+          preset_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       categories: {
         Row: {
           created_at: string
@@ -322,6 +343,30 @@ export type Database = {
           last_ip?: string | null
           last_seen_at?: string
           platform?: string
+        }
+        Relationships: []
+      }
+      permission_presets: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          permissions: string[]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          permissions?: string[]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          permissions?: string[]
+          updated_at?: string
         }
         Relationships: []
       }
@@ -737,12 +782,29 @@ export type Database = {
           session_started_at: string
         }[]
       }
+      has_admin_permission: {
+        Args: { _perm: string; _user_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
+      }
+      is_master_admin: { Args: { _user_id: string }; Returns: boolean }
+      list_admin_users: {
+        Args: never
+        Returns: {
+          display_name: string
+          email: string
+          has_custom: boolean
+          is_master: boolean
+          permissions: string[]
+          preset_id: string
+          user_id: string
+        }[]
       }
       resolve_device_limit: { Args: { _user_id: string }; Returns: number }
       short_link_hit: { Args: { _slug: string }; Returns: undefined }

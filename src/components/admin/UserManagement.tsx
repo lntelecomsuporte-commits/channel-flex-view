@@ -13,6 +13,7 @@ const PLAYLIST_HOST = "https://tv2.lntelecom.net";
 import { useCategories } from "@/hooks/useChannels";
 import { UserStatusBadge } from "./UserStatusBadge";
 import { UserDevicesDialog } from "./UserDevicesDialog";
+import { isMasterEmail } from "@/lib/adminPermissions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type AccessStats = {
@@ -108,7 +109,7 @@ function useAccessStats() {
   });
 }
 
-const UserManagement = () => {
+const UserManagement = ({ can = () => true, isMaster = false }: { can?: (p: string) => boolean; isMaster?: boolean }) => {
   const { data: profiles, isLoading } = useProfiles();
   const { data: accessStats } = useAccessStats();
   const { data: trialMap } = useTrialAccess();
@@ -699,7 +700,7 @@ const UserManagement = () => {
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className={can("users.create") ? "" : "hidden"}>
         <CardHeader>
           <CardTitle>Novo Usuário</CardTitle>
         </CardHeader>
@@ -824,24 +825,26 @@ const UserManagement = () => {
                     <span className={`text-xs px-2 py-0.5 rounded ${p.is_blocked ? "bg-destructive/20 text-destructive" : p.is_active ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
                       {p.is_blocked ? "Bloqueado" : p.is_active ? "Ativo" : "Inativo"}
                     </span>
-                    <Button variant="ghost" size="sm" onClick={() => handleEdit(p as Profile)} title="Editar">
+                    {(() => { const prot = isMasterEmail(p.username) && !isMaster; return (<>
+                    {can("users.edit") && !prot && <Button variant="ghost" size="sm" onClick={() => handleEdit(p as Profile)} title="Editar">
                       <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setDevicesUser(p as Profile)} title="Dispositivos vinculados">
+                    </Button>}
+                    {can("users.devices") && <Button variant="ghost" size="sm" onClick={() => setDevicesUser(p as Profile)} title="Dispositivos vinculados">
                       <Smartphone className="h-4 w-4 text-primary" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setPlaylistUser(p as Profile)} title="Gerar playlist M3U/HLS">
+                    </Button>}
+                    {can("users.playlist") && <Button variant="ghost" size="sm" onClick={() => setPlaylistUser(p as Profile)} title="Gerar playlist M3U/HLS">
                       <ListVideo className="h-4 w-4 text-primary" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleForceSignout(p.id, p.display_name)} title="Deslogar usuário (forçar logout remoto)">
+                    </Button>}
+                    {can("users.block") && !prot && <Button variant="ghost" size="sm" onClick={() => handleForceSignout(p.id, p.display_name)} title="Deslogar usuário (forçar logout remoto)">
                       <LogOut className="h-4 w-4 text-amber-500" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleToggleBlock(p.id, p.is_blocked)} title={p.is_blocked ? "Desbloquear" : "Bloquear"}>
+                    </Button>}
+                    {can("users.block") && !prot && <Button variant="ghost" size="sm" onClick={() => handleToggleBlock(p.id, p.is_blocked)} title={p.is_blocked ? "Desbloquear" : "Bloquear"}>
                       {p.is_blocked ? <ShieldCheck className="h-4 w-4 text-primary" /> : <ShieldOff className="h-4 w-4 text-destructive" />}
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDelete(p.id, p.user_id)} disabled={deletingUserId === p.user_id}>
+                    </Button>}
+                    {can("users.delete") && !prot && <Button variant="ghost" size="sm" onClick={() => handleDelete(p.id, p.user_id)} disabled={deletingUserId === p.user_id}>
                       <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    </Button>}
+                    </>); })()}
                   </div>
                 </div>
                 );
@@ -944,11 +947,11 @@ const UserManagement = () => {
                 </p>
               </div>
             )}
-            <label className="flex items-center gap-2 text-sm cursor-pointer p-3 rounded-md border border-border bg-secondary/50">
+            {can("users.set_admin") && <label className="flex items-center gap-2 text-sm cursor-pointer p-3 rounded-md border border-border bg-secondary/50">
               <Checkbox checked={editIsAdmin} onCheckedChange={(v) => setEditIsAdmin(!!v)} />
               <span className="font-medium">Administrador do painel</span>
-              <span className="text-xs text-muted-foreground ml-auto">Acesso total ao /admin</span>
-            </label>
+              <span className="text-xs text-muted-foreground ml-auto">Permissões na lista de Administradores</span>
+            </label>}
             <Button onClick={handleUpdate} disabled={updating} className="w-full">
               {updating ? "Salvando..." : "Salvar Alterações"}
             </Button>

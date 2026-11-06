@@ -90,20 +90,37 @@ Deno.serve(async (req) => {
 
     // Verify caller is admin
     const authHeader = req.headers.get("Authorization");
-    if (authHeader) {
-      const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-      const userClient = createClient(supabaseUrl, anonKey, {
-        global: { headers: { Authorization: authHeader } },
-        auth: { autoRefreshToken: false, persistSession: false },
-      });
-      const { data: { user } } = await userClient.auth.getUser();
-      if (!user) return json({ error: "Unauthorized" }, 401);
+    if (!authHeader) return json({ error: "Unauthorized" }, 401);
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data: { user: caller } } = await userClient.auth.getUser();
+    if (!caller) return json({ error: "Unauthorized" }, 401);
 
-      const { data: isAdmin } = await userClient.rpc("has_role", { _user_id: user.id, _role: "admin" });
-      if (!isAdmin) return json({ error: "Forbidden" }, 403);
-    }
+    const { data: isAdmin } = await userClient.rpc("has_role", { _user_id: caller.id, _role: "admin" });
+    if (!isAdmin) return json({ error: "Forbidden" }, 403);
 
     const { action, email, password, display_name, user_id, is_admin } = await req.json();
+
+    // Permissões granulares por ação
+    const actionPerm: Record<string, string> = {
+      create: "users.create", update: "users.edit", set_admin: "users.set_admin", delete: "users.delete",
+    };
+    const needed = actionPerm[action];
+    if (needed) {
+      const { data: allowed } = await userClient.rpc("has_admin_permission", { _user_id: caller.id, _perm: needed });
+      if (!allowed) return json({ error: "Você não tem permissão para esta ação" }, 403);
+    }
+    // Usuário master: ninguém além dele mesmo pode alterar ou apagar
+    if (user_id && user_id !== caller.id) {
+      const { data: targetIsMaster } = await userClient.rpc("is_master_admin", { _user_id: user_id });
+      if (targetIsMaster) return json({ error: "O usuário master não pode ser alterado" }, 403);
+    }
+    if (action === "delete" && user_id === caller.id) {
+      return json({ error: "Você não pode excluir a si mesmo" }, 403);
+    }
     const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
 
     if (action === "create") {

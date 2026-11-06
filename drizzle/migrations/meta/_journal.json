@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1793934186338,
+      "tag": "0000_admin_permissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793934197393,
+      "tag": "0001_admin_permissions_defaults",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793934301441,
+      "tag": "0002_protect_master_profile",
+      "breakpoints": true
+    }
+  ]
+}

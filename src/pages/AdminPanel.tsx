@@ -31,6 +31,8 @@ import { INNOVATV_BASE_URL, fetchInnovaTvPrograms } from "@/lib/innovatv";
 import { NXTV_BASE_URL, fetchNxtvPrograms } from "@/lib/nxtv";
 import NxtvChannelPicker from "@/components/admin/NxtvChannelPicker";
 import ChannelConfigEditor from "@/components/admin/ChannelConfigEditor";
+import AdminPermissionsManager from "@/components/admin/AdminPermissionsManager";
+import { useAdminPermissions } from "@/hooks/useAdminPermissions";
 
 
 import { getCurrentAndNextPrograms } from "@/hooks/useEPG";
@@ -44,6 +46,7 @@ const emptyChannelForm = {
 
 const AdminPanel = () => {
   const { user, isAdmin, loading: authLoading, signOut } = useAuth();
+  const { can, isMaster } = useAdminPermissions(user, isAdmin);
   const { data: channels, isLoading: channelsLoading } = useAllChannels();
   const { data: categories, isLoading: categoriesLoading } = useCategories();
   const queryClient = useQueryClient();
@@ -279,9 +282,7 @@ const AdminPanel = () => {
     }
   };
 
-  const CHANNEL_DELETE_ALLOWED_EMAIL = "lucasiappe@yahoo.com.br";
-  const canDeleteChannels =
-    (user?.email ?? "").trim().toLowerCase() === CHANNEL_DELETE_ALLOWED_EMAIL;
+  const canDeleteChannels = can("channels.delete");
 
   
 
@@ -422,7 +423,7 @@ const AdminPanel = () => {
             <Button variant="outline" size="sm" onClick={() => navigate("/")}>
               <Tv className="h-4 w-4 mr-1" /> Ver Player
             </Button>
-            <Button
+            {can("database.export") && <Button
               variant="outline"
               size="sm"
               onClick={async () => {
@@ -450,21 +451,21 @@ const AdminPanel = () => {
               }}
             >
               <Download className="h-4 w-4 mr-1" /> Exportar BD
-            </Button>
+            </Button>}
             <Button variant="outline" size="sm" onClick={signOut}>
               <LogOut className="h-4 w-4 mr-1" /> Sair
             </Button>
           </div>
         </div>
 
-        <Tabs defaultValue="channels">
+        <Tabs defaultValue={["channels","categories","users","hubsoft","monitoring","firewall"].find((t) => can(t === "channels" ? "channels.view" : t === "categories" ? "categories.manage" : t === "users" ? (can("users.view") ? "users.view" : "admins.manage") : t === "hubsoft" ? "hubsoft.manage" : t === "monitoring" ? "monitoring.view" : "firewall.manage")) ?? "none"}>
           <TabsList className="mb-6 !grid !h-auto w-full grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-6">
-            <TabsTrigger value="channels"><Tv className="h-4 w-4 mr-1" /> Canais</TabsTrigger>
-            <TabsTrigger value="categories"><Layers className="h-4 w-4 mr-1" /> Categorias</TabsTrigger>
-            <TabsTrigger value="users"><Users className="h-4 w-4 mr-1" /> Usuários</TabsTrigger>
-            <TabsTrigger value="hubsoft"><Link className="h-4 w-4 mr-1" /> Hubsoft</TabsTrigger>
-            <TabsTrigger value="monitoring"><Activity className="h-4 w-4 mr-1" /> Monitoramento</TabsTrigger>
-            <TabsTrigger value="firewall"><Shield className="h-4 w-4 mr-1" /> Firewall</TabsTrigger>
+            {can("channels.view") && <TabsTrigger value="channels"><Tv className="h-4 w-4 mr-1" /> Canais</TabsTrigger>}
+            {can("categories.manage") && <TabsTrigger value="categories"><Layers className="h-4 w-4 mr-1" /> Categorias</TabsTrigger>}
+            {(can("users.view") || can("admins.manage")) && <TabsTrigger value="users"><Users className="h-4 w-4 mr-1" /> Usuários</TabsTrigger>}
+            {can("hubsoft.manage") && <TabsTrigger value="hubsoft"><Link className="h-4 w-4 mr-1" /> Hubsoft</TabsTrigger>}
+            {can("monitoring.view") && <TabsTrigger value="monitoring"><Activity className="h-4 w-4 mr-1" /> Monitoramento</TabsTrigger>}
+            {can("firewall.manage") && <TabsTrigger value="firewall"><Shield className="h-4 w-4 mr-1" /> Firewall</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="channels">
@@ -472,14 +473,14 @@ const AdminPanel = () => {
               <Button variant={channelsView === "list" ? "default" : "outline"} size="sm" onClick={() => setChannelsView("list")}>
                 <Tv className="h-4 w-4 mr-1" /> Lista
               </Button>
-              <Button variant={channelsView === "config" ? "default" : "outline"} size="sm" onClick={() => setChannelsView("config")}>
+              {can("channels.config_editor") && <Button variant={channelsView === "config" ? "default" : "outline"} size="sm" onClick={() => setChannelsView("config")}>
                 <FileCode className="h-4 w-4 mr-1" /> Config Editor
-              </Button>
+              </Button>}
             </div>
 
-            {channelsView === "list" ? (
+            {channelsView === "list" || !can("channels.config_editor") ? (
             <>
-            <Card className="mb-6" ref={channelFormRef}>
+            <Card className={can("channels.edit") ? "mb-6" : "hidden"} ref={channelFormRef}>
 
               <CardHeader><CardTitle>{editingChannelId ? "Editar Canal" : "Novo Canal"}</CardTitle></CardHeader>
               <CardContent className="space-y-4">
@@ -838,7 +839,7 @@ const AdminPanel = () => {
                           <span className={`text-xs px-2 py-0.5 rounded ${ch.is_active ? "bg-primary/20 text-primary" : "bg-destructive/20 text-destructive"}`}>
                             {ch.is_active ? "Ativo" : "Inativo"}
                           </span>
-                          <Button variant="ghost" size="sm" onClick={() => handleEditChannel(ch)}>Editar</Button>
+                          {can("channels.edit") && <Button variant="ghost" size="sm" onClick={() => handleEditChannel(ch)}>Editar</Button>}
                           {canDeleteChannels && (
                             <Button variant="ghost" size="sm" onClick={() => handleDeleteChannel(ch.id, ch.name)}>
                               <Trash2 className="h-4 w-4 text-destructive" />
@@ -962,7 +963,10 @@ const AdminPanel = () => {
           </TabsContent>
 
           <TabsContent value="users">
-            <UserManagement />
+            {can("admins.manage") && user && (
+              <div className="mb-6"><AdminPermissionsManager currentUserId={user.id} isMaster={isMaster} /></div>
+            )}
+            {can("users.view") && <UserManagement can={can} isMaster={isMaster} />}
           </TabsContent>
 
           <TabsContent value="hubsoft">
