@@ -28,10 +28,16 @@ function HbStartPayload(device as Object, token as String, channelId as Dynamic,
     return payload
 end function
 
+function HbHasForceSignout(value as Dynamic) as Boolean
+    if value = invalid then return false
+    ' ParseJson/Task assocarrays podem normalizar as chaves para minúsculas.
+    return value.forceSignout = true or value.forcesignout = true
+end function
+
 function HbRequestStart(payload as Object) as Object
     res = HbInvoke("start", payload)
     if res.ok and res.body <> invalid
-        if res.body.forceSignout = true then return { forceSignout: true }
+        if HbHasForceSignout(res.body) then return { ok: false, forceSignout: true, status: res.status }
         if res.body.id <> invalid and res.body.id <> "" then return { ok: true, id: res.body.id, status: res.status }
     end if
     HbLogFailure("start", res)
@@ -45,8 +51,8 @@ function HbBeat(sessionId as String, channelId as Dynamic, channelName as Dynami
     if channelId <> invalid then payload.channelId = channelId
     if channelName <> invalid then payload.channelName = channelName
     res = HbInvoke("heartbeat", payload)
-    if res.ok and res.body <> invalid and res.body.forceSignout = true
-        return { forceSignout: true }
+    if res.ok and HbHasForceSignout(res.body)
+        return { ok: false, forceSignout: true, status: res.status }
     end if
     if not res.ok then HbLogFailure("heartbeat", res)
     return { ok: res.ok, status: res.status }

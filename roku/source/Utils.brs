@@ -5,7 +5,6 @@ function NewHttp(url as String, method as String) as Object
     req.setUrl(url)
     req.setRequest(method)
     req.setCertificatesFile("common:/certs/ca-bundle.crt")
-    req.initClientCertificates()
     req.addHeader("Content-Type", "application/json")
     req.addHeader("Accept", "application/json")
     cfg = LNTV_Config()

@@ -35,6 +35,16 @@ sub Main()
     SetResponses([{ ok: true, status: 200, body: {} }])
     result = HbRequestStart(payload)
     Assert(result.ok = false and result.id = invalid, "response without session ID remains retryable")
+
+    SetResponses([{ ok: true, status: 200, body: { forcesignout: true } }])
+    result = HbRequestStart(payload)
+    Assert(HbHasForceSignout(result) and result.status = 200, "start accepts lowercase remote signout response")
+    SetResponses([{ ok: true, status: 200, body: { forceSignout: true } }])
+    result = HbBeat("session-123", "rpc-id", "RPC", true)
+    Assert(HbHasForceSignout(result) and result.status = 200, "heartbeat accepts remote signout response")
+    signoutState = HbNewState()
+    signoutAction = HbNextAction(signoutState)
+    Assert(HbAcceptResult(signoutState, signoutAction, { forcesignout: true }) = false and signoutState.pending = false, "lowercase remote signout cancels queued presence")
     print "ROKU_TESTS_COMPLETE"
 end sub
 

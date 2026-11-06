@@ -17,7 +17,7 @@ end function
 function HbAcceptResult(state as Object, action as String, result as Dynamic) as Boolean
     state.busy = false
     if result = invalid then return false
-    if result.forceSignout = true
+    if HbHasForceSignout(result)
         state.pending = false
         return false
     end if

@@ -10,6 +10,7 @@ App Roku do LN TV (BrightScript + SceneGraph). Consome o mesmo backend do APK An
 - Enquanto o login estiver aberto, anuncia o Roku a cada 15 segundos em **Aparelhos aguardando login**; após vínculo pelo painel, faz login automático.
 - Login manual usa `device-login` para registrar o Roku em **Dispositivos Vinculados**, respeitando bloqueios e limites do cadastro.
 - Presença no Monitoramento via `session-heartbeat` a cada 30 segundos; registra o canal imediatamente e tenta novamente se a criação da sessão falhar.
+- Logout remoto pelo painel interrompe o vídeo, limpa o login salvo e volta para a ativação sem esperar confirmação na TV.
 - Lista de categorias respeitando `category_includes` (hierarquia) e `user_category_access` (Hubsoft + degustação)
 - Lista de canais ordenada por `channel_number`
 - Favoritos (★) — adicionar/remover com botão **info** do controle
@@ -44,6 +45,8 @@ Testes da lógica de ativação (fora do aparelho, com respostas simuladas): `no
 ### Conferir presença no Monitoramento
 
 Após instalar o ZIP atualizado, reproduza um canal e clique em **Atualizar** no Monitoramento. Confira o usuário em **Online agora** (não em **Ativos no proxy**, pois o Roku normalmente reproduz direto da fonte). Se não aparecer, o console de desenvolvimento do Roku registra `[LNTV][heartbeat] action=... status=...` sem expor tokens. Status 0 indica falha de rede/tempo limite; 400 indica rejeição pelo servidor e requer conferir os logs de `session-heartbeat` no servidor. Os testes simulados não substituem essa validação no aparelho real.
+
+Para testar o logout remoto, reproduza um canal e use **Deslogar usuário** no painel. Em até 30 segundos o Roku deve parar o vídeo, apagar a sessão salva e mostrar a tela de login com o aviso de sessão encerrada. O canal também deve deixar de aparecer em **Online agora** ao atualizar o painel.
 
 ## Build local
 

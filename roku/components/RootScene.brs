@@ -58,8 +58,9 @@ sub OnLogout(evt as Object)
 end sub
 
 sub OnForceSignout(evt as Object)
-    ' Sessão revogada pelo admin (ou usuário bloqueado).
+    ' Para o vídeo e remove a Home imediatamente; não espera confirmação no aviso.
     SbLogout()
+    ShowLogin()
     dlg = createObject("roSGNode", "Dialog")
     dlg.title = "Sessão encerrada"
     dlg.message = "Seu acesso foi encerrado pelo administrador. Faça login novamente."
@@ -72,5 +73,4 @@ end sub
 sub OnForceSignoutAck(evt as Object)
     if m.signoutDlg <> invalid then m.signoutDlg.close = true
     m.signoutDlg = invalid
-    ShowLogin()
 end sub

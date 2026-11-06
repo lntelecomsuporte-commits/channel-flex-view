@@ -57,7 +57,7 @@ sub OnHeartbeatDone(evt as Object)
     m.hbTask = invalid
     sendPending = HbAcceptResult(m.hbState, action, res)
     m.sessionId = m.hbState.sessionId
-    if res <> invalid and res.forceSignout = true
+    if HbHasForceSignout(res)
         m.hbTimer.control = "stop"
         m.top.forceSignout = true
         return
