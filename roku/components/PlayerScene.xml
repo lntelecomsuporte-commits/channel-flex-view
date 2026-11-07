@@ -88,5 +88,7 @@
     <Timer id="osdTimer" repeat="false" duration="5" />
     <Timer id="longPressTimer" repeat="false" duration="0.55" />
     <Timer id="toastTimer" repeat="false" duration="2" />
+    <!-- Debounce do zap: só sintoniza após 400ms sem novos cliques -->
+    <Timer id="tuneTimer" repeat="false" duration="0.4" />
   </children>
 </component>

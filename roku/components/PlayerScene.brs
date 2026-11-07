@@ -59,6 +59,8 @@ sub init()
     m.osdTimer.observeField("fire", "HideOsdAll")
     m.longPressTimer.observeField("fire", "OnLongPress")
     m.toastTimer.observeField("fire", "HideToast")
+    m.tuneTimer = m.top.findNode("tuneTimer")
+    m.tuneTimer.observeField("fire", "OnTuneTimer")
     m.chOverlay.observeField("itemSelected", "OnOverlaySelected")
     m.chOverlay.observeField("itemFocused", "OnOverlayFocused")
 end sub
@@ -136,6 +138,10 @@ sub OnChannelData()
     content.url = urls[0]
     if urls.count() > 1 then content.streamUrls = urls
     content.title = ch.name
+    ' Ao vivo: Roku começa com menos buffer acumulado
+    content.live = true
+    m.video.enableTrickPlay = false
+    if m.tuneTimer <> invalid then m.tuneTimer.control = "stop"
 
     m.video.control = "stop"
     m.video.content = invalid
@@ -456,6 +462,7 @@ end sub
 sub PreviewChannel(delta as Integer)
     list = m.top.channelList
     if list = invalid or list.count() <= 1 then return
+    if m.tuneTimer <> invalid then m.tuneTimer.control = "stop"
     base = m.top.channelIndex
     if m.previewIdx >= 0 then base = m.previewIdx
     idx = base + delta
@@ -467,7 +474,13 @@ sub PreviewChannel(delta as Integer)
     ShowOsd(ch)
 end sub
 
+sub OnTuneTimer()
+    if m.focusZone = "list" then return
+    PlayPreviewed()
+end sub
+
 sub PlayPreviewed()
+    if m.tuneTimer <> invalid then m.tuneTimer.control = "stop"
     if m.previewIdx < 0 then return
     list = m.top.channelList
     if list = invalid or m.previewIdx >= list.count() then return
@@ -786,7 +799,10 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     ' RELEASE: ▲/▼ soltos depois de preview → toca o canal previewado
     if not press
         if (key = "up" or key = "down") and m.previewIdx >= 0 and m.focusZone <> "favorites"
-            PlayPreviewed()
+            ' Debounce: cliques rápidos só atualizam o OSD; sintoniza
+            ' uma vez só, 400ms depois do último clique.
+            m.tuneTimer.control = "stop"
+            m.tuneTimer.control = "start"
             return true
         end if
         return false
