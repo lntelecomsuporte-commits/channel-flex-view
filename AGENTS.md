@@ -11,3 +11,4 @@
 - Session heartbeats must reject ended sessions with 404 so clients recreate active presence instead of refreshing rows excluded from monitoring.
 - session-heartbeat reads body fields ignoring case and underscores because Roku BrightScript lowercases associative-array keys.
 - Remote app commands (reload_channels/force_close) are rows in app_commands delivered once per session via the session-heartbeat response, tracked by user_sessions.last_command_at; insert RLS enforces the per-command admin permission keys.
+- Send admin app commands through the self-hosted client and require its authenticated user before inserting, so command ownership matches the panel session and RLS.

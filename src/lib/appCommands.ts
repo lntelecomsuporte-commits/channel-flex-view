@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabaseLocal";
 import { toast } from "sonner";
 
 export type AppCommand = "reload_channels" | "force_close";
@@ -8,11 +8,15 @@ export async function sendAppCommand(command: AppCommand, targetUserId: string |
   const what = command === "reload_channels" ? "recarregar os canais" : "fechar o app";
   const who = targetUserId ? (label || "este cliente") : "TODOS os apps online";
   if (!window.confirm(`Deseja ${what} de ${who}?`)) return;
-  const { data: auth } = await supabase.auth.getUser();
+  const { data: auth, error: authError } = await supabase.auth.getUser();
+  if (authError || !auth.user) {
+    toast.error("Sua sessão expirou. Entre novamente no painel para enviar o comando.");
+    return;
+  }
   const { error } = await supabase.from("app_commands").insert({
     command,
     target_user_id: targetUserId,
-    created_by: auth.user?.id ?? null,
+    created_by: auth.user.id,
   });
   if (error) toast.error("Erro ao enviar comando: " + error.message);
   else toast.success(`Comando enviado — ${who} em até 30s`);
