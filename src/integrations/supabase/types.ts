@@ -35,6 +35,30 @@ export type Database = {
         }
         Relationships: []
       }
+      app_commands: {
+        Row: {
+          command: string
+          created_at: string
+          created_by: string | null
+          id: string
+          target_user_id: string | null
+        }
+        Insert: {
+          command: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          target_user_id?: string | null
+        }
+        Update: {
+          command?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
       categories: {
         Row: {
           created_at: string
@@ -657,6 +681,7 @@ export type Database = {
           id: string
           ip_address: string | null
           is_watching: boolean
+          last_command_at: string | null
           last_heartbeat_at: string
           platform: string | null
           session_token: string
@@ -675,6 +700,7 @@ export type Database = {
           id?: string
           ip_address?: string | null
           is_watching?: boolean
+          last_command_at?: string | null
           last_heartbeat_at?: string
           platform?: string | null
           session_token: string
@@ -693,6 +719,7 @@ export type Database = {
           id?: string
           ip_address?: string | null
           is_watching?: boolean
+          last_command_at?: string | null
           last_heartbeat_at?: string
           platform?: string | null
           session_token?: string

@@ -14,7 +14,8 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Trash2, LogOut, Tv, Layers, Users, Link, Activity, Download, Shield, FileCode } from "lucide-react";
+import { Plus, Trash2, LogOut, Tv, Layers, Users, Link, Activity, Download, Shield, FileCode, RefreshCw, Power } from "lucide-react";
+import { sendAppCommand } from "@/lib/appCommands";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -469,12 +470,18 @@ const AdminPanel = () => {
           </TabsList>
 
           <TabsContent value="channels">
-            <div className="mb-4 flex gap-2">
+            <div className="mb-4 flex flex-wrap gap-2">
               <Button variant={channelsView === "list" ? "default" : "outline"} size="sm" onClick={() => setChannelsView("list")}>
                 <Tv className="h-4 w-4 mr-1" /> Lista
               </Button>
               {can("channels.config_editor") && <Button variant={channelsView === "config" ? "default" : "outline"} size="sm" onClick={() => setChannelsView("config")}>
                 <FileCode className="h-4 w-4 mr-1" /> Config Editor
+              </Button>}
+              {can("channels.reload_all") && <Button variant="outline" size="sm" onClick={() => sendAppCommand("reload_channels", null)}>
+                <RefreshCw className="h-4 w-4 mr-1" /> Recarregar canais (todos)
+              </Button>}
+              {can("channels.close_all") && <Button variant="outline" size="sm" onClick={() => sendAppCommand("force_close", null)}>
+                <Power className="h-4 w-4 mr-1 text-destructive" /> Fechar todos os apps
               </Button>}
             </div>
 
@@ -974,7 +981,7 @@ const AdminPanel = () => {
           </TabsContent>
 
           <TabsContent value="monitoring">
-            <ProxyMonitoring />
+            <ProxyMonitoring can={can} />
           </TabsContent>
 
           <TabsContent value="firewall">

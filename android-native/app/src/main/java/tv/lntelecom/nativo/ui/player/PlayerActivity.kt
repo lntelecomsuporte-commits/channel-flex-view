@@ -203,7 +203,12 @@ class PlayerActivity : AppCompatActivity() {
         setupListOverlay()
         loadCurrent()
 
-        heartbeat = tv.lntelecom.nativo.data.HeartbeatManager(applicationContext, sb).also { it.start() }
+        heartbeat = tv.lntelecom.nativo.data.HeartbeatManager(applicationContext, sb) { cmd ->
+            when (cmd) {
+                "force_close" -> shutdownAndRelease("remote_command")
+                "reload_channels" -> reloadChannelsRemote()
+            }
+        }.also { it.start() }
 
         // Carrega PIN parental cedo (não só ao abrir menu) pra que o gate funcione
         fetchUserProfile()
@@ -252,6 +257,29 @@ class PlayerActivity : AppCompatActivity() {
             try { finishAffinity() } catch (_: Exception) {}
         }
         Handler(Looper.getMainLooper()).postDelayed({ System.exit(0) }, 150)
+    }
+
+    /** Recarrega canais/planos em segundo plano sem interromper o vídeo atual. */
+    private fun reloadChannelsRemote() {
+        lifecycleScope.launch {
+            val fresh = withContext(Dispatchers.IO) {
+                runCatching { tv.lntelecom.nativo.data.ChannelsRepository(sb).loadChannels() }.getOrNull()
+            } ?: return@launch
+            if (fresh.isEmpty() || isFinishing) return@launch
+            val currentId = channels.getOrNull(index)?.id
+            ChannelStore.channels = fresh
+            channels = fresh
+            val newIdx = fresh.indexOfFirst { it.id == currentId }
+            listAdapter.submit(channels)
+            b.listTitle.text = "Canais — ${channels.size}"
+            if (newIdx >= 0) {
+                index = newIdx
+            } else {
+                // Canal atual saiu do plano: vai para o primeiro disponível.
+                index = 0
+                loadCurrent()
+            }
+        }
     }
 
     private fun setupListOverlay() {

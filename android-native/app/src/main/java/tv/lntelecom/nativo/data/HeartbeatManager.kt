@@ -18,6 +18,8 @@ import java.util.UUID
 class HeartbeatManager(
     private val ctx: Context,
     private val sb: SupabaseClient,
+    /** Comando remoto do painel ("reload_channels" | "force_close"), entregue na main thread. */
+    private val onCommand: ((String) -> Unit)? = null,
 ) {
     private val handler = Handler(Looper.getMainLooper())
     private val intervalMs = 30_000L
@@ -122,7 +124,12 @@ class HeartbeatManager(
                 sessionId = null
                 return
             }
-            if (!res.isSuccessful) android.util.Log.w("LNTV-HB", "hb ${res.code}: $txt")
+            if (!res.isSuccessful) { android.util.Log.w("LNTV-HB", "hb ${res.code}: $txt"); return }
+            val cmd = try { JSONObject(txt).optString("command") } catch (_: Exception) { "" }
+            if (cmd.isNotEmpty()) {
+                android.util.Log.i("LNTV-HB", "comando remoto: $cmd")
+                handler.post { onCommand?.invoke(cmd) }
+            }
         }
     }
 

@@ -8,7 +8,7 @@ const js = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
 }).outputText;
 
-function setup(ended: boolean) {
+function setup(ended: boolean, pendingCommand: string | null = null) {
   let handler = async (_request: Request): Promise<Response> => new Response(null, { status: 500 });
   const update = vi.fn();
   const row = { id: "session-1", user_id: "user-1", started_at: "2026-11-06T03:00:00Z", ended_at: ended ? "2026-11-06T03:10:00Z" : null };
@@ -18,10 +18,13 @@ function setup(ended: boolean) {
     const query = {
       select: () => query,
       eq: (key: string, value: unknown) => { filters[key] = value; return query; },
+      or: () => query, gt: () => query, order: () => query, limit: () => query,
       is: (key: string, value: unknown) => { filters[key] = value; return query; },
       insert: () => { inserting = true; return query; },
       update: (value: unknown) => { update(value); return query; },
-      maybeSingle: async () => ({ data: table === "profiles" ? { force_signout_at: null } :
+      maybeSingle: async () => table === "app_commands"
+        ? { data: pendingCommand ? { command: pendingCommand, created_at: "2026-11-06T03:05:00Z" } : null, error: null }
+        : ({ data: table === "profiles" ? { force_signout_at: null } :
         Object.entries(filters).every(([key, value]) => row[key as keyof typeof row] === value) ? row : null, error: null }),
       single: async () => ({ data: inserting ? { id: "new-session", started_at: "2026-11-06T04:00:00Z" } : null, error: null }),
       then: (resolve: (value: unknown) => unknown) => Promise.resolve({ error: null }).then(resolve),
@@ -70,5 +73,11 @@ describe("Monitoring session recovery", () => {
     const { invoke, update } = setup(false);
     expect((await invoke({ action: "heartbeat", sessionId: "someone-elses-session" })).status).toBe(404);
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it("delivers a pending remote command on heartbeat", async () => {
+    const { invoke } = setup(false, "force_close");
+    const res = await invoke({ action: "heartbeat", sessionId: "session-1" });
+    expect(await res.json()).toMatchObject({ command: "force_close" });
   });
 });

@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Plus, Trash2, ShieldOff, ShieldCheck, Pencil, LogOut, Download, ListVideo, Copy, RefreshCw, Smartphone } from "lucide-react";
+import { Plus, Trash2, ShieldOff, ShieldCheck, Pencil, LogOut, Download, ListVideo, Copy, RefreshCw, Smartphone, Power } from "lucide-react";
+import { sendAppCommand } from "@/lib/appCommands";
 const PLAYLIST_HOST = "https://tv2.lntelecom.net";
 import { useCategories } from "@/hooks/useChannels";
 import { UserStatusBadge } from "./UserStatusBadge";
@@ -838,6 +839,12 @@ const UserManagement = ({ can = () => true, isMaster = false }: { can?: (p: stri
                     {can("users.signout") && !prot && <Button variant="ghost" size="sm" onClick={() => handleForceSignout(p.id, p.display_name)} title="Deslogar usuário (forçar logout remoto)">
                       <LogOut className="h-4 w-4 text-amber-500" />
                     </Button>}
+                    {can("users.reload_channels") && !prot && <Button variant="ghost" size="sm" onClick={() => sendAppCommand("reload_channels", p.user_id, p.display_name)} title="Recarregar canais nos apps deste cliente">
+                      <RefreshCw className="h-4 w-4 text-primary" />
+                    </Button>}
+                    {can("users.force_close") && !prot && <Button variant="ghost" size="sm" onClick={() => sendAppCommand("force_close", p.user_id, p.display_name)} title="Fechar app deste cliente">
+                      <Power className="h-4 w-4 text-destructive" />
+                    </Button>}
                     {can("users.block") && !prot && <Button variant="ghost" size="sm" onClick={() => handleToggleBlock(p.id, p.is_blocked)} title={p.is_blocked ? "Desbloquear" : "Bloquear"}>
                       {p.is_blocked ? <ShieldCheck className="h-4 w-4 text-primary" /> : <ShieldOff className="h-4 w-4 text-destructive" />}
                     </Button>}
@@ -855,7 +862,7 @@ const UserManagement = ({ can = () => true, isMaster = false }: { can?: (p: stri
       </Card>
 
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Usuário</DialogTitle>
           </DialogHeader>

@@ -235,7 +235,7 @@ Deno.serve(async (req) => {
 
     const { data: session, error: sessionError } = await adminClient
       .from("user_sessions")
-      .select("id, started_at")
+      .select("id, started_at, last_command_at")
       .eq("id", sessionId)
       .eq("user_id", user.id)
       // Expired/ended sessions must be recreated, not refreshed invisibly.
@@ -272,6 +272,22 @@ Deno.serve(async (req) => {
         .eq("user_id", user.id);
 
       if (error) return json({ error: error.message }, 400);
+
+      // Remote admin commands (global or per user) issued after this session last received one.
+      const since = (session as any).last_command_at ?? session.started_at;
+      const { data: cmd } = await adminClient
+        .from("app_commands")
+        .select("command, created_at")
+        .or(`target_user_id.is.null,target_user_id.eq.${user.id}`)
+        .gt("created_at", since)
+        .gt("created_at", new Date(Date.now() - 10 * 60 * 1000).toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cmd) {
+        await adminClient.from("user_sessions").update({ last_command_at: cmd.created_at }).eq("id", sessionId);
+        return json({ success: true, command: cmd.command });
+      }
       return json({ success: true });
     }
 

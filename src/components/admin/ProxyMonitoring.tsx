@@ -3,7 +3,8 @@ import { supabase } from "@/lib/supabaseLocal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, Globe, Tv2, User, Wifi, RefreshCw, ChevronDown } from "lucide-react";
+import { Activity, Globe, Tv2, User, Wifi, RefreshCw, ChevronDown, Power } from "lucide-react";
+import { sendAppCommand } from "@/lib/appCommands";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useEffect, useState } from "react";
@@ -167,7 +168,7 @@ const formatBytes = (bytes: number) => {
   return `${n.toFixed(1)} ${units[i]}`;
 };
 
-const ProxyMonitoring = () => {
+const ProxyMonitoring = ({ can = () => false }: { can?: (perm: string) => boolean }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   const [detailView, setDetailView] = useState<null | "online" | "proxy" | "ips">(null);
@@ -527,6 +528,16 @@ const ProxyMonitoring = () => {
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <div className="px-3 pb-3 pt-1 border-t border-border/50 space-y-1.5 text-xs">
+                        {s.user_id && s.platform !== "m3u" && (can("users.reload_channels") || can("users.force_close")) && (
+                          <div className="flex flex-wrap gap-2 py-1">
+                            {can("users.reload_channels") && <Button variant="outline" size="sm" onClick={() => sendAppCommand("reload_channels", s.user_id, getUserText(s.user_id!))}>
+                              <RefreshCw className="h-3.5 w-3.5 mr-1" /> Recarregar canais
+                            </Button>}
+                            {can("users.force_close") && <Button variant="outline" size="sm" onClick={() => sendAppCommand("force_close", s.user_id, getUserText(s.user_id!))}>
+                              <Power className="h-3.5 w-3.5 mr-1 text-destructive" /> Fechar app
+                            </Button>}
+                          </div>
+                        )}
                         <div className="grid grid-cols-[110px_1fr] gap-2">
                           <span className="text-muted-foreground">IPv4 cliente:</span>
                           <span className="font-mono text-foreground break-all">

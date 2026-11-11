@@ -199,6 +199,9 @@ export const useSessionHeartbeat = ({ channelId, channelName, isWatching = false
         if (hbData?.forceSignout) {
           if (intervalRef.current) clearInterval(intervalRef.current);
           await handleForceSignout();
+        } else if (hbData?.command === "reload_channels" || hbData?.command === "force_close") {
+          // Web/PWA: recarregar a página busca canais e planos novamente.
+          window.location.reload();
         }
       }, HEARTBEAT_INTERVAL_MS);
     };
