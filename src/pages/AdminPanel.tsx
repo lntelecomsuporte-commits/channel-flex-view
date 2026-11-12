@@ -32,6 +32,7 @@ import { INNOVATV_BASE_URL, fetchInnovaTvPrograms } from "@/lib/innovatv";
 import { NXTV_BASE_URL, fetchNxtvPrograms } from "@/lib/nxtv";
 import NxtvChannelPicker from "@/components/admin/NxtvChannelPicker";
 import ChannelConfigEditor from "@/components/admin/ChannelConfigEditor";
+import ChannelSourceSwitcher from "@/components/admin/ChannelSourceSwitcher";
 import AdminPermissionsManager from "@/components/admin/AdminPermissionsManager";
 import { useAdminPermissions } from "@/hooks/useAdminPermissions";
 
@@ -477,6 +478,7 @@ const AdminPanel = () => {
               {can("channels.config_editor") && <Button variant={channelsView === "config" ? "default" : "outline"} size="sm" onClick={() => setChannelsView("config")}>
                 <FileCode className="h-4 w-4 mr-1" /> Config Editor
               </Button>}
+              {can("channels.switch_source") && <ChannelSourceSwitcher channels={channels} canReloadAll={can("channels.reload_all")} />}
               {can("channels.reload_all") && <Button variant="outline" size="sm" onClick={() => sendAppCommand("reload_channels", null)}>
                 <RefreshCw className="h-4 w-4 mr-1" /> Recarregar canais (todos)
               </Button>}

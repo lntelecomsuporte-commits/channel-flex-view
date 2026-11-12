@@ -7,6 +7,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     { key: "channels.view", label: "Ver aba Canais" },
     { key: "channels.edit", label: "Criar e editar canais" },
     { key: "channels.config_editor", label: "Usar Config Editor" },
+    { key: "channels.switch_source", label: "Alterar fonte dos canais em lote" },
     { key: "channels.delete", label: "Remover canais" },
     { key: "channels.reload_all", label: "Recarregar canais em todos os apps online" },
     { key: "channels.close_all", label: "Fechar todos os apps online" },

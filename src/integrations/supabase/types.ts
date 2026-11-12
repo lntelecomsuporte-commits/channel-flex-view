@@ -835,6 +835,19 @@ export type Database = {
       }
       resolve_device_limit: { Args: { _user_id: string }; Returns: number }
       short_link_hit: { Args: { _slug: string }; Returns: undefined }
+      switch_channel_sources: {
+        Args: {
+          _mode: string
+          _replacement_origin?: string
+          _save_old_as_backup?: boolean
+          _source_origin: string
+        }
+        Returns: {
+          matched_count: number
+          skipped_without_backup: number
+          updated_count: number
+        }[]
+      }
       user_has_category_access: {
         Args: { _category_id: string; _user_id: string }
         Returns: boolean

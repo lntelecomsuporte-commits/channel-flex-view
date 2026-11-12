@@ -71,4 +71,12 @@ describe("remote commands use the panel session", () => {
     expect(backend.errorToast).toHaveBeenCalledOnce();
     expect(backend.successToast).not.toHaveBeenCalled();
   });
+
+  it("allows an already confirmed bulk action to reload apps without a second prompt", async () => {
+    const confirmation = vi.spyOn(window, "confirm");
+    const sent = await sendAppCommand("reload_channels", null, undefined, { confirm: false });
+    expect(sent).toBe(true);
+    expect(confirmation).not.toHaveBeenCalled();
+    expect(backend.insert).toHaveBeenCalledOnce();
+  });
 });

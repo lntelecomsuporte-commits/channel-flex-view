@@ -10,6 +10,7 @@ describe("permissões de administrador", () => {
     const p = resolvePermissions({ email: "x@y.com", isAdmin: true, custom: null });
     expect(p.has("channels.delete")).toBe(false);
     expect(p.has("admins.manage")).toBe(false);
+    expect(p.has("channels.switch_source")).toBe(true);
     expect(p.has("users.edit")).toBe(true);
   });
   it("admin personalizado só tem o que foi marcado", () => {

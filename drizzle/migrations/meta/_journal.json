@@ -29,6 +29,13 @@
       "when": 1794365501037,
       "tag": "0003_app_remote_commands",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794502902852,
+      "tag": "0004_channel_source_switcher",
+      "breakpoints": true
     }
   ]
 }
