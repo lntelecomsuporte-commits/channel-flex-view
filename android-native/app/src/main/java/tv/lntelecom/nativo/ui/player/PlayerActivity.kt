@@ -158,6 +158,7 @@ class PlayerActivity : AppCompatActivity() {
     private val unlockedAdult = mutableSetOf<String>()
     private var lastSafeIndex = 0
     private var pinDialogOpen = false
+    private var lockedChannelId: String? = null
 
     // Stats overlay live updater
     private val statsHandler = Handler(Looper.getMainLooper())
@@ -452,37 +453,46 @@ class PlayerActivity : AppCompatActivity() {
         heartbeat?.updateChannel(c.id, c.name, true)
     }
 
-    /** Mostra dialog de PIN se canal é adulto e ainda não liberado. Retorna true se bloqueou. */
+    /**
+     * Canal restrito ainda não liberado: para o vídeo e mostra o cadeado no
+     * OSD, SEM abrir o diálogo — assim ▲▼ continuam zapeando livremente.
+     * O PIN só é pedido quando o usuário aperta OK (ver openPinForCurrent).
+     */
     private fun maybeRequestPin(c: Channel): Boolean {
-        if (!c.isAdult || unlockedAdult.contains(c.id)) return false
-        if (pinDialogOpen) return true
+        if (!c.isAdult || unlockedAdult.contains(c.id)) { lockedChannelId = null; return false }
+        lockedChannelId = c.id
+        retryHandler.removeCallbacksAndMessages(null)
+        stallHandler.removeCallbacks(stallCheck)
+        player?.let { it.stop(); it.clearMediaItems() }
+        showOsd(index)
+        b.osdEpg.text = "🔒 Canal bloqueado por PIN • OK para desbloquear"
+        osdHandler.removeCallbacks(hideOsd)
+        heartbeat?.updateChannel(c.id, c.name, false)
+        return true
+    }
+
+    private fun openPinForCurrent(): Boolean {
+        val c = channels.getOrNull(index) ?: return false
+        if (lockedChannelId != c.id || pinDialogOpen) return lockedChannelId == c.id
         pinDialogOpen = true
-        // Pausa qualquer mídia em curso enquanto o dialog está aberto
-        player?.playWhenReady = false
-        b.osd.visibility = View.GONE
         val input = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
             hint = "PIN (4 dígitos)"
         }
         AlertDialog.Builder(this)
-            .setTitle("🔞 Canal adulto — digite o PIN")
+            .setTitle("🔞 Canal restrito — digite o PIN")
             .setMessage("Canal ${c.channelNumber} • ${c.name}")
             .setView(input)
-            .setCancelable(false)
+            .setOnDismissListener { pinDialogOpen = false }
             .setPositiveButton("OK") { _, _ ->
-                pinDialogOpen = false
                 if (input.text.toString() == currentAdultPin) {
                     unlockedAdult.add(c.id)
-                    loadCurrent()
+                    if (channels.getOrNull(index)?.id == c.id) loadCurrent()
                 } else {
                     Toast.makeText(this, "PIN incorreto", Toast.LENGTH_SHORT).show()
-                    revertToSafe()
                 }
             }
-            .setNegativeButton("Cancelar") { _, _ ->
-                pinDialogOpen = false
-                revertToSafe()
-            }
+            .setNegativeButton("Cancelar", null)
             .show()
         return true
     }
@@ -698,6 +708,7 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun handleOkPress(): Boolean {
+        if (pendingIndex < 0 && openPinForCurrent()) return true
         // Se tem preview pendente, OK confirma imediatamente.
         if (pendingIndex >= 0) {
             previewHandler.removeCallbacks(tunePending)

@@ -193,6 +193,7 @@ const PlayerPage = () => {
     modalOpenRef.current = settingsOpen || !!pendingAdult;
   }, [settingsOpen, pendingAdult]);
   const lastSafeIndexRef = useRef(0);
+  const [channelLocked, setChannelLocked] = useState(false);
   const [adultPin, setAdultPin] = useState("1234");
 
   // Evento nativo enviado pelo MainActivity quando o usuário aperta a tecla
@@ -248,12 +249,12 @@ const PlayerPage = () => {
     const ch: any = currentChannel;
     const categoryRequiresPin = ch.category_id && pinCategoryIds.current.has(ch.category_id);
     const isRestricted = !!ch.is_adult || categoryRequiresPin;
-    if (!isRestricted || unlockedAdult.has(currentChannel.id)) {
-      lastSafeIndexRef.current = currentIndex;
-      setPendingAdult((p) => (p && p.id === currentChannel.id ? null : p));
-      return;
-    }
-    setPendingAdult((prev) => prev ?? { id: currentChannel.id, revertIndex: lastSafeIndexRef.current });
+    const locked = isRestricted && !unlockedAdult.has(currentChannel.id);
+    setChannelLocked(locked);
+    if (!locked) lastSafeIndexRef.current = currentIndex;
+    // Zapeamento livre: o PIN só abre quando o usuário aperta OK no canal
+    // bloqueado. Ao trocar de canal, fecha qualquer prompt pendente.
+    setPendingAdult((p) => (p && p.id === currentChannel.id ? p : null));
   }, [currentChannel?.id, unlockedAdult, currentIndex, categories]);
 
   const playerRef = useRef<VideoPlayerHandle>(null);
@@ -501,9 +502,7 @@ const PlayerPage = () => {
   const backPressRef = useRef<{ count: number; timer: ReturnType<typeof setTimeout> | null }>({ count: 0, timer: null });
   const handleBackPress = useCallback((): boolean => {
     if (pendingAdult) {
-      const revertTo = pendingAdult.revertIndex;
       setPendingAdult(null);
-      setCurrentIndex(revertTo);
       return true;
     }
     if (settingsOpen) {
@@ -826,6 +825,11 @@ const PlayerPage = () => {
         return;
       }
       if (showChannelList || synopsisProgram || showStats) return;
+      if (!showPreview && channelLocked && currentChannel) {
+        lastEnterRef.current = { id: "", time: 0 };
+        setPendingAdult({ id: currentChannel.id, revertIndex: currentIndex });
+        return;
+      }
       if (showPreview) {
         lastEnterRef.current = { id: "", time: 0 };
         confirmPreview();
@@ -856,7 +860,7 @@ const PlayerPage = () => {
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
     };
-  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, searchActive, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, setFavorite, isUpdatingFavorite, isFavorite, showOSDTemporarily, favFocusIndex, favorites, channels, currentChannel, showOSD, showFavoritesBar, handleBackPress, pushDigit, numBuffer, jumpToChannelNumber, settingsOpen, pendingAdult]);
+  }, [changeChannel, showNextPreview, confirmPreview, showPreview, showChannelList, searchActive, synopsisProgram, focusedChannel, openSynopsisForFocused, pushCombo, isComboArmed, showStats, setFavorite, isUpdatingFavorite, isFavorite, showOSDTemporarily, favFocusIndex, favorites, channels, currentChannel, showOSD, showFavoritesBar, handleBackPress, pushDigit, numBuffer, jumpToChannelNumber, settingsOpen, pendingAdult, channelLocked, currentIndex]);
 
   useEffect(() => {
     if (!showFavoritesBar || !showOSD) setFavFocusIndex(null);
@@ -906,7 +910,7 @@ const PlayerPage = () => {
     >
       {currentChannel && (
         <>
-          {!pendingAdult ? (
+          {!channelLocked ? (
             <VideoPlayer
               ref={playerRef}
               streamUrl={currentChannel.stream_url}
@@ -917,10 +921,15 @@ const PlayerPage = () => {
               backupStreamUrls={(currentChannel as any).backup_stream_urls ?? null}
             />
           ) : (
-            <div className="absolute inset-0 bg-background flex items-center justify-center z-[5]">
+            <div
+              className="absolute inset-0 bg-background flex items-center justify-center z-[5]"
+              onClick={(e) => { e.stopPropagation(); setPendingAdult({ id: currentChannel.id, revertIndex: currentIndex }); }}
+            >
               <div className="text-center text-muted-foreground">
-                <p className="text-6xl mb-4">🔞</p>
-                <p>Conteúdo restrito — digite o PIN parental</p>
+                <p className="text-6xl mb-4">🔒</p>
+                <p className="text-lg text-foreground">{currentChannel.channel_number} • {currentChannel.name}</p>
+                <p>Canal bloqueado por PIN — pressione OK para desbloquear</p>
+                <p className="text-sm mt-1">▲▼ continua trocando de canal</p>
               </div>
             </div>
           )}
@@ -1129,11 +1138,7 @@ const PlayerPage = () => {
                 });
                 setPendingAdult(null);
               }}
-              onCancel={() => {
-                const revertTo = pendingAdult.revertIndex;
-                setPendingAdult(null);
-                setCurrentIndex(revertTo);
-              }}
+              onCancel={() => setPendingAdult(null)}
             />
           )}
 

@@ -168,10 +168,7 @@ sub LaunchPlayer(startIdx as Integer)
     m.status.visible = false
     ch = m.allowedChannels[startIdx]
     if ch = invalid then return
-    if IsRestricted(ch) and not IsUnlocked(ch.id)
-        AskPin(ch, startIdx)
-        return
-    end if
+    ' Canal restrito abre com cadeado no player (PIN só ao apertar OK).
     OpenPlayerAt(startIdx)
 end sub
 
@@ -233,6 +230,7 @@ sub OpenPlayerAt(idx as Integer)
     p.observeField("channelData", "OnPlayerChannelChanged")
     p.observeField("favoritesChanged", "OnPlayerFavoritesChanged")
     p.observeField("unlockRequest", "OnUnlockRequest")
+    p.observeField("menuRequest", "OnMenuRequest")
     p.setFocus(true)
     m.player = p
     m.currentPlayingCh = m.allowedChannels[idx]
@@ -273,11 +271,98 @@ sub OnInPlayerPinResult(evt as Object)
             m.player.setFocus(true)
         end if
     else
-        if m.player <> invalid
-            ' volta pro canal anterior ainda no player
-            m.player.revertRestricted = true
-            m.player.setFocus(true)
-        end if
+        ' cancelou: continua no canal com cadeado, zap liberado
+        if m.player <> invalid then m.player.setFocus(true)
+    end if
+end sub
+
+' ==================== MENU (tecla *) ====================
+
+sub OnMenuRequest()
+    if m.pinDialog <> invalid or m.settingsMenu <> invalid then return
+    menu = createObject("roSGNode", "SettingsMenu")
+    menu.observeField("selected", "OnMenuSelected")
+    m.settingsMenu = menu
+    m.top.appendChild(menu)
+    menu.setFocus(true)
+end sub
+
+sub CloseMenu()
+    if m.settingsMenu <> invalid then m.top.removeChild(m.settingsMenu)
+    m.settingsMenu = invalid
+end sub
+
+sub FocusPlayer()
+    if m.player <> invalid then m.player.setFocus(true)
+end sub
+
+sub OnMenuSelected(evt as Object)
+    sel = evt.getData()
+    CloseMenu()
+    if sel = "change-pin"
+        ShowPinStep("verify", "Trocar PIN — digite o PIN atual", "OnChangePinCurrent")
+    else
+        FocusPlayer()
+    end if
+end sub
+
+sub ShowPinStep(mode as String, title as String, handler as String)
+    dlg = createObject("roSGNode", "PinDialog")
+    dlg.mode = mode
+    dlg.title = title
+    dlg.expectedPin = m.adultPin
+    dlg.observeField("pinResult", handler)
+    m.pinDialog = dlg
+    m.top.appendChild(dlg)
+    dlg.setFocus(true)
+end sub
+
+sub ClosePinDialog()
+    if m.pinDialog <> invalid then m.top.removeChild(m.pinDialog)
+    m.pinDialog = invalid
+end sub
+
+sub OnChangePinCurrent(evt as Object)
+    r = evt.getData()
+    ClosePinDialog()
+    if r = "ok"
+        ShowPinStep("new", "Novo PIN parental (4 dígitos)", "OnChangePinNew")
+    else
+        FocusPlayer()
+    end if
+end sub
+
+sub OnChangePinNew(evt as Object)
+    r = evt.getData()
+    newPin = ""
+    if m.pinDialog <> invalid then newPin = m.pinDialog.enteredPin
+    ClosePinDialog()
+    FocusPlayer()
+    if r <> "ok" or newPin = invalid or Len(newPin) <> 4 then return
+    task = createObject("roSGNode", "FavoriteTask")
+    task.action = "set_pin"
+    task.pin = newPin
+    m.newPinPending = newPin
+    task.observeField("result", "OnPinSaved")
+    m.pinTask = task
+    task.control = "RUN"
+end sub
+
+sub OnPinSaved(evt as Object)
+    res = evt.getData()
+    m.pinTask = invalid
+    if res <> invalid and res.ok = true
+        m.adultPin = m.newPinPending
+        if m.player <> invalid then m.player.adultPin = m.adultPin
+        ShowStatusToast("PIN atualizado!")
+    else
+        ShowStatusToast("Falha ao atualizar PIN")
+    end if
+end sub
+
+sub ShowStatusToast(text as String)
+    if m.player <> invalid
+        m.player.toastText = text
     end if
 end sub
 

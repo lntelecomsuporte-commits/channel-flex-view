@@ -8,5 +8,7 @@ sub RunTask()
     else if m.top.action = "remove"
         res = RemoveFavorite(m.top.favoriteId)
         m.top.result = res
+    else if m.top.action = "set_pin"
+        m.top.result = UpdateAdultPin(m.top.pin)
     end if
 end sub

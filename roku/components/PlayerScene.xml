@@ -12,6 +12,8 @@
     <field id="pinCategoryIds" type="assocarray" />
     <field id="unlockRequest" type="assocarray" alwaysNotify="true" />
     <field id="revertRestricted" type="boolean" alwaysNotify="true" />
+    <field id="menuRequest" type="boolean" alwaysNotify="true" />
+    <field id="toastText" type="string" alwaysNotify="true" />
   </interface>
   <script type="text/brightscript" uri="pkg:/components/PlayerScene.brs" />
   <script type="text/brightscript" uri="pkg:/source/Config.brs" />

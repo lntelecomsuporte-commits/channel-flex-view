@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="SettingsMenu" extends="Group">
+  <interface>
+    <field id="selected" type="string" alwaysNotify="true" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/SettingsMenu.brs" />
+  <children>
+    <Rectangle width="1920" height="1080" color="0x000000cc" />
+    <Rectangle width="720" height="420" translation="[600, 330]" color="0x111827ff" />
+    <Label text="Configurações" font="font:MediumBoldSystemFont" color="0xffffffff"
+           translation="[600, 360]" width="720" horizAlign="center" />
+    <LabelList id="menuList" translation="[680, 440]" itemSize="[560, 64]"
+               focusedColor="0xffffffff" color="0xd1d5dbff" focusBitmapBlendColor="0xdc2626ff">
+      <ContentNode role="content">
+        <ContentNode title="Trocar PIN dos canais adultos" id="change-pin" />
+        <ContentNode title="Fechar" id="close" />
+      </ContentNode>
+    </LabelList>
+    <Label text="▲▼ navegar  •  OK selecionar  •  Voltar fechar" font="font:SmallSystemFont"
+           color="0x9ca3afff" translation="[600, 680]" width="720" horizAlign="center" />
+  </children>
+</component>

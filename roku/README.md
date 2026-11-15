@@ -21,7 +21,6 @@ App Roku do LN TV (BrightScript + SceneGraph). Consome o mesmo backend do APK An
 ## Não inclui ainda (próximas iterações)
 
 - EPG (programa atual + barra de progresso + sinopse)
-- PIN adulto (`profiles.adult_pin`)
 - Busca de canais
 - Stats overlay
 - Canais YouTube

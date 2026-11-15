@@ -48,6 +48,16 @@ function SbDelete(path as String) as Object
 end function
 
 ' Domain helpers
+function UpdateAdultPin(pin as String) as Object
+    cfg = LNTV_Config()
+    url = cfg.baseUrl + "/rest/v1/profiles?user_id=eq." + SbUserId()
+    res = HttpJson(url, "PATCH", { adult_pin: pin }, SbAccessToken())
+    if res.status = 401
+        if SbRefresh() then res = HttpJson(url, "PATCH", { adult_pin: pin }, SbAccessToken())
+    end if
+    return res
+end function
+
 function FetchChannels() as Object
     return SbGet("channels?is_active=eq.true&select=id,name,channel_number,stream_url,stream_format,backup_stream_urls,logo_url,category_id,is_adult,epg_url,epg_type,epg_channel_id&order=channel_number.asc")
 end function

@@ -38,12 +38,14 @@ class ChannelsRepository(private val sb: SupabaseClient) {
 
         // 3. Nome das categorias
         val catMap = mutableMapOf<String, String>()
-        sb.get("categories?select=id,name").use { res ->
+        val pinCats = mutableSetOf<String>()
+        sb.get("categories?select=id,name,requires_pin").use { res ->
             if (res.isSuccessful) {
                 val arr = JSONArray(res.body?.string() ?: "[]")
                 for (i in 0 until arr.length()) {
                     val o = arr.optJSONObject(i) ?: continue
                     catMap[o.optString("id")] = o.optString("name")
+                    if (o.optBoolean("requires_pin", false)) pinCats.add(o.optString("id"))
                 }
             }
         }
@@ -73,7 +75,7 @@ class ChannelsRepository(private val sb: SupabaseClient) {
                             isActive = o.optBoolean("is_active", true),
                             updatedAt = o.optString("updated_at"),
                             forceProxyNative = o.optBoolean("force_proxy_native", false),
-                            isAdult = o.optBoolean("is_adult", false),
+                            isAdult = o.optBoolean("is_adult", false) || (catId != null && pinCats.contains(catId)),
                             preferSwDecoder = o.optBoolean("prefer_sw_decoder", false)
                         )
                     )

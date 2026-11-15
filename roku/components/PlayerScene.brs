@@ -49,12 +49,14 @@ sub init()
     m.favoritesResolved = []
     m.favIcons = []
     m.lastIndex = m.top.channelIndex
+    m.lockedId = ""
 
     m.top.observeField("channelData", "OnChannelData")
     m.top.observeField("channelList", "OnChannelListChanged")
     m.top.observeField("favorites", "OnFavoritesField")
     m.top.observeField("unlockedIds", "OnUnlockedChanged")
     m.top.observeField("revertRestricted", "OnRevertRestricted")
+    m.top.observeField("toastText", "OnToastText")
     m.video.observeField("state", "OnState")
     m.osdTimer.observeField("fire", "HideOsdAll")
     m.longPressTimer.observeField("fire", "OnLongPress")
@@ -111,12 +113,19 @@ sub OnChannelData()
 
     ' bloqueio de canais restritos
     if IsRestricted(ch) and not IsUnlocked(ch.id)
-        ' avisa o HomeScene pra abrir o PIN
+        ' Zapeamento livre: só bloqueia o vídeo e mostra o cadeado.
+        ' O PIN é pedido apenas quando o usuário aperta OK (HandleOkAction).
         m.video.control = "stop"
         m.video.content = invalid
-        m.top.unlockRequest = { channelId: ch.id }
+        m.lockedId = ch.id
+        m.previewIdx = -1
+        m.lastIndex = m.top.channelIndex
+        m.errLabel.text = "🔒 Canal bloqueado por PIN  •  OK para desbloquear  •  ▲▼ troca de canal"
+        m.errLabel.visible = true
+        ShowOsd(ch)
         return
     end if
+    m.lockedId = ""
 
     fmt = "hls"
     if ch.stream_format = "mp4" then fmt = "mp4"
@@ -196,7 +205,7 @@ sub OnState(evt as Object)
         if err = invalid then err = "erro desconhecido"
         m.errLabel.text = "Erro no stream: " + err
         m.errLabel.visible = true
-    else
+    else if m.lockedId = invalid or m.lockedId = ""
         m.errLabel.visible = false
     end if
 end sub
@@ -511,6 +520,10 @@ end sub
 
 ' ==================== TOAST ====================
 
+sub OnToastText()
+    ShowToast(m.top.toastText)
+end sub
+
 sub ShowToast(msg as String)
     m.toastLabel.text = msg
     m.toastBg.visible = true
@@ -611,6 +624,11 @@ sub HandleOkAction()
     end if
     if m.previewIdx >= 0
         PlayPreviewed()
+        return
+    end if
+    ch = m.top.channelData
+    if ch <> invalid and m.lockedId <> invalid and m.lockedId <> "" and m.lockedId = ch.id
+        m.top.unlockRequest = { channelId: ch.id }
         return
     end if
     if m.osdVisible
@@ -863,6 +881,11 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             return true
         end if
         PreviewChannel(1)
+        return true
+    end if
+
+    if key = "options"
+        m.top.menuRequest = true
         return true
     end if
 

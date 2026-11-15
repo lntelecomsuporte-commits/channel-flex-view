@@ -6,7 +6,12 @@ sub init()
     m.pos = 0
     m.display = m.top.findNode("pinDisplay")
     m.errLabel = m.top.findNode("pinErr")
+    m.titleLabel = m.top.findNode("pinTitle")
     Render()
+end sub
+
+sub OnTitle()
+    if m.titleLabel <> invalid then m.titleLabel.text = m.top.title
 end sub
 
 sub Render()
@@ -50,7 +55,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         for i = 0 to 3
             entered = entered + m.digits[i].toStr()
         end for
-        if entered = m.top.expectedPin
+        if m.top.mode = "new" or entered = m.top.expectedPin
+            m.top.enteredPin = entered
             m.top.pinResult = "ok"
         else
             m.errLabel.text = "PIN incorreto"

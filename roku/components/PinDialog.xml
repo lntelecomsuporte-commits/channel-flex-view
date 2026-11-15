@@ -2,13 +2,16 @@
 <component name="PinDialog" extends="Group">
   <interface>
     <field id="expectedPin" type="string" />
+    <field id="mode" type="string" value="verify" />
+    <field id="title" type="string" value="Conteúdo adulto — digite o PIN" onChange="OnTitle" />
+    <field id="enteredPin" type="string" />
     <field id="pinResult" type="string" alwaysNotify="true" />
   </interface>
   <script type="text/brightscript" uri="pkg:/components/PinDialog.brs" />
   <children>
     <Rectangle width="1920" height="1080" color="0x000000cc" />
     <Rectangle width="640" height="320" translation="[640, 380]" color="0x111827ff" />
-    <Label text="Conteúdo adulto — digite o PIN"
+    <Label id="pinTitle" text="Conteúdo adulto — digite o PIN"
            font="font:MediumBoldSystemFont" color="0xffffffff"
            translation="[640, 410]" width="640" horizAlign="center" />
     <Label id="pinDisplay" text="____"

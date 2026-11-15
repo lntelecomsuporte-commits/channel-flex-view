@@ -4,6 +4,7 @@
     <field id="action" type="string" />
     <field id="channelId" type="string" />
     <field id="favoriteId" type="string" />
+    <field id="pin" type="string" />
     <field id="result" type="assocarray" alwaysNotify="true" />
   </interface>
   <script type="text/brightscript" uri="pkg:/components/FavoriteTask.brs" />
