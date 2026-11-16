@@ -36,6 +36,13 @@
       "when": 1794502902852,
       "tag": "0004_channel_source_switcher",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794841203930,
+      "tag": "0005_restrict_epg_presets_read",
+      "breakpoints": true
     }
   ]
 }

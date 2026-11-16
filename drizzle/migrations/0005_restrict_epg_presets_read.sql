@@ -1,0 +1,2 @@
+DROP POLICY IF EXISTS "Anyone authenticated can view epg presets" ON public.epg_url_presets;
+CREATE POLICY "Admins can view epg presets" ON public.epg_url_presets FOR SELECT TO authenticated USING (public.has_role(auth.uid(), 'admin'));
