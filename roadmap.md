@@ -11,6 +11,13 @@
 - [x] Use the panel's self-hosted session for remote commands and reject unauthenticated sends.
 - [x] Run regression tests for individual/global commands and missing sessions (15 tests passed including monitoring regressions).
 
+# Device/session revocation without APK update
+
+- [x] Return `force_close` together with remote signout and revoke removed/blocked devices in session-heartbeat.
+- [x] Prevent Native/Roku heartbeat self-registration from recreating removed device bindings.
+- [x] Add regression tests and verify the panel build (20 focused tests passed; panel build OK).
+- [ ] Next Native APK release: handle `forceSignout` during start/heartbeat, clear saved tokens and return to login instead of only closing the process (deferred to avoid an APK release now).
+
 # Bulk channel source switching
 
 - [x] Add an atomic, permission-checked database operation for backup inversion and origin replacement.

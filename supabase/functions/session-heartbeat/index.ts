@@ -55,6 +55,12 @@ const sanitizeIp = (v: unknown): string | null => {
   return t;
 };
 
+const normalizeDeviceId = (v: unknown): string | null => {
+  if (typeof v !== "string") return null;
+  const clean = v.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+  return clean.length >= 6 ? clean : null;
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -117,8 +123,9 @@ Deno.serve(async (req) => {
     const ipAddress = getClientIp(req);
     const cIpv4 = sanitizeIp(clientIpv4);
     const cIpv6 = sanitizeIp(clientIpv6);
-    const cleanDeviceId = typeof deviceId === "string" && deviceId.length >= 6 ? deviceId : null;
+    const cleanDeviceId = normalizeDeviceId(deviceId);
     const cleanPlatform = ["android", "roku", "web", "pwa"].includes(platform) ? platform : null;
+    const isNativeOrRoku = cleanPlatform === "roku" || /LNTV-Native\//i.test(String(userAgent || uaHeader));
 
     if (platform === "roku" || looksLikeRoku) {
       console.log("[hb][roku]", JSON.stringify({
@@ -143,13 +150,10 @@ Deno.serve(async (req) => {
     };
 
     if (action === "start") {
-      // Antes de criar sessão, checa se há force_signout pendente "no futuro" (qualquer valor)
-      // Como ainda não há sessão, comparamos com "agora menos 5s" pra evitar criar sessão de quem foi deslogado.
+      // Cria a sessão mesmo quando já existe uma revogação pendente. O APK atual só
+      // processa force_close no heartbeat; sem um id ele nunca receberia o comando.
       const justBefore = new Date(Date.now() - 5000).toISOString();
       const shouldKick = await checkForceSignout(justBefore);
-      if (shouldKick) {
-        return json({ forceSignout: true });
-      }
 
       const { data, error } = await adminClient
         .from("user_sessions")
@@ -171,10 +175,10 @@ Deno.serve(async (req) => {
 
       if (error) return json({ error: error.message }, 400);
 
-      // Auto-vincula dispositivo nativo (APK/Roku) ao usuário, se ainda não estiver
-      // vinculado. Respeita limite — se exceder, deixa a sessão rolar mas não cadastra
-      // (admin pode cadastrar manualmente pelo painel via "Dispositivos online").
-      if (cleanDeviceId && (cleanPlatform === "android" || cleanPlatform === "roku")) {
+      // O app Nativo e o Roku já se cadastram pelo device-login. Não recadastrar
+      // aqui: senão remover um aparelho no painel seria desfeito no próximo start.
+      // Mantém o auto-cadastro do APK Release/WebView, que usa o login web.
+      if (!isNativeOrRoku && cleanDeviceId && (cleanPlatform === "android" || cleanPlatform === "roku")) {
         const { data: existing } = await adminClient
           .from("user_devices")
           .select("id, user_id, is_active")
@@ -183,7 +187,6 @@ Deno.serve(async (req) => {
           .maybeSingle();
 
         if (existing) {
-          // Atualiza last_seen se for do mesmo user
           if (existing.user_id === user.id) {
             await adminClient
               .from("user_devices")
@@ -196,7 +199,6 @@ Deno.serve(async (req) => {
               .eq("id", existing.id);
           }
         } else {
-          // Checa limite antes de inserir
           const { data: activeDevs } = await adminClient
             .from("user_devices")
             .select("id")
@@ -221,21 +223,36 @@ Deno.serve(async (req) => {
         }
       }
 
-      return json({ id: data.id });
+      let deviceAllowed = true;
+      if (cleanDeviceId && (cleanPlatform === "android" || cleanPlatform === "roku")) {
+        const { data: binding, error: bindingError } = await adminClient
+          .from("user_devices")
+          .select("id, user_id, is_active")
+          .eq("device_id", cleanDeviceId)
+          .eq("platform", cleanPlatform)
+          .maybeSingle();
+        if (bindingError) return json({ error: bindingError.message }, 400);
+        deviceAllowed = !!binding && binding.user_id === user.id && binding.is_active;
+      }
+
+      return json({
+        id: data.id,
+        ...(shouldKick || !deviceAllowed ? { forceSignout: true, command: "force_close" } : {}),
+      });
     }
 
     if (action === "check") {
       // Endpoint leve para o boot do app conferir se foi deslogado pelo admin
       const justBefore = new Date(Date.now() - 5000).toISOString();
       const shouldKick = await checkForceSignout(justBefore);
-      return json({ forceSignout: shouldKick });
+      return json({ forceSignout: shouldKick, ...(shouldKick ? { command: "force_close" } : {}) });
     }
 
     if (!sessionId) return json({ error: "sessionId é obrigatório" }, 400);
 
     const { data: session, error: sessionError } = await adminClient
       .from("user_sessions")
-      .select("id, started_at, last_command_at")
+      .select("id, started_at, last_command_at, device_id, platform")
       .eq("id", sessionId)
       .eq("user_id", user.id)
       // Expired/ended sessions must be recreated, not refreshed invisibly.
@@ -252,7 +269,29 @@ Deno.serve(async (req) => {
           .from("user_sessions")
           .update({ ended_at: new Date().toISOString() })
           .eq("id", sessionId);
-        return json({ forceSignout: true });
+        return json({ forceSignout: true, command: "force_close" });
+      }
+
+      // Remover/bloquear o vínculo derruba a reprodução no próximo heartbeat.
+      // A resposta inclui os dois formatos: web/Roku usam forceSignout e o APK
+      // Nativo já instalado entende command=force_close.
+      const effectiveDeviceId = cleanDeviceId ?? normalizeDeviceId(session.device_id);
+      const effectivePlatform = cleanPlatform ?? session.platform ?? null;
+      if (effectiveDeviceId && (effectivePlatform === "android" || effectivePlatform === "roku")) {
+        const { data: binding, error: bindingError } = await adminClient
+          .from("user_devices")
+          .select("id, user_id, is_active")
+          .eq("device_id", effectiveDeviceId)
+          .eq("platform", effectivePlatform)
+          .maybeSingle();
+        if (bindingError) return json({ error: bindingError.message }, 400);
+        if (!binding || binding.user_id !== user.id || !binding.is_active) {
+          await adminClient
+            .from("user_sessions")
+            .update({ ended_at: new Date().toISOString() })
+            .eq("id", sessionId);
+          return json({ forceSignout: true, command: "force_close", reason: "device_revoked" });
+        }
       }
 
       const { error } = await adminClient

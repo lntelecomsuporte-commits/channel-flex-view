@@ -152,7 +152,7 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
       .update({ is_active: !d.is_active })
       .eq("id", d.id);
     if (error) return toast.error("Erro: " + error.message);
-    toast.success(d.is_active ? "Dispositivo bloqueado" : "Dispositivo desbloqueado");
+    toast.success(d.is_active ? "Dispositivo bloqueado — o app será fechado em até 30s" : "Dispositivo desbloqueado");
     void reload();
   };
 
@@ -160,7 +160,7 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
     if (!confirm(`Remover ${d.device_label || d.device_name || maskDeviceId(d.device_id)}? O cliente terá que logar novamente.`)) return;
     const { error } = await supabase.from("user_devices").delete().eq("id", d.id);
     if (error) return toast.error("Erro: " + error.message);
-    toast.success("Dispositivo removido");
+    toast.success("Dispositivo removido — o app será fechado em até 30s");
     void reload();
   };
 
