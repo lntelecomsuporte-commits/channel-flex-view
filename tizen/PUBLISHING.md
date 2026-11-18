@@ -99,8 +99,12 @@ Cada TV precisa estar em Developer Mode com o IP do seu servidor liberado:
    *File → New → Tizen Project → Certificate Profile Manager* → escolha
    **Distribution** → **Public Distribution**. Isso gera a chave que a Samsung aceita.
    Sem esse certificado a submissão não passa da primeira tela.
-4. **Política de privacidade com URL pública** — obrigatória. O site do LN TV ainda
-   **não tem** essa página; é preciso criar antes de submeter.
+4. **Política de privacidade com URL pública** — obrigatória. Já publicada em
+   `https://tv2.lntelecom.net/privacidade` (arquivo `src/pages/PrivacyPage.tsx`).
+   Confira o texto antes de submeter: é o que a Samsung vai conferir.
+
+> Textos prontos de metadados, a ordem das etapas e o que falta de material estão
+> em **[STORE-SUBMISSION.md](STORE-SUBMISSION.md)**.
 
 ### Passos na loja
 
@@ -147,4 +151,4 @@ Cada TV precisa estar em Developer Mode com o IP do seu servidor liberado:
 - [ ] Privilégios `avplay` e `tv.inputdevice` presentes
 - [ ] Teste feito em TV física: abre canal, troca de canal, PIN de canal adulto,
       revogação pelo painel derruba a sessão
-- [ ] Política de privacidade publicada (para o Caminho B)
+- [ ] Política de privacidade publicada em `/privacidade` e revisada pela LN Telecom
