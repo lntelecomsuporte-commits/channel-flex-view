@@ -17,3 +17,4 @@
 
 - Tizen heartbeats parse HTTP responses and retain the returned session ID; playback starts after session validation so pairing and remote revocation use the same device binding.
 - Tizen full-screen containers use explicit edge coordinates, not CSS inset, and the AVPlay document stays transparent so older Samsung engines size overlays correctly and do not cover the native video plane.
+- Tizen category assignments are scoped to the signed-in user; absent assignments query active channels under server RLS, preserving admin access without granting subscriber access. Retain Samsung's required application/avplayer object.

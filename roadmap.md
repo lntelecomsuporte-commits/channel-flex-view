@@ -5,6 +5,7 @@
 - [x] Test Samsung PIN and heartbeat handling (30 focused tests; browser remote-key flow passed); provide self-hosted deployment commands.
 - [x] Fix collapsed screen bounds on older Samsung browsers, remove opaque AVPlay backgrounds and retain visible startup failures.
 - [x] Sweep Samsung startup, channel reload, empty-list navigation and AVPlay/HTML5 failures for silent black-screen paths.
+- [x] Restore Samsung channel loading without direct category assignments under server authorization, scope assignments to the signed-in user and keep notices inside the TV viewport (23 tests and simulated remote-key flow passed; physical AVPlay still needs reinstall).
 - [ ] Verify activation and AVPlay on the physical Samsung (blocked: requires updated WGT installation and server deployment).
 
 # Roku

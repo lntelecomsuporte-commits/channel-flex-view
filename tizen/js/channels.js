@@ -11,11 +11,13 @@ LNTV.channels = {
 
   load: function () {
     var self = this;
+    var uid = LNTV.session.userId();
+    if (!uid) { self.list = []; return Promise.reject(new Error("Sessão não autenticada")); }
     // 1. categorias autorizadas
     return LNTV.sb.get("categories?select=id,requires_pin", true).then(function (categories) {
       self.protectedCategories = {};
       (categories || []).forEach(function (c) { if (c.requires_pin) self.protectedCategories[c.id] = true; });
-      return LNTV.sb.get("user_category_access?select=category_id&is_active=eq.true", true);
+      return LNTV.sb.get("user_category_access?select=category_id&user_id=eq." + encodeURIComponent(uid) + "&is_active=eq.true", true);
     })
       .then(function (rows) {
         var directIds = (rows || []).map(function (r) { return r.category_id; });
@@ -31,10 +33,12 @@ LNTV.channels = {
           });
       })
       .then(function (catIds) {
-        if (!catIds.length) { self.list = []; return []; }
+        // Sem vínculos diretos, deixa a autorização do servidor filtrar a lista.
+        // Administradores podem ler canais sem categorias atribuídas; assinantes
+        // continuam sujeitos às políticas de acesso do servidor.
         var q = "channels?select=id,name,channel_number,stream_url,stream_format,logo_url,logo_source_url,category_id,epg_channel_id,is_active,force_proxy_native,is_adult"
               + "&is_active=eq.true"
-              + "&category_id=in.(" + catIds.join(",") + ")"
+              + (catIds.length ? "&category_id=in.(" + catIds.join(",") + ")" : "")
               + "&order=channel_number.asc";
         return LNTV.sb.get(q, true);
       })

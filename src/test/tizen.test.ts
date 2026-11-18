@@ -75,6 +75,40 @@ describe('Samsung session presence', () => {
 });
 
 describe('Samsung startup', () => {
+  it('requests server-authorized active channels when no categories are assigned', async () => {
+    const { app } = setup();
+    app.sb.get.mockImplementation(async (path: string) => path.startsWith('channels?')
+      ? [{ id: 'open', channel_number: 1 }, { id: 'adult', channel_number: 2, is_adult: true }]
+      : []);
+    const channels = await app.channels.load();
+    expect(channels.map((ch: { id: string }) => ch.id)).toEqual(['open', 'adult']);
+    const query = app.sb.get.mock.calls.find(([path]: [string]) => path.startsWith('channels?'))?.[0];
+    expect(query).toContain('&is_active=eq.true&order=channel_number.asc');
+    expect(query).not.toContain('category_id=in.');
+    expect(app.channels.isRestricted(channels[1])).toBe(true);
+    expect(app.sb.get).toHaveBeenCalledWith('user_category_access?select=category_id&user_id=eq.user-1&is_active=eq.true', true);
+  });
+  it('preserves direct and included category filters', async () => {
+    const { app } = setup();
+    app.sb.get.mockImplementation(async (path: string) => {
+      if (path.startsWith('user_category_access?')) return [{ category_id: 'sports' }];
+      if (path.startsWith('category_includes?')) return [{ included_category_id: 'open-tv' }];
+      return [];
+    });
+    await app.channels.load();
+    const query = app.sb.get.mock.calls.find(([path]: [string]) => path.startsWith('channels?'))?.[0];
+    expect(query).toContain('&category_id=in.(sports,open-tv)');
+  });
+  it('keeps an empty lineup when the server returns no authorized channels', async () => {
+    const { app } = setup(); app.sb.get.mockResolvedValue([]);
+    expect(await app.channels.load()).toEqual([]);
+    expect(app.channels.list).toEqual([]);
+  });
+  it('does not request channels without a signed-in user', async () => {
+    const { app } = setup(); app.session.userId = () => null;
+    await expect(app.channels.load()).rejects.toThrow('Sessão não autenticada');
+    expect(app.sb.get).not.toHaveBeenCalled();
+  });
   function startup(ok: boolean) {
     document.body.innerHTML = '<div id="screen-login"></div><div id="screen-player" class="hidden"></div>';
     const app: Record<string, any> = {
