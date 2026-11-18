@@ -23,8 +23,9 @@ LNTV.player = {
 
   /* ---------------- Public tune API ---------------- */
 
-  tuneByIndex: function (idx) {
+  tuneByIndex: function (idx, delayMs) {
     if (idx < 0 || idx >= LNTV.channels.list.length) return;
+    if (this._zapT) { clearTimeout(this._zapT); this._zapT = null; }
     this.stop();
     this.index = idx;
     this.current = LNTV.channels.list[idx];
@@ -32,7 +33,12 @@ LNTV.player = {
     document.getElementById("channel-lock").classList.toggle("hidden", !this._locked);
     this._retries = 0;
     LNTV.toast.hide();
-    if (!this._locked) this._play();
+    if (!this._locked) {
+      if (delayMs) {
+        var self = this, ch = this.current;
+        this._zapT = setTimeout(function () { self._zapT = null; if (self.current === ch && !self._locked) self._play(); }, delayMs);
+      } else this._play();
+    }
     LNTV.osd.show(this.current);
     LNTV.hb.setChannel(this._locked ? null : this.current);
     this._statsCache.channelName = this.current.name || "";
@@ -69,7 +75,7 @@ LNTV.player = {
     var max = LNTV.channels.list.length - 1;
     if (next < 0) next = max;
     if (next > max) next = 0;
-    this.tuneByIndex(next);
+    this.tuneByIndex(next, 300);
   },
 
   /* Preview canal (← / →): mostra OSD do canal seguinte, sintoniza após 1500ms */

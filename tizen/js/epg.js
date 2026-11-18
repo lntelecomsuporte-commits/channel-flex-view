@@ -1,38 +1,43 @@
-/* LN TV — EPG (XMLTV parser) */
+/* LN TV — EPG (JSON pré-processado) */
 window.LNTV = window.LNTV || {};
 
 LNTV.epg = {
   _cache: null,
   _expiresAt: 0,
-  _ttl: 10 * 60 * 1000,
+  _ttl: 60 * 60 * 1000,
+  _pending: null,
 
+  // Lê o JSON pré-processado pelo servidor (sem DOMParser, que travava a TV).
   load: function () {
     var self = this;
     if (self._cache && Date.now() < self._expiresAt) return Promise.resolve(self._cache);
-    return fetch(LNTV.EPG_URL).then(function (r) { return r.ok ? r.text() : ""; })
-      .then(function (xml) {
+    if (self._pending) return self._pending;
+    self._pending = fetch(LNTV.EPG_URL).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        var src = (data && data.byChannel) || {};
         var byChan = {};
-        if (!xml) { self._cache = byChan; self._expiresAt = Date.now() + 60000; return byChan; }
-        try {
-          var doc = new DOMParser().parseFromString(xml, "text/xml");
-          var progs = doc.getElementsByTagName("programme");
-          for (var i = 0; i < progs.length; i++) {
-            var p = progs[i];
-            var ch = p.getAttribute("channel") || "";
-            var start = self._parse(p.getAttribute("start"));
-            var stop = self._parse(p.getAttribute("stop"));
-            var title = "";
-            var t = p.getElementsByTagName("title")[0];
-            if (t) title = (t.textContent || "").trim();
-            if (!ch || !start || !stop) continue;
-            if (!byChan[ch]) byChan[ch] = [];
-            byChan[ch].push({ start: start, stop: stop, title: title });
+        for (var ch in src) {
+          if (!src.hasOwnProperty(ch)) continue;
+          var arr = src[ch] || [], out = [];
+          for (var i = 0; i < arr.length; i++) {
+            var st = Date.parse(arr[i].start_date);
+            if (!isNaN(st)) out.push({ start: st, title: arr[i].title || "" });
           }
-        } catch (e) {}
+          out.sort(function (x, y) { return x.start - y.start; });
+          for (var j = 0; j < out.length; j++) out[j].stop = out[j + 1] ? out[j + 1].start : out[j].start + 2 * 3600000;
+          byChan[ch] = out;
+        }
         self._cache = byChan;
-        self._expiresAt = Date.now() + self._ttl;
+        self._expiresAt = Date.now() + (data ? self._ttl : 60000);
+        self._pending = null;
         return byChan;
-      }).catch(function () { return {}; });
+      }).catch(function () {
+        self._pending = null;
+        self._cache = self._cache || {};
+        self._expiresAt = Date.now() + 60000;
+        return self._cache;
+      });
+    return self._pending;
   },
 
   // "20260616120000 +0000" → ms

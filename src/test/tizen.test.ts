@@ -34,9 +34,11 @@ describe('Samsung protected channels', () => {
     expect(app.player._locked).toBe(true); expect(app.player._play).not.toHaveBeenCalled();
   });
   it('allows channel up and down through locked channels', () => {
+    vi.useFakeTimers();
     const { app } = setup(); app.player.tuneByIndex(1); app.player.step(1);
     expect(app.player.current.id).toBe('category'); app.player.step(1);
-    expect(app.player.current.id).toBe('open'); expect(app.player._play).toHaveBeenCalledTimes(1);
+    expect(app.player.current.id).toBe('open'); expect(app.player._play).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(300); expect(app.player._play).toHaveBeenCalledTimes(1);
   });
   it('only accepts the account PIN after OK', async () => {
     const { app, prompt } = setup(); app.player.tuneByIndex(1); app.player.unlock();

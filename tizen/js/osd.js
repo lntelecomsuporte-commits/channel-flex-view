@@ -82,24 +82,30 @@ LNTV.list = {
   _open: false,
   _focused: 0,
 
+  _builtFor: null,
+  _builtKey: "",
+
   open: function (currentIndex) {
     this._open = true;
-    this._focused = currentIndex || 0;
     var ul = document.getElementById("cl-ul");
-    ul.innerHTML = "";
     var chs = LNTV.channels.list;
-    for (var i = 0; i < chs.length; i++) {
-      var ch = chs[i];
-      var li = document.createElement("li");
-      li.setAttribute("data-idx", i);
-      var fav = LNTV.channels.isFavorite(ch.id) ? "★ " : "";
-      li.innerHTML = '<span class="num">' + (ch.channel_number != null ? ch.channel_number : "") + '</span>'
-                   + '<img src="' + LNTV.logos.url(ch) + '" onerror="this.style.visibility=\'hidden\'">'
-                   + '<span>' + fav + (ch.name || "") + '</span>';
-      ul.appendChild(li);
+    var key = chs.length + "|" + (LNTV.channels.favorites ? JSON.stringify(LNTV.channels.favorites) : "");
+    if (this._builtFor !== chs || this._builtKey !== key) {
+      var html = [];
+      for (var i = 0; i < chs.length; i++) {
+        var ch = chs[i];
+        var fav = LNTV.channels.isFavorite(ch.id) ? "\u2605 " : "";
+        html.push('<li data-idx="' + i + '"><span class="num">' + (ch.channel_number != null ? ch.channel_number : "") + '</span>'
+          + '<img src="' + LNTV.logos.url(ch) + '" onerror="this.style.visibility=\'hidden\'">'
+          + '<span>' + fav + (ch.name || "") + '</span></li>');
+      }
+      ul.innerHTML = html.join("");
+      this._builtFor = chs; this._builtKey = key;
+      this._lis = ul.getElementsByTagName("li");
+      this._prevEl = null;
     }
-    this._setFocus(this._focused);
     document.getElementById("channel-list").classList.remove("hidden");
+    this._setFocus(currentIndex || 0);
   },
 
   close: function () {
@@ -121,10 +127,13 @@ LNTV.list = {
 
   _setFocus: function (i) {
     this._focused = i;
-    var ul = document.getElementById("cl-ul");
-    var lis = ul.getElementsByTagName("li");
-    for (var k = 0; k < lis.length; k++) lis[k].classList.remove("focused");
-    var el = lis[i];
-    if (el) { el.classList.add("focused"); el.scrollIntoView({ block: "nearest" }); }
+    if (!this._lis) this._lis = document.getElementById("cl-ul").getElementsByTagName("li");
+    if (this._prevEl) this._prevEl.classList.remove("focused");
+    var el = this._lis[i];
+    if (el) {
+      el.classList.add("focused");
+      if (el.scrollIntoViewIfNeeded) el.scrollIntoViewIfNeeded(false); else el.scrollIntoView(false);
+    }
+    this._prevEl = el || null;
   }
 };
