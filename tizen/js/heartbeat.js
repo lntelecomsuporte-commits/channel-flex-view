@@ -59,7 +59,12 @@ LNTV.hb = {
     return response.json().then(function (j) {
       if (j.forceSignout || j.command === "force_close") { self._signout(); return null; }
       if (j.command === "reload_channels") {
-        LNTV.channels.load().then(function () { LNTV.player.tuneByIndex(0); });
+        LNTV.channels.load().then(function (chs) {
+          if (!self._token) return;
+          LNTV.player.stop();
+          if (chs.length) LNTV.player.tuneByIndex(0);
+          else { self.setChannel(null); LNTV.toast.show("Nenhum canal liberado para este usuário", 0); }
+        }).catch(function () { LNTV.toast.show("Erro ao atualizar canais", 0); });
       }
       return j;
     });
@@ -83,7 +88,12 @@ LNTV.hb = {
   beat: function () {
     if (!this._token || this._starting || this._busy) return;
     var self = this;
-    if (!self._id) { self.start(); return; }
+    if (!self._id) {
+      self.start().then(function (ok) {
+        if (ok && !LNTV.player.current && LNTV.channels.list.length) LNTV.player.tuneByIndex(0);
+      });
+      return;
+    }
     self._busy = true;
     LNTV.sb.fn("session-heartbeat", self._payload("heartbeat")).then(function (r) {
       if (r.status === 404) { self._id = null; return self.start(); }

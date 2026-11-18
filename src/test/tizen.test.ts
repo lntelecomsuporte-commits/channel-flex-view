@@ -10,7 +10,7 @@ function setup() {
   const app: Record<string, any> = {
     sb: { get: vi.fn(async () => [{ adult_pin: '2468' }]) },
     session: { userId: () => 'user-1' },
-    modal: { prompt }, osd: { show: vi.fn() }, toast: { show: vi.fn() }, hb: { setChannel: vi.fn() },
+    modal: { prompt }, osd: { show: vi.fn() }, toast: { show: vi.fn(), hide: vi.fn() }, hb: { setChannel: vi.fn() },
   };
   load('channels', app); load('player', app);
   app.player.stop = vi.fn(); app.player._play = vi.fn();
@@ -106,5 +106,37 @@ describe('Samsung startup', () => {
       return [];
     });
     await expect(app.channels.load()).rejects.toThrow('channels-offline');
+  });
+});
+
+describe('Samsung playback recovery', () => {
+  it('does not preview a nonexistent channel in an empty lineup', () => {
+    const { app } = setup(); app.channels.list = [];
+    app.player.preview(1);
+    expect(app.osd.show).not.toHaveBeenCalled();
+    expect(app.player._previewIdx).toBe(-1);
+  });
+  it('retries playback errors and cancels the retry once playing', async () => {
+    vi.useFakeTimers(); const { app } = setup();
+    app.player._onError();
+    expect(app.player._statsCache.state).toBe('error');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(app.player._play).toHaveBeenCalledOnce();
+    app.player._onError(); app.player._onPlaying();
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(app.player._play).toHaveBeenCalledOnce();
+    expect(app.player._statsCache.state).toBe('playing');
+  });
+  it('does not play removed channels after an empty remote reload', async () => {
+    vi.useFakeTimers(); const { app } = setup();
+    app.device = { id: () => 'Samsung', name: () => 'Samsung' };
+    app.channels.load = vi.fn(async () => []);
+    app.sb.fn = vi.fn(async () => new Response('{}'));
+    app.player.tuneByIndex = vi.fn(); load('heartbeat', app); app.hb._token = 'test-token';
+    await app.hb._read(new Response(JSON.stringify({ command: 'reload_channels' })));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(app.player.stop).toHaveBeenCalled();
+    expect(app.player.tuneByIndex).not.toHaveBeenCalled();
+    expect(app.hb._watching).toBe(false);
   });
 });

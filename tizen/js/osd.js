@@ -5,6 +5,7 @@ LNTV.osd = {
   _osdTimer: null,
 
   show: function (ch) {
+    if (!ch) return;
     document.getElementById("osd-num").textContent = ch.channel_number != null ? ch.channel_number : "";
     document.getElementById("osd-name").textContent = ch.name || "";
     var img = document.getElementById("osd-logo");
@@ -39,6 +40,11 @@ LNTV.osd = {
 
 LNTV.toast = {
   _t: null,
+  hide: function () {
+    if (this._t) clearTimeout(this._t);
+    this._t = null;
+    document.getElementById("toast").classList.add("hidden");
+  },
   show: function (msg, ms) {
     var el = document.getElementById("toast");
     el.textContent = msg;

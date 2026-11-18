@@ -31,6 +31,7 @@ LNTV.player = {
     this._locked = LNTV.channels.isRestricted(this.current) && !this._unlocked[this.current.id];
     document.getElementById("channel-lock").classList.toggle("hidden", !this._locked);
     this._retries = 0;
+    LNTV.toast.hide();
     if (!this._locked) this._play();
     LNTV.osd.show(this.current);
     LNTV.hb.setChannel(this._locked ? null : this.current);
@@ -73,6 +74,7 @@ LNTV.player = {
 
   /* Preview canal (← / →): mostra OSD do canal seguinte, sintoniza após 1500ms */
   preview: function (delta) {
+    if (!LNTV.channels.list.length) return;
     var max = LNTV.channels.list.length - 1;
     if (this._previewIdx < 0) this._previewIdx = this.index;
     this._previewIdx += delta;
@@ -113,8 +115,10 @@ LNTV.player = {
     var ch = this.current;
     if (!ch || this._locked) return;
     var url = this._resolveUrl(ch);
-    if (!url) { LNTV.toast.show("Canal sem URL"); return; }
+    if (!url) { LNTV.toast.show("Canal sem URL", 0); return; }
     this._statsCache.state = "loading";
+    LNTV.toast.show("Carregando canal…", 0);
+    this._armStall();
 
     if (this._useAvplay()) {
       this._playAvplay(url, ch);
@@ -138,11 +142,11 @@ LNTV.player = {
       webapis.avplay.setListener({
         onbufferingstart: function () { self._statsCache.state = "buffering"; self._armStall(); },
         onbufferingprogress: function (p) { self._statsCache.buffer = p; },
-        onbufferingcomplete: function () { self._statsCache.state = "playing"; self._clearStall(); self._retries = 0; },
-        oncurrentplaytime: function () { self._statsCache.state = "playing"; },
+        onbufferingcomplete: function () {},
+        oncurrentplaytime: function () { if (generation === self._generation) self._onPlaying(); },
         onevent: function () {},
         onerror: function (e) { self._onError(e); },
-        onstreamcompleted: function () { /* livestream end */ },
+        onstreamcompleted: function () { if (generation === self._generation) self._onError(); },
         ondrmevent: function () {},
         onsubtitlechange: function () {}
       });
@@ -161,10 +165,11 @@ LNTV.player = {
     av.classList.add("hidden");
     v.classList.remove("hidden");
     v.src = url;
-    v.play().catch(function () {});
     var self = this;
+    var generation = self._generation;
+    v.play().catch(function () { if (generation === self._generation) self._onError(); });
     v.onerror = function () { self._onError("html5-error"); };
-    v.oncanplay = function () { self._statsCache.state = "playing"; };
+    v.onplaying = function () { if (generation === self._generation) self._onPlaying(); };
   },
 
   _loadTracks: function () {
@@ -250,10 +255,23 @@ LNTV.player = {
 
   /* ---------------- Retry / Stall ---------------- */
 
+  _onPlaying: function () {
+    if (this._locked) return;
+    if (this._statsCache.state !== "playing") LNTV.toast.hide();
+    this._statsCache.state = "playing";
+    this._retries = 0;
+    this._clearStall();
+    if (this._retryT) clearTimeout(this._retryT);
+    this._retryT = null;
+  },
+
   _onError: function () {
     if (this._locked) return;
     var self = this;
+    self._clearStall();
+    if (self._retryT) clearTimeout(self._retryT);
     self._statsCache.state = "error";
+    LNTV.toast.show("Não foi possível reproduzir este canal. Tentando novamente…", 0);
     if (this._retries >= 6) {
       // sonda lenta a cada 30s
       this._retryT = setTimeout(function () { self._retries = 0; self._play(); }, 30000);

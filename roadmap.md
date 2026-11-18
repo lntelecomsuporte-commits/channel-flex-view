@@ -4,6 +4,7 @@
 - [x] Enforce restricted-channel PIN with free zapping and cancellation staying on the locked channel.
 - [x] Test Samsung PIN and heartbeat handling (30 focused tests; browser remote-key flow passed); provide self-hosted deployment commands.
 - [x] Fix collapsed screen bounds on older Samsung browsers, remove opaque AVPlay backgrounds and retain visible startup failures.
+- [x] Sweep Samsung startup, channel reload, empty-list navigation and AVPlay/HTML5 failures for silent black-screen paths.
 - [ ] Verify activation and AVPlay on the physical Samsung (blocked: requires updated WGT installation and server deployment).
 
 # Roku
