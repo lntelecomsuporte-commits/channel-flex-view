@@ -83,10 +83,12 @@ LNTV.app = {
     LNTV.channels.load().then(function (chs) {
       if (!chs || !chs.length) { LNTV.toast.show("Nenhum canal liberado para este usuário", 0); return; }
       setTimeout(function () { LNTV.update.check(); }, 5000);
-      return LNTV.hb.start().then(function (ok) {
-        if (ok) LNTV.player.tuneByIndex(0);
-        else if (document.getElementById("screen-login").classList.contains("hidden")) {
-          LNTV.toast.show("Não foi possível validar a sessão. Feche e abra o app novamente.", 0);
+      // Sintoniza imediatamente (igual Android/Roku); a sessão valida em segundo plano
+      // e, se o servidor revogar o aparelho, o heartbeat para o player e volta ao login.
+      LNTV.player.tuneByIndex(0);
+      LNTV.hb.start().then(function (ok) {
+        if (!ok && document.getElementById("screen-login").classList.contains("hidden")) {
+          LNTV.toast.show("Sessão não confirmada pelo servidor — tentando novamente…", 6000);
         }
       });
     }).catch(function (e) {

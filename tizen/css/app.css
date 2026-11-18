@@ -48,8 +48,7 @@ html, body { width:100%; height:100%; overflow:hidden; background:transparent; c
   font-size:96px; font-weight:900; color:#fff; font-family:monospace; }
 
 /* Toast */
-.toast { position:absolute; top:60px; left:50%; -webkit-transform:translateX(-50%); transform:translateX(-50%);
-  width:90%; max-width:1400px; text-align:center; white-space:normal; word-wrap:break-word; z-index:10;
+.toast { position:absolute; top:60px; left:80px; right:80px; text-align:center; white-space:normal; word-wrap:break-word; z-index:10;
   background:#000d; border:1px solid #dc2626; padding:14px 28px;
   border-radius:12px; font-size:24px; color:#fff; }
 

@@ -15,6 +15,6 @@
 - Send admin app commands through the self-hosted client and require its authenticated user before inserting, so command ownership matches the panel session and RLS.
 - Restricted channels (is_adult or category requires_pin) show a lock screen without blocking channel up/down; the PIN prompt opens only on OK and cancelling keeps the user on the locked channel, consistently across web, native Android, Roku and Tizen.
 
-- Tizen heartbeats parse HTTP responses and retain the returned session ID; playback starts after session validation so pairing and remote revocation use the same device binding.
+- Tizen heartbeats parse HTTP responses and retain the returned session ID; the first channel tunes right after the lineup loads (like Android/Roku) and heartbeat runs in background, stopping playback on revocation, so a slow server never leaves a black screen.
 - Tizen full-screen containers use explicit edge coordinates, not CSS inset, and the AVPlay document stays transparent so older Samsung engines size overlays correctly and do not cover the native video plane.
 - Tizen category assignments are scoped to the signed-in user; absent assignments query active channels under server RLS, preserving admin access without granting subscriber access. Retain Samsung's required application/avplayer object.

@@ -265,13 +265,16 @@ LNTV.player = {
     this._retryT = null;
   },
 
-  _onError: function () {
+  _onError: function (e) {
     if (this._locked) return;
     var self = this;
     self._clearStall();
     if (self._retryT) clearTimeout(self._retryT);
     self._statsCache.state = "error";
-    LNTV.toast.show("Não foi possível reproduzir este canal. Tentando novamente…", 0);
+    var why = "";
+    try { why = typeof e === "string" ? e : (e && (e.name || e.message || e.type)) || ""; } catch (x) {}
+    var mode = self._useAvplay() ? "AVPlay" : "HTML5";
+    LNTV.toast.show("Não foi possível reproduzir este canal (" + mode + (why ? ": " + why : "") + "). Tentando novamente…", 0);
     if (this._retries >= 6) {
       // sonda lenta a cada 30s
       this._retryT = setTimeout(function () { self._retries = 0; self._play(); }, 30000);

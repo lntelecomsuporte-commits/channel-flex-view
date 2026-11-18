@@ -119,16 +119,24 @@ describe('Samsung startup', () => {
     load('app', app);
     return app;
   }
-  it('starts the first channel only after session validation succeeds', async () => {
-    vi.useFakeTimers(); const app = startup(true); app.app.enterApp();
+  it('starts the first channel right after channels load, without waiting for the session check', async () => {
+    vi.useFakeTimers(); const app = startup(true);
+    app.hb.start = vi.fn(() => new Promise(() => {}));
+    app.app.enterApp();
     await vi.advanceTimersByTimeAsync(0);
     expect(app.player.tuneByIndex).toHaveBeenCalledWith(0);
   });
-  it('does not play when session validation fails', async () => {
+  it('keeps playing and warns when the session check fails', async () => {
     vi.useFakeTimers(); const app = startup(false); app.app.enterApp();
     await vi.advanceTimersByTimeAsync(0);
-    expect(app.player.tuneByIndex).not.toHaveBeenCalled();
+    expect(app.player.tuneByIndex).toHaveBeenCalledWith(0);
     expect(app.toast.show).toHaveBeenCalled();
+  });
+  it('declares the AVPlay and remote-control privileges Samsung requires', () => {
+    const xml = readFileSync('tizen/config.xml', 'utf8');
+    expect(xml).toContain('http://developer.samsung.com/privilege/avplay');
+    expect(xml).toContain('http://tizen.org/privilege/tv.inputdevice');
+    expect(xml).not.toContain('allow-navigation');
   });
   it('propagates channel request failures instead of treating them as an empty lineup', async () => {
     const { app } = setup();
