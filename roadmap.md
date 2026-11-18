@@ -7,6 +7,7 @@
 - [x] Sweep Samsung startup, channel reload, empty-list navigation and AVPlay/HTML5 failures for silent black-screen paths.
 - [x] Restore Samsung channel loading without direct category assignments under server authorization, scope assignments to the signed-in user and keep notices inside the TV viewport (23 tests and simulated remote-key flow passed; physical AVPlay still needs reinstall).
 - [ ] Verify activation and AVPlay on the physical Samsung (blocked: requires updated WGT installation and server deployment).
+- [ ] Publish the Samsung app: server-hosted package plus Seller Office submission (blocked: needs the distributor certificate, a public privacy-policy URL, and content-rights proof from the user).
 
 # Roku
 

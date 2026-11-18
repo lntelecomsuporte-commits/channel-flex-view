@@ -1,0 +1,85 @@
+name: Build Tizen App
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tizen/**'
+      - '.github/workflows/tizen-app.yml'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    name: Package Samsung app
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set version from run number
+        run: |
+          VERSION_CODE=${{ github.run_number }}
+          VERSION_NAME="1.0.${{ github.run_number }}"
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
+
+      - name: Stamp version into the app
+        run: |
+          sed -i -E "s|(<widget[^>]*version=\")[^\"]*(\")|\1$VERSION_NAME\2|" tizen/config.xml
+          sed -i -E "s|^LNTV\.APP_VERSION = .*|LNTV.APP_VERSION = \"$VERSION_NAME\";|" tizen/js/config.js
+          sed -i -E "s|^LNTV\.APP_VERSION_CODE = .*|LNTV.APP_VERSION_CODE = $VERSION_CODE;|" tizen/js/config.js
+          grep -o 'version="[^"]*"' tizen/config.xml
+          grep -E '^LNTV\.APP_VERSION' tizen/js/config.js
+
+      - name: Package .wgt (unsigned)
+        run: |
+          mkdir -p out
+          (cd tizen && zip -r ../out/lntv-tizen.wgt config.xml index.html icon.png css js)
+          unzip -l out/lntv-tizen.wgt
+          ls -lh out/lntv-tizen.wgt
+
+      - name: Generate tizen-version.json
+        run: |
+          cat > out/tizen-version.json <<EOF
+          {
+            "tizenVersionCode": ${VERSION_CODE},
+            "tizenVersionName": "${VERSION_NAME}",
+            "tizenUrl": "https://tv2.lntelecom.net/downloads/lntv-tizen.wgt",
+            "tizenNotes": "Build #${{ github.run_number }} — ${{ github.event.head_commit.message }}"
+          }
+          EOF
+          cat out/tizen-version.json
+
+      - name: Upload Tizen artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lntv-tizen
+          path: |
+            out/lntv-tizen.wgt
+            out/tizen-version.json
+          retention-days: 30
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: tizen-v${{ env.VERSION_NAME }}
+          name: LN TV Samsung v${{ env.VERSION_NAME }} (build ${{ github.run_number }})
+          body: |
+            Build Samsung #${{ github.run_number }}
+            Commit: ${{ github.event.head_commit.message }}
+
+            ATENÇÃO: este .wgt está SEM ASSINATURA.
+            Antes de instalar na TV, assine com o seu perfil do Tizen Studio:
+              tizen package -t wgt -s LNTV -- lntv-tizen.wgt
+            Ou instale direto pelo Tizen Studio (botão direito no projeto → Run As → 1 Tizen Web Application).
+          files: |
+            out/lntv-tizen.wgt
+            out/tizen-version.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

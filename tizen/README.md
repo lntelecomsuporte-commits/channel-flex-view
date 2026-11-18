@@ -134,9 +134,11 @@ location = /version-tizen.json {
 
 (O `location ^~ /downloads/` já existente cobre o `.wgt`.)
 
-## Distribuição final (Samsung Apps TV Seller Office)
+## Publicar
 
-1. Cadastro gratuito em https://seller.samsungapps.com
-2. Submeter `LNTVtizen0.wgt` assinado com perfil de **distribuidor público**.
-3. Metadados PT-BR, screenshots 1920×1080, ícone 512×512.
-4. Aprovação 2–4 semanas. Enquanto isso, segue via Developer Mode.
+Ver **[PUBLISHING.md](PUBLISHING.md)** — os dois caminhos possíveis:
+publicar no seu próprio servidor (`tv2.lntelecom.net`) ou submeter à loja
+Samsung Apps (Seller Office), com todos os pré-requisitos de cada um.
+
+O GitHub Actions (`Build Tizen App`) gera o pacote a cada alteração em `tizen/`
+e publica uma Release com `lntv-tizen.wgt` + `tizen-version.json`.
