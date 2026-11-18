@@ -1,9 +1,9 @@
 /* LN TV — Tizen Web App */
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { width:1920px; height:1080px; overflow:hidden; background:#000; color:#fff;
+html, body { width:1920px; height:1080px; overflow:hidden; background:transparent; color:#fff;
   font-family: "Tizen Sans", Arial, sans-serif; -webkit-user-select:none; user-select:none; }
 .hidden { display:none !important; }
-.screen { position:absolute; inset:0; }
+.screen { position:absolute; top:0; right:0; bottom:0; left:0; width:1920px; height:1080px; }
 
 /* Login */
 #screen-login { background:#0a0a0a; display:flex; align-items:center; justify-content:center; }
@@ -28,7 +28,7 @@ html, body { width:1920px; height:1080px; overflow:hidden; background:#000; colo
 .dev-line { font-size:14px; color:#444; margin-top:24px; font-family: monospace; }
 
 /* Player */
-#screen-player { background:#000; }
+#screen-player { background:transparent; }
 #avplay, #htmlplayer { position:absolute; top:0; left:0; width:1920px; height:1080px; }
 
 /* OSD */
@@ -75,7 +75,7 @@ html, body { width:1920px; height:1080px; overflow:hidden; background:#000; colo
 .menu li.focused { background:#dc2626; color:#fff; }
 
 /* Modal */
-.modal { position:absolute; inset:0; background:#000c; display:flex;
+.modal { position:absolute; top:0; right:0; bottom:0; left:0; background:#000c; display:flex;
   align-items:center; justify-content:center; }
 .modal-box { background:#111; border:1px solid #222; border-radius:16px;
   padding:36px; min-width:600px; max-width:900px; }
@@ -102,5 +102,5 @@ html, body { width:1920px; height:1080px; overflow:hidden; background:#000; colo
   font-size:18px; color:#0f0; line-height:1.6; min-width:380px; }
 
 :root { --lock-background:#000; --lock-foreground:#fff; --lock-primary:#dc2626; }
-.channel-lock { position:absolute; inset:0; background:var(--lock-background); color:var(--lock-foreground); display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:42px; gap:24px; }
+.channel-lock { position:absolute; top:0; right:0; bottom:0; left:0; background:var(--lock-background); color:var(--lock-foreground); display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:42px; gap:24px; }
 .lock-symbol { font-size:96px; color:var(--lock-primary); }

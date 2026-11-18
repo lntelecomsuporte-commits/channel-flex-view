@@ -73,3 +73,38 @@ describe('Samsung session presence', () => {
     expect(app.app.showLogin).toHaveBeenCalledOnce(); expect(app.hb._id).toBeNull();
   });
 });
+
+describe('Samsung startup', () => {
+  function startup(ok: boolean) {
+    document.body.innerHTML = '<div id="screen-login"></div><div id="screen-player" class="hidden"></div>';
+    const app: Record<string, any> = {
+      channels: { load: vi.fn(async () => [{ id: 'open' }]) },
+      hb: { start: vi.fn(async () => ok) }, player: { tuneByIndex: vi.fn() },
+      toast: { show: vi.fn() }, update: { check: vi.fn() },
+    };
+    load('app', app);
+    return app;
+  }
+  it('starts the first channel only after session validation succeeds', async () => {
+    vi.useFakeTimers(); const app = startup(true); app.app.enterApp();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(app.player.tuneByIndex).toHaveBeenCalledWith(0);
+  });
+  it('does not play when session validation fails', async () => {
+    vi.useFakeTimers(); const app = startup(false); app.app.enterApp();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(app.player.tuneByIndex).not.toHaveBeenCalled();
+    expect(app.toast.show).toHaveBeenCalled();
+  });
+  it('propagates channel request failures instead of treating them as an empty lineup', async () => {
+    const { app } = setup();
+    app.sb.get.mockImplementation(async (path: string, strict: boolean) => {
+      if (path.startsWith('categories?')) return [];
+      if (path.startsWith('user_category_access?')) return [{ category_id: 'cat' }];
+      if (path.startsWith('category_includes?')) return [];
+      if (strict) throw new Error('channels-offline');
+      return [];
+    });
+    await expect(app.channels.load()).rejects.toThrow('channels-offline');
+  });
+});

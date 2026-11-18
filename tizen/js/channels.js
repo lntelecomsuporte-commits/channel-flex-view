@@ -15,13 +15,13 @@ LNTV.channels = {
     return LNTV.sb.get("categories?select=id,requires_pin", true).then(function (categories) {
       self.protectedCategories = {};
       (categories || []).forEach(function (c) { if (c.requires_pin) self.protectedCategories[c.id] = true; });
-      return LNTV.sb.get("user_category_access?select=category_id&is_active=eq.true");
+      return LNTV.sb.get("user_category_access?select=category_id&is_active=eq.true", true);
     })
       .then(function (rows) {
         var directIds = (rows || []).map(function (r) { return r.category_id; });
         if (!directIds.length) return [];
         // 2. category_includes — pega derivadas
-        return LNTV.sb.get("category_includes?category_id=in.(" + directIds.join(",") + ")&select=included_category_id")
+        return LNTV.sb.get("category_includes?category_id=in.(" + directIds.join(",") + ")&select=included_category_id", true)
           .then(function (incl) {
             var all = directIds.slice();
             (incl || []).forEach(function (r) {
@@ -36,7 +36,7 @@ LNTV.channels = {
               + "&is_active=eq.true"
               + "&category_id=in.(" + catIds.join(",") + ")"
               + "&order=channel_number.asc";
-        return LNTV.sb.get(q);
+        return LNTV.sb.get(q, true);
       })
       .then(function (chs) {
         self.list = chs || [];

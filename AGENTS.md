@@ -16,3 +16,4 @@
 - Restricted channels (is_adult or category requires_pin) show a lock screen without blocking channel up/down; the PIN prompt opens only on OK and cancelling keeps the user on the locked channel, consistently across web, native Android, Roku and Tizen.
 
 - Tizen heartbeats parse HTTP responses and retain the returned session ID; playback starts after session validation so pairing and remote revocation use the same device binding.
+- Tizen full-screen containers use explicit edge coordinates, not CSS inset, and the AVPlay document stays transparent so older Samsung engines size overlays correctly and do not cover the native video plane.

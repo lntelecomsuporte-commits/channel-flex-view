@@ -44,7 +44,7 @@ LNTV.toast = {
     el.textContent = msg;
     el.classList.remove("hidden");
     if (this._t) clearTimeout(this._t);
-    this._t = setTimeout(function () { el.classList.add("hidden"); }, ms || 2500);
+    this._t = ms === 0 ? null : setTimeout(function () { el.classList.add("hidden"); }, ms || 2500);
   }
 };
 

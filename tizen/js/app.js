@@ -81,11 +81,16 @@ LNTV.app = {
     document.getElementById("screen-login").classList.add("hidden");
     document.getElementById("screen-player").classList.remove("hidden");
     LNTV.channels.load().then(function (chs) {
-      if (!chs || !chs.length) { LNTV.toast.show("Nenhum canal disponível"); return; }
-      LNTV.hb.start().then(function (ok) { if (ok) LNTV.player.tuneByIndex(0); });
+      if (!chs || !chs.length) { LNTV.toast.show("Nenhum canal liberado para este usuário", 0); return; }
       setTimeout(function () { LNTV.update.check(); }, 5000);
+      return LNTV.hb.start().then(function (ok) {
+        if (ok) LNTV.player.tuneByIndex(0);
+        else if (document.getElementById("screen-login").classList.contains("hidden")) {
+          LNTV.toast.show("Não foi possível validar a sessão. Feche e abra o app novamente.", 0);
+        }
+      });
     }).catch(function (e) {
-      LNTV.toast.show("Erro ao carregar canais");
+      LNTV.toast.show("Erro ao carregar canais. Verifique a conexão e abra o app novamente.", 0);
     });
   },
 
