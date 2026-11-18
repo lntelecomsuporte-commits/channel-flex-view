@@ -42,8 +42,8 @@ Deno.serve(async (req) => {
     if (!device_id || device_id.length < 6) {
       return json({ error: "device_id inválido" }, 400);
     }
-    if (platform !== "android" && platform !== "roku") {
-      return json({ error: "platform deve ser android ou roku" }, 400);
+    if (platform !== "android" && platform !== "roku" && platform !== "tizen") {
+      return json({ error: "platform deve ser android, roku ou tizen" }, 400);
     }
 
     // 1) Procura o device pré-cadastrado
@@ -114,6 +114,8 @@ Deno.serve(async (req) => {
       access_token: otpData.session.access_token,
       refresh_token: otpData.session.refresh_token,
       user_id: device.user_id,
+      user: otpData.user,
+      expires_in: otpData.session.expires_in,
     });
   } catch (e: any) {
     const message = e?.message || String(e);

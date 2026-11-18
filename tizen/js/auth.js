@@ -29,7 +29,7 @@ LNTV.auth = {
     }).then(function (r) { return r.ok ? r.json() : null; })
       .then(function (j) {
         if (!j || !j.access_token) return false;
-        LNTV.session.save(j.access_token, j.refresh_token, j.user && j.user.id, j.expires_in);
+        LNTV.session.save(j.access_token, j.refresh_token, (j.user && j.user.id) || j.user_id, j.expires_in);
         return true;
       }).catch(function () { return false; });
   },
@@ -59,19 +59,7 @@ LNTV.auth = {
         // fallback: device-auto-login (caso o backend já tenha vinculado)
         return self.autoLogin().then(function (ok) {
           if (ok) return { ok: true };
-          // fallback final: senha direta via Auth
-          return fetch(LNTV.AUTH_URL + "/token?grant_type=password", {
-            method: "POST",
-            headers: { "apikey": LNTV.ANON_KEY, "Content-Type": "application/json" },
-            body: JSON.stringify({ email: email, password: password })
-          }).then(function (r) { return r.ok ? r.json() : null; })
-            .then(function (j) {
-              if (j && j.access_token) {
-                LNTV.session.save(j.access_token, j.refresh_token, j.user && j.user.id, j.expires_in);
-                return { ok: true };
-              }
-              return { ok: false, error: (res.j && res.j.error) || "Credenciais inválidas" };
-            });
+          return { ok: false, error: (res.j && res.j.error) || "Credenciais inválidas" };
         });
       }).catch(function (e) { return { ok: false, error: e.message || "Erro de rede" }; });
   },

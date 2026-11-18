@@ -4,6 +4,9 @@ window.LNTV = window.LNTV || {};
 LNTV.player = {
   index: 0,
   current: null,
+  _locked: false,
+  _unlocked: {},
+  _generation: 0,
   _retries: 0,
   _retryT: null,
   _stallT: null,
@@ -22,12 +25,15 @@ LNTV.player = {
 
   tuneByIndex: function (idx) {
     if (idx < 0 || idx >= LNTV.channels.list.length) return;
+    this.stop();
     this.index = idx;
     this.current = LNTV.channels.list[idx];
+    this._locked = LNTV.channels.isRestricted(this.current) && !this._unlocked[this.current.id];
+    document.getElementById("channel-lock").classList.toggle("hidden", !this._locked);
     this._retries = 0;
-    this._play();
+    if (!this._locked) this._play();
     LNTV.osd.show(this.current);
-    LNTV.hb.setChannel(this.current);
+    LNTV.hb.setChannel(this._locked ? null : this.current);
     this._statsCache.channelName = this.current.name || "";
     this._statsCache.channelNum = this.current.channel_number;
   },
@@ -36,6 +42,25 @@ LNTV.player = {
     var i = LNTV.channels.findByNumber(n);
     if (i >= 0) this.tuneByIndex(i);
     else LNTV.toast.show("Canal " + n + " não encontrado");
+  },
+
+  unlock: function () {
+    if (!this._locked || !this.current) return;
+    var self = this;
+    var channelId = this.current.id;
+    var uid = LNTV.session.userId();
+    if (!uid) return;
+    LNTV.sb.get("profiles?user_id=eq." + uid + "&select=adult_pin").then(function (rows) {
+      if (!self._locked || !self.current || self.current.id !== channelId) return;
+      var pin = rows[0] && rows[0].adult_pin;
+      if (!/^\d{4}$/.test(pin || "")) { LNTV.toast.show("Configure o PIN no menu"); return; }
+      LNTV.modal.prompt("Canal protegido", "PIN de 4 dígitos:", "password", function (value) {
+        if (!self.current || self.current.id !== channelId) return;
+        if (value !== pin) { LNTV.toast.show("PIN incorreto"); return; }
+        self._unlocked[channelId] = true;
+        self.tuneByIndex(self.index);
+      });
+    });
   },
 
   step: function (delta) {
@@ -86,6 +111,7 @@ LNTV.player = {
 
   _play: function () {
     var ch = this.current;
+    if (!ch || this._locked) return;
     var url = this._resolveUrl(ch);
     if (!url) { LNTV.toast.show("Canal sem URL"); return; }
     this._statsCache.state = "loading";
@@ -102,6 +128,7 @@ LNTV.player = {
     document.getElementById("avplay").classList.remove("hidden");
     document.getElementById("htmlplayer").classList.add("hidden");
     var self = this;
+    var generation = self._generation;
     try {
       try { webapis.avplay.stop(); } catch (e) {}
       try { webapis.avplay.close(); } catch (e) {}
@@ -120,6 +147,7 @@ LNTV.player = {
         onsubtitlechange: function () {}
       });
       webapis.avplay.prepareAsync(function () {
+        if (generation !== self._generation || self._locked) return;
         self._loadTracks();
         try { webapis.avplay.play(); } catch (e) { self._onError(e); }
       }, function (e) { self._onError(e); });
@@ -202,16 +230,28 @@ LNTV.player = {
   },
 
   stop: function () {
+    this._generation++;
+    if (this._retryT) clearTimeout(this._retryT);
+    this._retryT = null;
+    this._clearStall();
+    if (this._previewT) clearTimeout(this._previewT);
+    this._previewT = null;
+    this._previewIdx = -1;
     if (this._useAvplay()) {
       try { webapis.avplay.stop(); webapis.avplay.close(); } catch (e) {}
     } else {
-      try { document.getElementById("htmlplayer").pause(); } catch (e) {}
+      try {
+        var video = document.getElementById("htmlplayer");
+        video.onerror = null;
+        video.pause(); video.removeAttribute("src"); video.load();
+      } catch (e) {}
     }
   },
 
   /* ---------------- Retry / Stall ---------------- */
 
   _onError: function () {
+    if (this._locked) return;
     var self = this;
     self._statsCache.state = "error";
     if (this._retries >= 6) {

@@ -4,11 +4,19 @@ window.LNTV = window.LNTV || {};
 LNTV.channels = {
   list: [],
   favorites: {},
+  protectedCategories: {},
+  isRestricted: function (ch) {
+    return !!(ch && (ch.is_adult || this.protectedCategories[ch.category_id]));
+  },
 
   load: function () {
     var self = this;
     // 1. categorias autorizadas
-    return LNTV.sb.get("user_category_access?select=category_id&is_active=eq.true")
+    return LNTV.sb.get("categories?select=id,requires_pin", true).then(function (categories) {
+      self.protectedCategories = {};
+      (categories || []).forEach(function (c) { if (c.requires_pin) self.protectedCategories[c.id] = true; });
+      return LNTV.sb.get("user_category_access?select=category_id&is_active=eq.true");
+    })
       .then(function (rows) {
         var directIds = (rows || []).map(function (r) { return r.category_id; });
         if (!directIds.length) return [];
@@ -24,7 +32,7 @@ LNTV.channels = {
       })
       .then(function (catIds) {
         if (!catIds.length) { self.list = []; return []; }
-        var q = "channels?select=id,name,channel_number,stream_url,stream_type,logo_url,logo_source_url,category_id,epg_channel_id,is_active,force_proxy_native,is_adult"
+        var q = "channels?select=id,name,channel_number,stream_url,stream_format,logo_url,logo_source_url,category_id,epg_channel_id,is_active,force_proxy_native,is_adult"
               + "&is_active=eq.true"
               + "&category_id=in.(" + catIds.join(",") + ")"
               + "&order=channel_number.asc";

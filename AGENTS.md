@@ -9,8 +9,10 @@
 - Roku heartbeats reuse login device identity and retain one asynchronous Task at a time; failed starts retry on the timer and queued channel changes flush after success to keep monitoring accurate without overlapping requests.
 - Roku remote signout accepts response keys regardless of case and removes playback immediately before showing the login screen, so revoked sessions cannot keep video running behind a confirmation dialog.
 - Session heartbeats must reject ended sessions with 404 so clients recreate active presence instead of refreshing rows excluded from monitoring.
-- Native/Roku sessions require an active matching `user_devices` binding; revoked devices receive `forceSignout` plus `force_close` before the server ends the session, and heartbeat never recreates their bindings.
+- Native/Roku/Tizen sessions require an active matching `user_devices` binding; revoked devices receive `forceSignout` plus `force_close` before the server ends the session, and heartbeat never recreates their bindings.
 - session-heartbeat reads body fields ignoring case and underscores because Roku BrightScript lowercases associative-array keys.
 - Remote app commands (reload_channels/force_close) are rows in app_commands delivered once per session via the session-heartbeat response, tracked by user_sessions.last_command_at; insert RLS enforces the per-command admin permission keys.
 - Send admin app commands through the self-hosted client and require its authenticated user before inserting, so command ownership matches the panel session and RLS.
-- Restricted channels (is_adult or category requires_pin) show a lock screen without blocking channel up/down; the PIN prompt opens only on OK and cancelling keeps the user on the locked channel, consistently across web, native Android and Roku.
+- Restricted channels (is_adult or category requires_pin) show a lock screen without blocking channel up/down; the PIN prompt opens only on OK and cancelling keeps the user on the locked channel, consistently across web, native Android, Roku and Tizen.
+
+- Tizen heartbeats parse HTTP responses and retain the returned session ID; playback starts after session validation so pairing and remote revocation use the same device binding.

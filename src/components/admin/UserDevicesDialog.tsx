@@ -12,7 +12,7 @@ type Device = {
   id: string;
   user_id: string;
   device_id: string;
-  platform: "android" | "roku";
+  platform: "android" | "roku" | "tizen";
   device_name: string | null;
   device_label: string | null;
   app_version: string | null;
@@ -54,7 +54,7 @@ type ActiveSession = {
 type PendingDevice = {
   id: string;
   device_id: string;
-  platform: "android" | "roku";
+  platform: "android" | "roku" | "tizen";
   device_name: string | null;
   app_version: string | null;
   last_ip: string | null;
@@ -78,7 +78,7 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
   const [labelDraft, setLabelDraft] = useState("");
 
   const [addOpen, setAddOpen] = useState(false);
-  const [addPlatform, setAddPlatform] = useState<"android" | "roku">("android");
+  const [addPlatform, setAddPlatform] = useState<"android" | "roku" | "tizen">("android");
   const [addDeviceId, setAddDeviceId] = useState("");
   const [addLabel, setAddLabel] = useState("");
   const [adding, setAdding] = useState(false);
@@ -205,12 +205,12 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
   const pendingOnline = sessions.filter(
     (s) =>
       s.device_id &&
-      (s.platform === "android" || s.platform === "roku") &&
+      (s.platform === "android" || s.platform === "roku" || s.platform === "tizen") &&
       !registeredKeys.has(`${s.platform}:${normalizeId(s.device_id)}`),
   );
   // Mapa device_id → sessão ativa (pra mostrar badge "online" em dispositivos cadastrados)
   const onlineDevices = new Set(
-    sessions.filter((s) => s.device_id).map((s) => `${s.platform}:${normalizeId(s.device_id!)}`),
+    sessions.flatMap((s) => s.device_id ? [`${s.platform}:${normalizeId(s.device_id)}`] : []),
   );
 
   const registerOnline = async (s: ActiveSession) => {
@@ -263,6 +263,7 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
                     <SelectContent>
                       <SelectItem value="android">Android (APK)</SelectItem>
                       <SelectItem value="roku">Roku</SelectItem>
+                      <SelectItem value="tizen">Samsung (Tizen)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -316,7 +317,7 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
                         ) : (
                           <Tv2 className="h-4 w-4 text-primary" />
                         )}
-                        <span className="text-sm font-medium">{s.platform}</span>
+                        <span className="text-sm font-medium">{s.platform === "tizen" ? "Samsung (Tizen)" : s.platform}</span>
                         {s.current_channel_name && (
                           <span className="text-xs text-muted-foreground">· assistindo {s.current_channel_name}</span>
                         )}
@@ -368,7 +369,7 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
                         ) : (
                           <Tv2 className="h-4 w-4 text-primary" />
                         )}
-                        <span className="text-sm font-medium">{p.device_name || p.platform}</span>
+                        <span className="text-sm font-medium">{p.device_name || (p.platform === "tizen" ? "Samsung (Tizen)" : p.platform)}</span>
                         <span className="text-xs text-muted-foreground">· {timeAgo(p.last_seen_at)}</span>
                       </div>
                       <p className="text-xs font-mono text-muted-foreground break-all">
@@ -459,7 +460,7 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
                         </div>
                       )}
                       <p className="text-xs text-muted-foreground font-mono break-all">
-                        {d.platform} · {maskDeviceId(d.device_id)}
+                        {d.platform === "tizen" ? "Samsung (Tizen)" : d.platform} · {maskDeviceId(d.device_id)}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Último acesso: {fmt(d.last_seen_at)}

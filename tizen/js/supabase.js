@@ -28,12 +28,15 @@ LNTV.sb = {
       }).catch(function () {});
   },
 
-  get: function (path) {
+  get: function (path, strict) {
     var self = this;
     return self.ensureFresh().then(function () {
       return fetch(LNTV.REST_URL + "/" + path, { headers: self._headers(true) })
-        .then(function (r) { return r.ok ? r.json() : []; })
-        .catch(function () { return []; });
+        .then(function (r) {
+          if (!r.ok && strict) throw new Error("Falha ao carregar dados protegidos");
+          return r.ok ? r.json() : [];
+        })
+        .catch(function (e) { if (strict) throw e; return []; });
     });
   },
 

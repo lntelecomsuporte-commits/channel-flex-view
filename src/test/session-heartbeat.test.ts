@@ -169,6 +169,25 @@ describe("Monitoring session recovery", () => {
 });
 
 describe("Remote signout and device revocation", () => {
+  it("preserves Samsung presence with an active binding", async () => {
+    const { invoke, insert } = setup();
+    const res = await invoke({ ...nativeStart, platform: "tizen", userAgent: "Samsung Tizen" });
+    expect(await res.json()).toEqual({ id: "new-session" });
+    expect(insert).toHaveBeenCalledWith({ table: "user_sessions", value: expect.objectContaining({ platform: "tizen" }) });
+  });
+
+  it("does not recreate a removed Samsung binding", async () => {
+    const { invoke, insert } = setup({ device: null });
+    const res = await invoke({ ...nativeStart, platform: "tizen" });
+    expect(await res.json()).toMatchObject({ forceSignout: true, command: "force_close" });
+    expect(insert).not.toHaveBeenCalledWith({ table: "user_devices", value: expect.anything() });
+  });
+
+  it("revokes Samsung playback after unlinking", async () => {
+    const { invoke } = setup({ device: null, sessionDeviceId: "SAMSUNG123", sessionPlatform: "tizen" });
+    const res = await invoke({ action: "heartbeat", sessionId: "session-1" });
+    expect(await res.json()).toEqual({ forceSignout: true, command: "force_close", reason: "device_revoked" });
+  });
   it("returns force_close with forceSignout and ends the revoked login session", async () => {
     const { invoke, update } = setup({ forceSignoutAt: "2026-11-06T03:05:00Z" });
     const res = await invoke({ action: "heartbeat", sessionId: "session-1" });

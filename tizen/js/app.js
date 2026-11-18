@@ -21,6 +21,8 @@ LNTV.app = {
 
     document.getElementById("login-btn").addEventListener("click", function () { LNTV.app.doManualLogin(); });
 
+    document.getElementById("modal-ok").addEventListener("click", function () { LNTV.modal.ok(); });
+    document.getElementById("modal-cancel").addEventListener("click", function () { LNTV.modal.cancel(); });
     if (LNTV.session.accessToken()) {
       this.enterApp();
     } else {
@@ -80,8 +82,7 @@ LNTV.app = {
     document.getElementById("screen-player").classList.remove("hidden");
     LNTV.channels.load().then(function (chs) {
       if (!chs || !chs.length) { LNTV.toast.show("Nenhum canal disponível"); return; }
-      LNTV.hb.start();
-      LNTV.player.tuneByIndex(0);
+      LNTV.hb.start().then(function (ok) { if (ok) LNTV.player.tuneByIndex(0); });
       setTimeout(function () { LNTV.update.check(); }, 5000);
     }).catch(function (e) {
       LNTV.toast.show("Erro ao carregar canais");
@@ -103,6 +104,11 @@ LNTV.app = {
     if (LNTV.modal.isOpen()) {
       if (code === K.ENTER) { LNTV.modal.ok(); e.preventDefault(); return; }
       if (code === K.BACK)  { LNTV.modal.cancel(); e.preventDefault(); return; }
+      if (code === K.LEFT || code === K.RIGHT) {
+        var cancel = document.getElementById("modal-cancel");
+        (code === K.LEFT && cancel.style.display !== "none" ? cancel : document.getElementById("modal-ok")).focus();
+        e.preventDefault(); return;
+      }
       return;
     }
 
@@ -192,6 +198,7 @@ LNTV.app = {
   },
 
   _handleOk: function () {
+    if (LNTV.player._locked) { LNTV.player.unlock(); return; }
     var now = Date.now();
     if (now - this._lastOk < 400) {
       LNTV.osd.hide();

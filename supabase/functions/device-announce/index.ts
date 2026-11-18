@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
     if (!device_id || device_id.length < 6) {
       return json({ error: "device_id inválido" }, 400);
     }
-    if (platform !== "android" && platform !== "roku") {
+    if (platform !== "android" && platform !== "roku" && platform !== "tizen") {
       return json({ error: "platform inválida" }, 400);
     }
 
@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
     const ip = getClientIp(req) || null;
     const now = new Date().toISOString();
 
-    await admin.from("pending_devices").upsert(
+    const { error: announceError } = await admin.from("pending_devices").upsert(
       {
         device_id,
         platform,
@@ -80,6 +80,7 @@ Deno.serve(async (req) => {
       { onConflict: "device_id,platform" },
     );
 
+    if (announceError) return json({ error: announceError.message }, 400);
     return json({ ok: true, registered: false });
   } catch (e: any) {
     console.error("device-announce error:", e?.message || e);

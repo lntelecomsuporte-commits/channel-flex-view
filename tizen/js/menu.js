@@ -63,6 +63,7 @@ LNTV.menu = {
         LNTV.modal.prompt("Novo PIN (4 dígitos)", "Use 4 dígitos:", "password", function (val) {
           if (!/^\d{4}$/.test(val || "")) { LNTV.toast.show("PIN inválido"); return; }
           LNTV.sb.patch("profiles?user_id=eq." + uid, { adult_pin: val }).then(function (ok) {
+            if (ok) LNTV.player._unlocked = {};
             LNTV.toast.show(ok ? "PIN atualizado" : "Falha ao salvar PIN");
           });
         });
@@ -141,7 +142,10 @@ LNTV.modal = {
 
   isOpen: function () { return !document.getElementById("modal").classList.contains("hidden"); },
 
-  ok: function () { if (this._onOk) this._onOk(); },
+  ok: function () {
+    if (document.activeElement && document.activeElement.id === "modal-cancel") { this.cancel(); return; }
+    if (this._onOk) this._onOk();
+  },
   cancel: function () { if (this._onCancel) this._onCancel(); else this.close(); }
 };
 
