@@ -31,12 +31,34 @@ LNTV.app = {
   },
 
   /* ---------------- Login screen ---------------- */
+  _loginControls: function () {
+    return [
+      document.getElementById("login-user"),
+      document.getElementById("login-pass"),
+      document.getElementById("login-btn")
+    ];
+  },
+
+  _focusLoginControl: function (index) {
+    var control = this._loginControls()[index];
+    if (control) control.focus();
+  },
+
+  _moveLoginFocus: function (step) {
+    var controls = this._loginControls();
+    var current = controls.indexOf(document.activeElement);
+    if (current < 0) current = step > 0 ? 0 : controls.length - 1;
+    else current = Math.max(0, Math.min(controls.length - 1, current + step));
+    controls[current].focus();
+  },
+
   showLogin: function () {
     document.getElementById("screen-login").classList.remove("hidden");
     document.getElementById("screen-player").classList.add("hidden");
     document.getElementById("pair-code").textContent = LNTV.device.prettyId();
     document.getElementById("login-status").textContent = "Aguardando pareamento…";
     document.getElementById("dev-line").textContent = "DUID " + LNTV.device.prettyId() + "  |  v" + LNTV.APP_VERSION;
+    this._focusLoginControl(0);
     this._startBeacon();
   },
 
@@ -119,9 +141,24 @@ LNTV.app = {
       return;
     }
 
-    // Login screen
+    // Login screen: setas navegam; OK nos campos mantém o evento nativo para abrir o IME da Samsung.
     if (!document.getElementById("screen-login").classList.contains("hidden")) {
-      if (code === K.ENTER) { this.doManualLogin(); e.preventDefault(); return; }
+      if (code === K.UP || code === K.DOWN) {
+        this._moveLoginFocus(code === K.UP ? -1 : 1);
+        e.preventDefault();
+        return;
+      }
+      if (code === K.ENTER) {
+        var active = document.activeElement;
+        if (active && active.id === "login-btn") {
+          this.doManualLogin();
+          e.preventDefault();
+        } else if (!active || (active.id !== "login-user" && active.id !== "login-pass")) {
+          this._focusLoginControl(0);
+          e.preventDefault();
+        }
+        return;
+      }
       if (code === K.BACK)  { try { tizen.application.getCurrentApplication().exit(); } catch (e2) {} return; }
       return;
     }

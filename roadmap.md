@@ -6,7 +6,8 @@
 - [x] Fix collapsed screen bounds on older Samsung browsers, remove opaque AVPlay backgrounds and retain visible startup failures.
 - [x] Sweep Samsung startup, channel reload, empty-list navigation and AVPlay/HTML5 failures for silent black-screen paths.
 - [x] Restore Samsung channel loading without direct category assignments under server authorization, scope assignments to the signed-in user and keep notices inside the TV viewport (23 tests and simulated remote-key flow passed; physical AVPlay still needs reinstall).
-- [ ] Verify activation and AVPlay on the physical Samsung (blocked: requires updated WGT installation and server deployment).
+- [x] Restore Samsung remote-control login navigation, native keyboard handling and visible focus in v1.0.2 (29 focused tests and simulated remote-key login passed).
+- [ ] Verify remote login, activation and AVPlay on the physical Samsung (blocked: requires updated WGT installation and server deployment).
 - [ ] Publish the Samsung app on the user's own server: signed .wgt in /opt/lntv-downloads, version-tizen.json and the nginx location (blocked: the signed package must come from the user's Tizen Studio).
 - [ ] Submit to Samsung Apps Seller Office: App ID into config.xml, signed package, demo login, four 1920x1080 JPG screenshots captured in the Tizen Studio emulator and highlight banner (blocked: needs the Seller Office App ID, emulator captures and content-rights proof from the user).
 

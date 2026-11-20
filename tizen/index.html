@@ -18,9 +18,10 @@
       <div class="pair-hint">Informe esse código no painel de controle para liberar este aparelho.</div>
 
       <div class="manual-login" id="manual-login">
-        <input id="login-user" type="text" placeholder="CPF ou e-mail" autocomplete="off">
-        <input id="login-pass" type="password" placeholder="Senha" autocomplete="off">
-        <button id="login-btn">Entrar</button>
+        <input id="login-user" type="text" placeholder="CPF ou e-mail" aria-label="CPF ou e-mail" autocomplete="off" autocapitalize="off" spellcheck="false" tabindex="0">
+        <input id="login-pass" type="password" placeholder="Senha" aria-label="Senha" autocomplete="off" tabindex="0">
+        <button id="login-btn" type="button" tabindex="0">Entrar</button>
+        <div class="login-nav-hint">Use ↑ ↓ para navegar e OK para digitar ou entrar.</div>
         <div class="login-err" id="login-err"></div>
       </div>
 
