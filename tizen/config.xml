@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="http://tv.lntelecom/tizen" version="1.0.0" viewmodes="maximized">
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="http://tv.lntelecom/tizen" version="1.0.1" viewmodes="maximized">
     <tizen:application id="LNTVtizen0.LNTV" package="LNTVtizen0" required_version="5.5" launch_mode="single"/>
     <content src="index.html"/>
     <feature name="http://tizen.org/feature/screen.size.all"/>
@@ -8,7 +8,6 @@
     <tizen:profile name="tv-samsung"/>
     <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable" encryption="disable" install-location="auto" hwkey-event="enable"/>
     <tizen:metadata key="http://samsung.com/tv/metadata/use.avplay" value="true"/>
-    <tizen:metadata key="http://samsung.com/tv/metadata/use.drm" value="false"/>
     <tizen:metadata key="http://samsung.com/tv/metadata/use.hls" value="true"/>
     <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch.support" value="true"/>
     <access origin="*" subdomains="true"/>
