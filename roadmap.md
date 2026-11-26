@@ -6,6 +6,7 @@
 - [x] Install and verify the initial app on the user's physical LG TV (login, channels and navigation reported working).
 - [x] Add white opaque launcher icons and restore direct icon relaunch in v1.0.1; keep the lightweight JSON EPG.
 - [ ] Verify v1.0.1 icon relaunch and playback resume on the physical LG TV (blocked: needs the updated IPK installation on the user's PC).
+- [x] Fill the official LG UX Scenario template (v4.4) with test account, screens, flow chart and contact.
 - [ ] Submit to LG Seller Lounge (blocked: needs the user's seller account, real TV screenshots and the deploy of the server changes).
 
 # Samsung Tizen
