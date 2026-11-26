@@ -20,7 +20,7 @@ function baseApp(overrides: Record<string, any> = {}) {
   localStorage.clear();
   localStorage.setItem('lntv.user_id', 'user-1');
   const app: Record<string, any> = {
-    APP_VERSION: '1.0.0',
+    APP_VERSION: '1.0.1',
     FN_URL: 'https://tv2.lntelecom.net/functions/v1',
     auth: { manualLogin: vi.fn(async () => ({ ok: false, error: 'Credenciais inválidas' })), logout: vi.fn() },
     hb: { setChannel: vi.fn(), start: vi.fn(async () => true), stop: vi.fn() },
@@ -190,11 +190,33 @@ describe('LG webOS device code', () => {
     expect(app.device.prettyId()).toBe('A1B2-C3D4-E5F6-7788');
   });
 
-  it('reports platform webos and version 1.0.0', () => {
+  it('reports platform webos and version 1.0.1', () => {
     const app: Record<string, any> = {};
     load('config', app);
     expect(app.PLATFORM).toBe('webos');
-    expect(app.APP_VERSION).toBe('1.0.0');
-    expect(JSON.parse(readFileSync('webos/appinfo.json', 'utf8'))).toMatchObject({ version: '1.0.0', disableBackHistoryAPI: true });
+    expect(app.APP_VERSION).toBe('1.0.1');
+    expect(app.APP_VERSION_CODE).toBe(2);
+    expect(JSON.parse(readFileSync('webos/appinfo.json', 'utf8'))).toMatchObject({
+      version: '1.0.1',
+      disableBackHistoryAPI: true,
+      handlesRelaunch: false,
+      iconColor: '#ffffff',
+    });
+  });
+});
+
+describe('LG webOS launcher relaunch', () => {
+  it('resumes playback and presence when the app icon raises webOSRelaunch', () => {
+    const app = baseApp();
+    app.registerKeys = vi.fn();
+    app.device = { init: vi.fn(() => new Promise(() => {})) };
+    app.app._bindClicks = vi.fn();
+    app.app.resume = vi.fn();
+    app.app.init();
+    app.app._paused = true;
+
+    document.dispatchEvent(new Event('webOSRelaunch'));
+
+    expect(app.app.resume).toHaveBeenCalledTimes(1);
   });
 });

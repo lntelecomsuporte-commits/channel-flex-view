@@ -14,6 +14,8 @@ LNTV.app = {
     document.addEventListener("visibilitychange", function () {
       if (document.hidden) self.pause(); else self.resume();
     });
+    // Com handlesRelaunch=false a LG recoloca o app em tela cheia; retomamos vídeo e presença.
+    document.addEventListener("webOSRelaunch", function () { self.resume(); }, true);
     // Ponteiro do Magic Remote: mostra os botões na tela enquanto o cursor estiver visível.
     document.addEventListener("cursorStateChange", function (e) {
       var visible = !!(e && e.detail && e.detail.visibility);

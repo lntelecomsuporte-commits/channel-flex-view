@@ -33,8 +33,8 @@ desconexão remota pelo painel.
    ```
 3. Na pasta do projeto:
    ```bash
-   ares-package webos                       # gera net.lntelecom.tv_1.0.0_all.ipk
-   ares-install --device lg-tv net.lntelecom.tv_1.0.0_all.ipk
+   ares-package webos                       # gera net.lntelecom.tv_1.0.1_all.ipk
+   ares-install --device lg-tv net.lntelecom.tv_1.0.1_all.ipk
    ares-launch --device lg-tv net.lntelecom.tv
    ares-inspect --device lg-tv --app net.lntelecom.tv --open   # depurar (opcional)
    ```

@@ -3,7 +3,9 @@
 - [x] Build the LG webOS app (login by remote/pointer, pairing, channels, adult/PIN lock, menu, EPG, heartbeat) reusing the Samsung flows.
 - [x] Accept LG TVs in device endpoints, session presence, the devices table and the admin Dispositivos dialog.
 - [x] Test LG login, PIN lock, device code, pairing and revocation (105 tests; simulated remote/pointer flow passed).
-- [ ] Install and verify on the user's physical LG TV (blocked: needs Developer Mode + ares-install on the user's PC).
+- [x] Install and verify the initial app on the user's physical LG TV (login, channels and navigation reported working).
+- [x] Add white opaque launcher icons and restore direct icon relaunch in v1.0.1; keep the lightweight JSON EPG.
+- [ ] Verify v1.0.1 icon relaunch and playback resume on the physical LG TV (blocked: needs the updated IPK installation on the user's PC).
 - [ ] Submit to LG Seller Lounge (blocked: needs the user's seller account, real TV screenshots and the deploy of the server changes).
 
 # Samsung Tizen
