@@ -1,0 +1,59 @@
+name: Build LG webOS App
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'webos/**'
+      - '.github/workflows/webos-app.yml'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    name: Package LG app
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Read version
+        run: |
+          VERSION_NAME=$(node -p "require('./webos/appinfo.json').version")
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
+          grep -E '^LNTV\.APP_VERSION' webos/js/config.js
+
+      - name: Package .ipk
+        run: |
+          npm install -g @webos-tools/cli
+          mkdir -p out
+          ares-package webos -o out --no-minify
+          ls -lh out
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lntv-webos
+          path: out/*.ipk
+          retention-days: 30
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: webos-v${{ env.VERSION_NAME }}-${{ github.run_number }}
+          name: LN TV LG v${{ env.VERSION_NAME }} (build ${{ github.run_number }})
+          body: |
+            Pacote LG webOS. Instale com:
+              ares-install --device lg-tv net.lntelecom.tv_${{ env.VERSION_NAME }}_all.ipk
+          files: out/*.ipk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

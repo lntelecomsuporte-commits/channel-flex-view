@@ -50,6 +50,13 @@
       "when": 1794975492366,
       "tag": "0006_allow_tizen_devices",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795655926402,
+      "tag": "0007_allow_webos_devices",
+      "breakpoints": true
     }
   ]
 }

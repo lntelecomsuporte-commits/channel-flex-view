@@ -1,0 +1,2 @@
+ALTER TABLE public.user_devices DROP CONSTRAINT IF EXISTS user_devices_platform_check;
+ALTER TABLE public.user_devices ADD CONSTRAINT user_devices_platform_check CHECK (platform IN ('android', 'roku', 'tizen', 'webos'));

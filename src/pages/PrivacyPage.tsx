@@ -4,7 +4,7 @@ const SECTIONS: { title: string; body: string[] }[] = [
   {
     title: "Quem somos",
     body: [
-      "O LN TV é um serviço de distribuição de canais de TV por internet operado pela LN Telecom, disponível pelo site tv2.lntelecom.net e por aplicativos para Smart TV (Samsung, Android, Roku) e celular.",
+      "O LN TV é um serviço de distribuição de canais de TV por internet operado pela LN Telecom, disponível pelo site tv2.lntelecom.net e por aplicativos para Smart TV (Samsung, LG, Android, Roku) e celular.",
       "Esta política explica quais dados coletamos, por que coletamos e quais são os seus direitos.",
     ],
   },

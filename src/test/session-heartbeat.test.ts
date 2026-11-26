@@ -183,6 +183,19 @@ describe("Remote signout and device revocation", () => {
     expect(insert).not.toHaveBeenCalledWith({ table: "user_devices", value: expect.anything() });
   });
 
+  it("does not recreate a removed LG binding", async () => {
+    const { invoke, insert } = setup({ device: null });
+    const res = await invoke({ ...nativeStart, platform: "webos" });
+    expect(await res.json()).toMatchObject({ forceSignout: true, command: "force_close" });
+    expect(insert).not.toHaveBeenCalledWith({ table: "user_devices", value: expect.anything() });
+  });
+
+  it("revokes LG playback after unlinking", async () => {
+    const { invoke } = setup({ device: null, sessionDeviceId: "LGTV1234ABCD5678", sessionPlatform: "webos" });
+    const res = await invoke({ action: "heartbeat", sessionId: "session-1" });
+    expect(await res.json()).toEqual({ forceSignout: true, command: "force_close", reason: "device_revoked" });
+  });
+
   it("revokes Samsung playback after unlinking", async () => {
     const { invoke } = setup({ device: null, sessionDeviceId: "SAMSUNG123", sessionPlatform: "tizen" });
     const res = await invoke({ action: "heartbeat", sessionId: "session-1" });

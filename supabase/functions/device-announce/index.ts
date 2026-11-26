@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
     if (!device_id || device_id.length < 6) {
       return json({ error: "device_id inválido" }, 400);
     }
-    if (platform !== "android" && platform !== "roku" && platform !== "tizen") {
+    if (platform !== "android" && platform !== "roku" && platform !== "tizen" && platform !== "webos") {
       return json({ error: "platform inválida" }, 400);
     }
 

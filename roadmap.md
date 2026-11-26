@@ -1,3 +1,11 @@
+# LG webOS
+
+- [x] Build the LG webOS app (login by remote/pointer, pairing, channels, adult/PIN lock, menu, EPG, heartbeat) reusing the Samsung flows.
+- [x] Accept LG TVs in device endpoints, session presence, the devices table and the admin Dispositivos dialog.
+- [x] Test LG login, PIN lock, device code, pairing and revocation (105 tests; simulated remote/pointer flow passed).
+- [ ] Install and verify on the user's physical LG TV (blocked: needs Developer Mode + ares-install on the user's PC).
+- [ ] Submit to LG Seller Lounge (blocked: needs the user's seller account, real TV screenshots and the deploy of the server changes).
+
 # Samsung Tizen
 
 - [x] Allow Samsung pairing in the device endpoints, database and admin panel.

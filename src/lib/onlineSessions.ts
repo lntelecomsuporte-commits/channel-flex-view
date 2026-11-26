@@ -23,6 +23,7 @@ export function deviceLabel(s: Pick<OnlineSessionLike, "platform" | "user_agent"
   }
   if (p === "roku" || ua.includes("roku")) return "Roku";
   if (p === "tizen" || ua.includes("tizen")) return "Samsung Tizen";
+  if (p === "webos") return "LG webOS";
   if (ua.includes("web0s") || ua.includes("webos")) return "LG webOS";
   const aft = ua.match(/\b(aft[a-z0-9]+)\b/);
   if (aft) return `Fire TV (${aft[1].toUpperCase()})`;

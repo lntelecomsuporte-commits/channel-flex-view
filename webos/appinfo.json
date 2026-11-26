@@ -1,0 +1,17 @@
+{
+  "id": "net.lntelecom.tv",
+  "version": "1.0.0",
+  "vendor": "LN Telecom",
+  "type": "web",
+  "main": "index.html",
+  "title": "LN TV",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "splashBackground": "splash.png",
+  "bgColor": "#0a0a0a",
+  "iconColor": "#dc2626",
+  "resolution": "1920x1080",
+  "disableBackHistoryAPI": true,
+  "handlesRelaunch": true,
+  "requiredMemory": 200
+}

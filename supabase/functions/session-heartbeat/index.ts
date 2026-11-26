@@ -124,8 +124,8 @@ Deno.serve(async (req) => {
     const cIpv4 = sanitizeIp(clientIpv4);
     const cIpv6 = sanitizeIp(clientIpv6);
     const cleanDeviceId = normalizeDeviceId(deviceId);
-    const cleanPlatform = ["android", "roku", "tizen", "web", "pwa"].includes(platform) ? platform : null;
-    const usesDeviceLogin = cleanPlatform === "roku" || cleanPlatform === "tizen" || /LNTV-Native\//i.test(String(userAgent || uaHeader));
+    const cleanPlatform = ["android", "roku", "tizen", "webos", "web", "pwa"].includes(platform) ? platform : null;
+    const usesDeviceLogin = cleanPlatform === "roku" || cleanPlatform === "tizen" || cleanPlatform === "webos" || /LNTV-Native\//i.test(String(userAgent || uaHeader));
 
     if (platform === "roku" || looksLikeRoku) {
       console.log("[hb][roku]", JSON.stringify({
@@ -224,7 +224,7 @@ Deno.serve(async (req) => {
       }
 
       let deviceAllowed = true;
-      if (cleanDeviceId && (cleanPlatform === "android" || cleanPlatform === "roku" || cleanPlatform === "tizen")) {
+      if (cleanDeviceId && (cleanPlatform === "android" || cleanPlatform === "roku" || cleanPlatform === "tizen" || cleanPlatform === "webos")) {
         const { data: binding, error: bindingError } = await adminClient
           .from("user_devices")
           .select("id, user_id, is_active")
@@ -277,7 +277,7 @@ Deno.serve(async (req) => {
       // Nativo já instalado entende command=force_close.
       const effectiveDeviceId = cleanDeviceId ?? normalizeDeviceId(session.device_id);
       const effectivePlatform = cleanPlatform ?? session.platform ?? null;
-      if (effectiveDeviceId && (effectivePlatform === "android" || effectivePlatform === "roku" || effectivePlatform === "tizen")) {
+      if (effectiveDeviceId && (effectivePlatform === "android" || effectivePlatform === "roku" || effectivePlatform === "tizen" || effectivePlatform === "webos")) {
         const { data: binding, error: bindingError } = await adminClient
           .from("user_devices")
           .select("id, user_id, is_active")

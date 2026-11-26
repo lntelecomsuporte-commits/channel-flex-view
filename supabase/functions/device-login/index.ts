@@ -55,8 +55,8 @@ Deno.serve(async (req) => {
     if (!device_id || device_id.length < 6) {
       return json({ error: "device_id inválido" }, 400);
     }
-    if (platform !== "android" && platform !== "roku" && platform !== "tizen") {
-      return json({ error: "platform deve ser android, roku ou tizen" }, 400);
+    if (platform !== "android" && platform !== "roku" && platform !== "tizen" && platform !== "webos") {
+      return json({ error: "platform deve ser android, roku, tizen ou webos" }, 400);
     }
 
     // 1) Login via SDK Auth; se falhar, aceita também credencial de playlist

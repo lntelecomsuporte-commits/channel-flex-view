@@ -65,3 +65,22 @@ describe('Samsung device activation endpoints', () => {
     expect((await invoke('unknown-platform')).status).toBe(400);
   });
 });
+describe('LG webOS device activation endpoints', () => {
+  it('announces the LG TV code for the admin to bind', async () => {
+    const { invoke, writes } = setup('device-announce', false);
+    const response = await invoke('webos');
+    expect(response.status).toBe(200);
+    expect(writes).toHaveBeenCalledWith('pending_devices', expect.objectContaining({ platform: 'webos', device_id: 'CA3EXVGAUJGUR' }));
+  });
+  it('activates an LG TV bound in the panel', async () => {
+    const { invoke } = setup('device-auto-login');
+    const response = await invoke('webos');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ user: { id: 'test-user' } });
+  });
+  it('allows LG password login with an active binding', async () => {
+    const { invoke } = setup('device-login');
+    const response = await invoke('webos');
+    expect(response.status).toBe(200);
+  });
+});

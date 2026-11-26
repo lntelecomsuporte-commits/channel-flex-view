@@ -12,7 +12,7 @@ type Device = {
   id: string;
   user_id: string;
   device_id: string;
-  platform: "android" | "roku" | "tizen";
+  platform: DevicePlatform;
   device_name: string | null;
   device_label: string | null;
   app_version: string | null;
@@ -29,6 +29,17 @@ type Props = {
   userId: string;
   userLabel: string;
 };
+
+type DevicePlatform = "android" | "roku" | "tizen" | "webos";
+const DEVICE_PLATFORMS: DevicePlatform[] = ["android", "roku", "tizen", "webos"];
+
+function platformLabel(platform: string | null | undefined) {
+  if (platform === "tizen") return "Samsung (Tizen)";
+  if (platform === "webos") return "LG (webOS)";
+  if (platform === "roku") return "Roku";
+  if (platform === "android") return "Android";
+  return platform || "";
+}
 
 function fmt(d: string | null) {
   if (!d) return "—";
@@ -54,7 +65,7 @@ type ActiveSession = {
 type PendingDevice = {
   id: string;
   device_id: string;
-  platform: "android" | "roku" | "tizen";
+  platform: DevicePlatform;
   device_name: string | null;
   app_version: string | null;
   last_ip: string | null;
@@ -78,7 +89,7 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
   const [labelDraft, setLabelDraft] = useState("");
 
   const [addOpen, setAddOpen] = useState(false);
-  const [addPlatform, setAddPlatform] = useState<"android" | "roku" | "tizen">("android");
+  const [addPlatform, setAddPlatform] = useState<DevicePlatform>("android");
   const [addDeviceId, setAddDeviceId] = useState("");
   const [addLabel, setAddLabel] = useState("");
   const [adding, setAdding] = useState(false);
@@ -205,7 +216,7 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
   const pendingOnline = sessions.filter(
     (s) =>
       s.device_id &&
-      (s.platform === "android" || s.platform === "roku" || s.platform === "tizen") &&
+      DEVICE_PLATFORMS.includes(s.platform as DevicePlatform) &&
       !registeredKeys.has(`${s.platform}:${normalizeId(s.device_id)}`),
   );
   // Mapa device_id → sessão ativa (pra mostrar badge "online" em dispositivos cadastrados)
@@ -264,6 +275,7 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
                       <SelectItem value="android">Android (APK)</SelectItem>
                       <SelectItem value="roku">Roku</SelectItem>
                       <SelectItem value="tizen">Samsung (Tizen)</SelectItem>
+                      <SelectItem value="webos">LG (webOS)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -317,7 +329,7 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
                         ) : (
                           <Tv2 className="h-4 w-4 text-primary" />
                         )}
-                        <span className="text-sm font-medium">{s.platform === "tizen" ? "Samsung (Tizen)" : s.platform}</span>
+                        <span className="text-sm font-medium">{platformLabel(s.platform)}</span>
                         {s.current_channel_name && (
                           <span className="text-xs text-muted-foreground">· assistindo {s.current_channel_name}</span>
                         )}
@@ -354,7 +366,7 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              APKs abertos na tela de login nos últimos 5 minutos. Clique em "Vincular" para liberar o acesso — o aparelho entra sozinho em até 15 segundos.
+              Apps (Android, Roku, Samsung e LG) abertos na tela de login nos últimos 5 minutos. Clique em "Vincular" para liberar o acesso — o aparelho entra sozinho em até 15 segundos.
             </p>
             {pending.length === 0 ? (
               <p className="text-xs text-muted-foreground italic">Nenhum aparelho aguardando no momento.</p>
@@ -369,7 +381,7 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
                         ) : (
                           <Tv2 className="h-4 w-4 text-primary" />
                         )}
-                        <span className="text-sm font-medium">{p.device_name || (p.platform === "tizen" ? "Samsung (Tizen)" : p.platform)}</span>
+                        <span className="text-sm font-medium">{p.device_name || platformLabel(p.platform)}</span>
                         <span className="text-xs text-muted-foreground">· {timeAgo(p.last_seen_at)}</span>
                       </div>
                       <p className="text-xs font-mono text-muted-foreground break-all">
@@ -460,7 +472,7 @@ export function UserDevicesDialog({ open, onOpenChange, userId, userLabel }: Pro
                         </div>
                       )}
                       <p className="text-xs text-muted-foreground font-mono break-all">
-                        {d.platform === "tizen" ? "Samsung (Tizen)" : d.platform} · {maskDeviceId(d.device_id)}
+                        {platformLabel(d.platform)} · {maskDeviceId(d.device_id)}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Último acesso: {fmt(d.last_seen_at)}
