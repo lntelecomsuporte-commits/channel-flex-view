@@ -1,12 +1,20 @@
-import { useLayoutEffect } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { getAppManifest, isAdminPath } from "@/lib/appManifest";
+import { getAppManifest, isAdminPath, needsAppEntryReload } from "@/lib/appManifest";
 
 // Metadata only: neither app registers an offline/app-shell worker here.
 export function AppManifest() {
   const { pathname } = useLocation();
+  const previousPathname = useRef(pathname);
 
   useLayoutEffect(() => {
+    // A home-screen install must read the correct static HTML, not only a changed link.
+    const reload = needsAppEntryReload(pathname, document.documentElement.dataset.appEntry, previousPathname.current);
+    previousPathname.current = pathname;
+    if (reload) {
+      window.location.replace(window.location.href);
+      return;
+    }
     const admin = isAdminPath(pathname);
     document.querySelector('link[rel="manifest"]')?.setAttribute("href", getAppManifest(pathname));
     document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute("href", admin ? "/admin-icon-192.png" : "/logo.png");

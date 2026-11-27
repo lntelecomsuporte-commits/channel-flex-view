@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import legacy from "@vitejs/plugin-legacy";
 import path from "path";
@@ -12,6 +12,22 @@ import { componentTagger } from "lovable-tagger";
 // Para gerar com legacy: `BUILD_LEGACY=1 npm run build`
 const enableLegacy = process.env.BUILD_LEGACY === "1";
 
+// Mirror nginx's static admin entry in development; retain the requested router URL.
+function adminHtmlEntry(): Plugin {
+  return {
+    name: "admin-html-entry",
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        const [pathname, query] = (req.url ?? "").split("?");
+        if (pathname === "/admin" || pathname === "/admin/" || pathname === "/admin/login" || pathname === "/admin/login/") {
+          req.url = `/admin/index.html${query ? `?${query}` : ""}`;
+        }
+        next();
+      });
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
@@ -22,6 +38,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   plugins: [
+    adminHtmlEntry(),
     react(),
     enableLegacy &&
       legacy({
@@ -33,6 +50,12 @@ export default defineConfig(({ mode }) => ({
   ].filter(Boolean),
   build: {
     target: "es2017",
+    rollupOptions: {
+      input: {
+        tv: path.resolve(__dirname, "index.html"),
+        admin: path.resolve(__dirname, "admin/index.html"),
+      },
+    },
   },
   resolve: {
     alias: {

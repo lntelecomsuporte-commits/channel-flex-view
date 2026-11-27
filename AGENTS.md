@@ -1,6 +1,6 @@
 # Architecture rules
 
-- Select admin home-screen metadata at initial HTML load and on router navigation, with a distinct manifest ID; keep mobile CSS scoped to admin-mode so the TV player and its installed app remain unchanged.
+- Serve /admin and /admin/login from the dedicated Vite admin/index.html entry with static home-screen metadata and a distinct manifest ID; reload when crossing TV/admin entry boundaries and mirror this routing in nginx and Vite dev so iOS installation does not depend on dynamic manifest changes. Keep mobile CSS scoped to admin-mode to preserve the TV app.
 
 - Keep manual-only monitoring query options scoped to the admin Monitoramento view; explicitly refetch all four queries together so player heartbeats and other admin screens retain their own update behavior.
 - Keep monitoring queries bounded to the live snapshot windows (90s for app heartbeats, 6h for heartbeat-less M3U sessions reused per device until the next tune), including IP enrichment and traffic summaries; never load multi-day statistics or paginate historical sessions in the real-time view.

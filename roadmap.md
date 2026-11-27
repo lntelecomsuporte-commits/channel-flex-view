@@ -1,6 +1,7 @@
 # Mobile admin home-screen app
 
 - [x] Add separate manifest and icons for /admin without offline caching or changes to the TV manifest.
+- [x] Serve static admin home-screen metadata on /admin and /admin/login; add backed-up nginx configuration, regression tests, JavaScript-disabled entry checks and isolated mobile navigation checks.
 - [x] Adapt admin navigation, forms, lists and dialogs to phone widths.
 - [x] Verify manifest selection, mobile navigation and existing permission/monitoring regressions (25 tests; isolated browser login/navigation at 360–1280px); provide server commands.
 - [ ] Verify home-screen installation and real administration on the user's phone (blocked: needs deployment to the self-hosted server and installation on the phone).
