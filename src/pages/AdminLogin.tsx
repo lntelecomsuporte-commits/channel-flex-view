@@ -27,10 +27,11 @@ const AdminLogin = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="admin-login flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="text-center text-2xl">Painel Admin</CardTitle>
+          <img src="/admin-icon-192.png" alt="LN TV" className="mx-auto mb-3 h-20 w-20 rounded-lg" />
+          <CardTitle className="text-center text-2xl">LN TV Admin</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -39,6 +40,8 @@ const AdminLogin = () => {
               <Input
                 id="email"
                 type="email"
+                autoComplete="username"
+                autoCapitalize="none"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -49,6 +52,7 @@ const AdminLogin = () => {
               <Input
                 id="password"
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required

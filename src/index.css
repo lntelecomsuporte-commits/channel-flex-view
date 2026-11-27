@@ -144,3 +144,94 @@
 .animate-fade-in {
   animation: fadeIn 0.3s ease-out;
 }
+
+/* Admin home-screen app only; the player/TV layout keeps its existing rules. */
+body.admin-mode {
+  overflow-y: auto;
+}
+
+.admin-container {
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+.admin-tabs {
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.admin-tabs [role="tab"] {
+  flex-shrink: 0;
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+@media (max-width: 639px) {
+  .admin-panel :is(div, section, p, span, code, label) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .admin-panel div.flex.justify-between {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .admin-panel .rounded-lg.border.bg-card > :is(.p-6, .pt-0) {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  body.admin-mode :is([role="dialog"], [role="alertdialog"]) {
+    width: calc(100% - 2rem);
+    max-height: calc(100dvh - 2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 1rem;
+    border-radius: 0.5rem;
+  }
+
+  body.admin-mode :is([role="dialog"], [role="alertdialog"]) :is(div, p, span, code) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  body.admin-mode :is([role="dialog"], [role="alertdialog"]) h2 {
+    padding-right: 1.5rem;
+    overflow-wrap: anywhere;
+  }
+
+  body.admin-mode :is([role="dialog"], [role="alertdialog"]) .flex > button {
+    flex-shrink: 0;
+  }
+
+  body.admin-mode :is([role="dialog"], [role="alertdialog"]) .flex.justify-between {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  body.admin-mode :is(input, textarea, [role="combobox"]) {
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  body.admin-mode button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]) {
+    min-height: 44px;
+  }
+
+  .admin-panel button:not([role]), body.admin-mode [role="dialog"] button:not([role]) {
+    height: auto;
+    white-space: normal;
+  }
+
+  body.admin-mode :is([role="dialog"], [role="alertdialog"]) > button:last-child {
+    top: 0.25rem;
+    right: 0.25rem;
+    min-width: 44px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+}

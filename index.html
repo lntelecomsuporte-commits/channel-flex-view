@@ -14,6 +14,18 @@
     <link rel="apple-touch-icon" href="/logo.png" />
     <link rel="icon" type="image/png" href="/logo.png" />
     <link rel="manifest" href="/manifest.json" />
+    <script>
+      // Select home-screen metadata before React starts, including direct login links.
+      (function () {
+        var p = window.location.pathname;
+        if (p === '/admin' || p.indexOf('/admin/') === 0) {
+          document.querySelector('link[rel="manifest"]').href = '/admin-manifest.json';
+          document.querySelector('link[rel="apple-touch-icon"]').href = '/admin-icon-192.png';
+          document.querySelector('meta[name="apple-mobile-web-app-title"]').content = 'LN TV Admin';
+          document.title = 'LN TV Admin - Painel de Administração';
+        }
+      })();
+    </script>
 
     <!-- TODO: Update og:title to match your application name -->
     

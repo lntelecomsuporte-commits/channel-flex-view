@@ -1,5 +1,7 @@
 # Architecture rules
 
+- Select admin home-screen metadata at initial HTML load and on router navigation, with a distinct manifest ID; keep mobile CSS scoped to admin-mode so the TV player and its installed app remain unchanged.
+
 - Keep manual-only monitoring query options scoped to the admin Monitoramento view; explicitly refetch all four queries together so player heartbeats and other admin screens retain their own update behavior.
 - Keep monitoring queries bounded to the live snapshot windows (90s for app heartbeats, 6h for heartbeat-less M3U sessions reused per device until the next tune), including IP enrichment and traffic summaries; never load multi-day statistics or paginate historical sessions in the real-time view.
 - External playlist requests (`pt` + `ch`, without `st`) resolve through the existing hls-proxy URL and return uncached redirects after account/channel validation; signed browser requests remain proxied to preserve URL protection and installed playlist compatibility.

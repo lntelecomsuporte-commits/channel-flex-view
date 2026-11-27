@@ -657,7 +657,7 @@ const HubsoftIntegration = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-foreground">Integrações Hubsoft</h2>
         <Button onClick={startNew} size="sm">
           <Plus className="h-4 w-4 mr-1" /> Nova Integração
@@ -681,7 +681,7 @@ const HubsoftIntegration = () => {
             return (
               <Card key={config.id}>
                 <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="font-medium text-foreground truncate">{config.name}</p>
@@ -700,7 +700,7 @@ const HubsoftIntegration = () => {
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 ml-2">
+                    <div className="flex flex-wrap items-center gap-1 sm:ml-2">
                       <Button variant="ghost" size="sm" onClick={() => copyToClipboard(buildCallbackUrl(config.api_key), "URL")} title="Copiar URL">
                         <Copy className="h-4 w-4" />
                       </Button>

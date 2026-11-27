@@ -417,11 +417,14 @@ const AdminPanel = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background overflow-auto">
-      <div className="mx-auto max-w-5xl p-4 md:p-8">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl font-bold text-foreground">Painel de Administração</h1>
-          <div className="flex gap-2">
+    <div className="admin-panel min-h-screen bg-background">
+      <div className="admin-container mx-auto max-w-5xl min-w-0 p-4 md:p-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6 md:mb-8">
+          <div className="flex items-center gap-3 min-w-0">
+            <img src="/admin-icon-192.png" alt="LN TV" className="h-12 w-12 shrink-0 rounded-lg" />
+            <h1 className="text-xl md:text-2xl font-bold text-foreground">Painel de Administração</h1>
+          </div>
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={() => navigate("/")}>
               <Tv className="h-4 w-4 mr-1" /> Ver Player
             </Button>
@@ -461,7 +464,7 @@ const AdminPanel = () => {
         </div>
 
         <Tabs defaultValue={["channels","categories","users","hubsoft","monitoring","firewall"].find((t) => can(t === "channels" ? "channels.view" : t === "categories" ? "categories.manage" : t === "users" ? (can("users.view") ? "users.view" : "admins.manage") : t === "hubsoft" ? "hubsoft.manage" : t === "monitoring" ? "monitoring.view" : "firewall.manage")) ?? "none"}>
-          <TabsList className="mb-6 !grid !h-auto w-full grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-6">
+          <TabsList aria-label="Seções do painel" className="admin-tabs mb-6 !flex !h-auto w-full !justify-start gap-1 overflow-x-auto lg:!grid lg:grid-cols-6">
             {can("channels.view") && <TabsTrigger value="channels"><Tv className="h-4 w-4 mr-1" /> Canais</TabsTrigger>}
             {can("categories.manage") && <TabsTrigger value="categories"><Layers className="h-4 w-4 mr-1" /> Categorias</TabsTrigger>}
             {(can("users.view") || can("admins.manage")) && <TabsTrigger value="users"><Users className="h-4 w-4 mr-1" /> Usuários</TabsTrigger>}
@@ -802,14 +805,14 @@ const AdminPanel = () => {
                 ) : (
                   <div className="space-y-2">
                     {channels.map((ch) => (
-                      <div key={ch.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
-                        <div className="flex items-center gap-3">
-                          <span className="channel-badge text-sm">{ch.channel_number}</span>
+                      <div key={ch.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg bg-secondary">
+                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                          <span className="channel-badge text-sm shrink-0">{ch.channel_number}</span>
                           {ch.logo_url && (
                             <img
                               src={resolveLogoUrl(ch.logo_url) ?? undefined}
                               alt=""
-                              className="h-8 w-8 rounded object-contain bg-muted"
+                              className="h-8 w-8 shrink-0 rounded object-contain bg-muted"
                               onError={(e) => {
                                 const img = e.currentTarget;
                                 const fallback = resolveLogoUrl((ch as any).logo_source_url);
@@ -822,9 +825,9 @@ const AdminPanel = () => {
                               }}
                             />
                           )}
-                          <div>
+                          <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-medium text-foreground">{ch.name}</p>
+                              <p className="font-medium text-foreground break-words">{ch.name}</p>
                               {(() => {
                                 const cat = categories?.find((c) => c.id === ch.category_id);
                                 return cat ? (
@@ -841,7 +844,7 @@ const AdminPanel = () => {
                             <p className="text-xs text-muted-foreground truncate max-w-xs">{ch.stream_url}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2 shrink-0">
                           {(ch as any).is_adult && (
                             <span className="text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive">🔞 Adulto</span>
                           )}
@@ -850,7 +853,7 @@ const AdminPanel = () => {
                           </span>
                           {can("channels.edit") && <Button variant="ghost" size="sm" onClick={() => handleEditChannel(ch)}>Editar</Button>}
                           {canDeleteChannels && (
-                            <Button variant="ghost" size="sm" onClick={() => handleDeleteChannel(ch.id, ch.name)}>
+                            <Button variant="ghost" size="sm" title="Remover canal" aria-label={`Remover ${ch.name}`} onClick={() => handleDeleteChannel(ch.id, ch.name)}>
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                           )}
@@ -941,8 +944,8 @@ const AdminPanel = () => {
                       const hubsoftCats = hubsoftConfigCategories?.filter((hcc) => hcc.category_id === cat.id) || [];
                       const linkedHubsoft = hubsoftCats.map((hc) => hubsoftConfigs?.find((h) => h.id === hc.hubsoft_config_id)?.name).filter(Boolean);
                       return (
-                        <div key={cat.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
-                          <div>
+                        <div key={cat.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg bg-secondary">
+                          <div className="min-w-0 flex-1 break-words">
                             <p className="font-medium text-foreground">
                               {cat.name} <span className="text-xs text-muted-foreground">(pos: {cat.position})</span>
                               {(cat as any).requires_pin && <span className="ml-2 text-xs px-2 py-0.5 rounded bg-destructive/20 text-destructive">🔞 PIN</span>}
@@ -958,7 +961,7 @@ const AdminPanel = () => {
                           </div>
                           <div className="flex gap-2">
                             <Button variant="ghost" size="sm" onClick={() => handleEditCategory(cat)}>Editar</Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDeleteCategory(cat.id)}>
+                            <Button variant="ghost" size="sm" title="Remover categoria" aria-label={`Remover ${cat.name}`} onClick={() => handleDeleteCategory(cat.id)}>
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                           </div>

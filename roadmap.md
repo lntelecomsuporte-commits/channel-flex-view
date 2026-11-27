@@ -1,3 +1,10 @@
+# Mobile admin home-screen app
+
+- [x] Add separate manifest and icons for /admin without offline caching or changes to the TV manifest.
+- [x] Adapt admin navigation, forms, lists and dialogs to phone widths.
+- [x] Verify manifest selection, mobile navigation and existing permission/monitoring regressions (25 tests; isolated browser login/navigation at 360–1280px); provide server commands.
+- [ ] Verify home-screen installation and real administration on the user's phone (blocked: needs deployment to the self-hosted server and installation on the phone).
+
 # LG webOS
 
 - [x] Build the LG webOS app (login by remote/pointer, pairing, channels, adult/PIN lock, menu, EPG, heartbeat) reusing the Samsung flows.

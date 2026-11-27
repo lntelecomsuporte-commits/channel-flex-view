@@ -11,6 +11,7 @@ import LoginPage from "./pages/LoginPage";
 import NotFound from "./pages/NotFound";
 import PrivacyPage from "./pages/PrivacyPage";
 import { UpdateNotification } from "@/components/UpdateNotification";
+import { AppManifest } from "@/components/AppManifest";
 
 const queryClient = new QueryClient();
 
@@ -39,6 +40,7 @@ const App = () => (
       <Sonner />
       <UpdateNotification />
       <BrowserRouter>
+        <AppManifest />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/privacidade" element={<PrivacyPage />} />
