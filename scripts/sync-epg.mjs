@@ -21,6 +21,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { loadInnovaCreds, fetchMotvFeed, findInnovaPrograms } from "./innovatv-motv.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -292,6 +293,73 @@ async function fetchInnovaPrograms(channels) {
     log(`   ${ch.epg_channel_id}: ${programs.length} programas`);
   }
 
+  return byChannelId;
+}
+
+/* InnovaTV atual (MOTV, com login): baixa canais + grade completa da conta.
+ * Arquivos públicos (sem token): sources/innovatv-channels.json (lista para o
+ * seletor do painel) e sources/innovatv-motv.json (grade por canal). */
+const INNOVA_CHANNELS_PATH = join(SOURCES_DIR, "innovatv-channels.json");
+const INNOVA_FEED_PATH = join(SOURCES_DIR, "innovatv-motv.json");
+
+async function readJsonIfFresh(path, maxAgeMin) {
+  if (!await fileExists(path)) return null;
+  const ageMin = (Date.now() - (await stat(path)).mtimeMs) / 60_000;
+  if (ageMin > maxAgeMin) return null;
+  try { return { json: JSON.parse(await readFile(path, "utf8")), ageMin }; } catch { return null; }
+}
+
+/** Retorna { channels, byChannel } ou null quando não há credenciais. */
+async function syncInnovaMotvFeed() {
+  const creds = await loadInnovaCreds(PROJECT_ROOT);
+  if (!creds) {
+    log("   ⚠ innovatv sem credenciais (.env.innovatv) — usando a API antiga");
+    return null;
+  }
+  await mkdir(SOURCES_DIR, { recursive: true });
+
+  if (CONSOLIDATE_ONLY) {
+    const cached = await readJsonIfFresh(INNOVA_FEED_PATH, 24 * 60);
+    return cached?.json?.byChannel ? cached.json : { channels: [], byChannel: {} };
+  }
+
+  if (!FORCE) {
+    const cached = await readJsonIfFresh(INNOVA_FEED_PATH, 150);
+    if (cached?.json?.byChannel) {
+      log(`✓ innovatv feed (cache ${Math.round(cached.ageMin)}min)`);
+      return cached.json;
+    }
+  }
+
+  try {
+    log("⬇  innovatv (conta MOTV)");
+    const feed = await fetchMotvFeed(creds);
+    log(`✓ innovatv autenticado — ${feed.channels.length} canais, ${Object.keys(feed.byChannel).length} com grade`);
+    await writeFile(INNOVA_FEED_PATH, JSON.stringify(feed), "utf8");
+    await writeFile(INNOVA_CHANNELS_PATH, JSON.stringify({ generated: feed.generated, channels: feed.channels }), "utf8");
+    return feed;
+  } catch (e) {
+    log(`✗ innovatv: ${e.message}`);
+    const stale = await readJsonIfFresh(INNOVA_FEED_PATH, 24 * 60);
+    if (stale?.json?.byChannel) {
+      log(`   usando a última grade baixada (${Math.round(stale.ageMin)}min)`);
+      return stale.json;
+    }
+    return { channels: [], byChannel: {} };
+  }
+}
+
+function matchInnovaPrograms(channels, feed) {
+  const byChannelId = new Map();
+  for (const ch of channels) {
+    const programs = findInnovaPrograms(ch.epg_channel_id, feed);
+    if (!programs?.length) {
+      log(`   ⚠ innovatv ${ch.epg_channel_id}: sem grade — escolha o canal pelo botão Buscar no painel`);
+      continue;
+    }
+    byChannelId.set(ch.epg_channel_id, programs);
+    log(`   innovatv ${ch.epg_channel_id}: ${programs.length} programas`);
+  }
   return byChannelId;
 }
 
@@ -663,10 +731,14 @@ async function consolidate(slugByUrl) {
   }
 
   // ── InnovaTV (API JSON) ──────────────────────────────────────────────
+  // A lista da conta é baixada mesmo sem canais salvos, para o seletor do painel.
+  const innovaFeed = await syncInnovaMotvFeed();
   const innovaChannels = fetchInnovaChannels();
   if (innovaChannels.length > 0) {
     log(`📡 canais InnovaTV: ${innovaChannels.length}`);
-    const innovaByChannelId = await fetchInnovaPrograms(innovaChannels);
+    const innovaByChannelId = innovaFeed
+      ? matchInnovaPrograms(innovaChannels, innovaFeed)
+      : await fetchInnovaPrograms(innovaChannels);
     for (const [chanId, programs] of innovaByChannelId) {
       byChannelStruct.set(chanId, programs);
       for (let i = 0; i < programs.length; i++) {

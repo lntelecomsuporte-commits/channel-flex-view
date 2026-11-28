@@ -1,61 +1,83 @@
 /**
- * InnovaTV EPG — API JSON usada por alguns canais (BM&C News, Hallo Anime, …).
+ * InnovaTV EPG — plataforma MOTV (mw.innova.tv.br), que exige a conta da InnovaTV.
  *
- * Exemplo:
- * https://api.innovatv.tv.br/epg/api/epg_list/by_date?date=-2,2&id=BM%26CBM%26C+News&time_zone=America%2FSao_Paulo
- *
- * A resposta é um array plano de programas com start_ut/stop_ut (epoch segundos).
+ * O navegador não faz login na InnovaTV: o scripts/sync-epg.mjs autentica no
+ * servidor e publica, sem token, dois arquivos no mesmo domínio do painel:
+ *   /epg/sources/innovatv-channels.json  → { channels: [{ id, name, logo }] }
+ *   /epg/sources/innovatv-motv.json      → { channels, byChannel: { id: EPGProgram[] } }
  */
 import type { EPGProgram } from "@/hooks/useEPG";
+import { getConsolidatedEpgJsonUrl, getEpgBaseUrl } from "@/lib/epgCache";
 
-export const INNOVATV_BASE_URL = "https://api.innovatv.tv.br/epg/api/epg_list/by_date";
-export const INNOVATV_TIMEZONE = "America/Sao_Paulo";
-export const INNOVATV_DATE_RANGE = "-2,2";
+export const INNOVATV_BASE_URL = "https://mw.innova.tv.br";
 
-export interface InnovaTvItem {
-  start_ut?: number | string;
-  start?: number | string;
-  title?: string;
-  desc?: string | null;
-  pg?: string | null;
+export interface InnovaTvChannel {
+  id: string;
+  name: string;
+  logo?: string | null;
 }
 
-/** Monta a URL da API para um ID de canal da InnovaTV. */
-export function buildInnovaTvUrl(channelId: string, baseUrl?: string): string {
-  const base = (baseUrl || "").trim() || INNOVATV_BASE_URL;
-  const params = new URLSearchParams({
-    date: INNOVATV_DATE_RANGE,
-    id: channelId,
-    time_zone: INNOVATV_TIMEZONE,
-  });
-  return `${base}?${params.toString()}`;
+interface InnovaTvFeed {
+  channels?: InnovaTvChannel[];
+  byChannel?: Record<string, EPGProgram[]>;
 }
 
-/** Converte a resposta da InnovaTV para o formato interno de programas. */
-export function innovaItemsToPrograms(items: unknown): EPGProgram[] {
-  if (!Array.isArray(items)) return [];
-  const out: EPGProgram[] = [];
-  for (const raw of items as InnovaTvItem[]) {
-    const startRaw = raw?.start_ut ?? raw?.start;
-    const startSec = typeof startRaw === "string" ? parseInt(startRaw, 10) : startRaw;
-    if (!startSec || !Number.isFinite(startSec)) continue;
-    const title = (raw?.title || "").trim();
-    const descRaw = (raw?.desc || "").trim();
-    const pg = (raw?.pg || "").trim();
-    out.push({
-      title,
-      start_date: new Date(startSec * 1000).toISOString(),
-      desc: descRaw && descRaw !== title ? descRaw : null,
-      rating: pg && pg !== "S/C" && pg !== "-1" ? pg : null,
-    });
+export const getInnovaTvChannelsUrl = (): string => `${getEpgBaseUrl()}/epg/sources/innovatv-channels.json`;
+export const getInnovaTvFeedUrl = (): string => `${getEpgBaseUrl()}/epg/sources/innovatv-motv.json`;
+
+/** Chave de comparação igual à do servidor ("HALLO! Anime" → "halloanime"). */
+export function innovaKey(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/** Aceita o ID numérico ("9") ou o nome do canal, como os cadastros antigos. */
+export function findInnovaTvPrograms(channelId: string, feed: InnovaTvFeed): EPGProgram[] | null {
+  const wanted = channelId.trim();
+  const byChannel = feed?.byChannel;
+  if (!wanted || !byChannel) return null;
+  if (Array.isArray(byChannel[wanted])) return byChannel[wanted];
+  const key = innovaKey(wanted);
+  if (!key) return null;
+  const match = (feed.channels || []).find((c) => innovaKey(c.id) === key || innovaKey(c.name) === key);
+  return match && Array.isArray(byChannel[match.id]) ? byChannel[match.id] : null;
+}
+
+const NOT_SYNCED =
+  "A lista da InnovaTV ainda não foi baixada no servidor. Configure o .env.innovatv e rode o sync-epg.";
+
+/** Canais da conta InnovaTV, já baixados pelo servidor. */
+export async function fetchInnovaTvChannelList(): Promise<InnovaTvChannel[]> {
+  const res = await fetch(getInnovaTvChannelsUrl(), { cache: "no-cache" });
+  if (res.status === 404) throw new Error(NOT_SYNCED);
+  if (!res.ok) throw new Error(`Lista da InnovaTV indisponível (HTTP ${res.status})`);
+  const json = await res.json().catch(() => null);
+  const list = Array.isArray(json?.channels) ? (json.channels as InnovaTvChannel[]) : [];
+  return list
+    .map((c) => ({ id: String(c?.id ?? "").trim(), name: String(c?.name || c?.id || "").trim(), logo: c?.logo ?? null }))
+    .filter((c) => c.id)
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }));
+}
+
+/** Grade de um canal: feed completo da conta e, se faltar, o consolidado já publicado. */
+export async function fetchInnovaTvPrograms(channelId: string): Promise<EPGProgram[]> {
+  const res = await fetch(getInnovaTvFeedUrl(), { cache: "no-cache" });
+  if (res.ok) {
+    const feed = (await res.json().catch(() => null)) as InnovaTvFeed | null;
+    const programs = feed ? findInnovaTvPrograms(channelId, feed) : null;
+    if (programs?.length) return programs;
   }
-  out.sort((a, b) => a.start_date.localeCompare(b.start_date));
-  return out;
-}
 
-/** Busca e converte o EPG de um canal InnovaTV. */
-export async function fetchInnovaTvPrograms(channelId: string, baseUrl?: string): Promise<EPGProgram[]> {
-  const res = await fetch(buildInnovaTvUrl(channelId, baseUrl));
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return innovaItemsToPrograms(await res.json());
+  const consolidated = await fetch(getConsolidatedEpgJsonUrl(), { cache: "no-cache" });
+  if (consolidated.ok) {
+    const json = await consolidated.json().catch(() => null);
+    const programs = json?.byChannel?.[channelId.trim()];
+    if (Array.isArray(programs) && programs.length) return programs as EPGProgram[];
+  }
+
+  if (res.status === 404) throw new Error(NOT_SYNCED);
+  throw new Error(`Canal "${channelId}" está sem grade na InnovaTV`);
 }

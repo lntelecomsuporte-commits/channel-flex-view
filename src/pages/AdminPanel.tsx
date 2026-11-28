@@ -31,6 +31,7 @@ import { getLocalFunctionUrl, LOCAL_SUPABASE_PUBLISHABLE_KEY } from "@/lib/local
 import { INNOVATV_BASE_URL, fetchInnovaTvPrograms } from "@/lib/innovatv";
 import { NXTV_BASE_URL, fetchNxtvPrograms } from "@/lib/nxtv";
 import NxtvChannelPicker from "@/components/admin/NxtvChannelPicker";
+import InnovaChannelPicker from "@/components/admin/InnovaChannelPicker";
 import ChannelConfigEditor from "@/components/admin/ChannelConfigEditor";
 import ChannelSourceSwitcher from "@/components/admin/ChannelSourceSwitcher";
 import AdminPermissionsManager from "@/components/admin/AdminPermissionsManager";
@@ -134,7 +135,7 @@ const AdminPanel = () => {
     if (!id) return;
     setInnovaTesting(true);
     try {
-      const programs = await fetchInnovaTvPrograms(id, channelForm.epg_url);
+      const programs = await fetchInnovaTvPrograms(id);
       if (programs.length === 0) {
         toast.error("Nenhum programa encontrado para esse ID");
         return;
@@ -230,7 +231,7 @@ const AdminPanel = () => {
       epg_url: isXmltv
         ? (normalizeGithub(channelForm.epg_url) || null)
         : isInnova
-          ? (channelForm.epg_url?.trim() || INNOVATV_BASE_URL)
+          ? INNOVATV_BASE_URL
           : isNxtv
             ? (channelForm.epg_url?.trim() || NXTV_BASE_URL)
             : null,
@@ -640,39 +641,27 @@ const AdminPanel = () => {
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <Label>
-                          ID do canal na InnovaTV{" "}
+                          Canal na InnovaTV{" "}
                           <span className="text-xs text-muted-foreground">
-                            — é o valor do parâmetro <code>id</code> da API (ex.: <code>BM&amp;CBM&amp;C News</code>, <code>hallo anime3</code>)
+                            — informe o ID (ex.: <code>9</code>) ou clique em Buscar
                           </span>
                         </Label>
-                        <div className="flex gap-2">
-                          <Input
-                            value={channelForm.epg_channel_id}
-                            onChange={(e) => setChannelForm((f) => ({ ...f, epg_channel_id: e.target.value }))}
-                            placeholder="hallo anime3"
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            disabled={innovaTesting || !channelForm.epg_channel_id.trim()}
-                            onClick={handleTestInnovatv}
-                          >
-                            {innovaTesting ? "Testando…" : "Testar"}
-                          </Button>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          A URL da API é montada automaticamente com <code>date=-2,2</code> e fuso <code>America/Sao_Paulo</code>.
-                        </p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>
-                          URL base da API <span className="text-xs text-muted-foreground">(opcional — deixe vazio para o padrão)</span>
-                        </Label>
-                        <Input
-                          value={channelForm.epg_url}
-                          onChange={(e) => setChannelForm((f) => ({ ...f, epg_url: e.target.value }))}
-                          placeholder={INNOVATV_BASE_URL}
+                        <InnovaChannelPicker
+                          value={channelForm.epg_channel_id}
+                          onChange={(v) => setChannelForm((f) => ({ ...f, epg_channel_id: v }))}
                         />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={innovaTesting || !channelForm.epg_channel_id.trim()}
+                          onClick={handleTestInnovatv}
+                        >
+                          {innovaTesting ? "Testando…" : "Testar"}
+                        </Button>
+                        <p className="text-xs text-muted-foreground">
+                          A grade vem da conta InnovaTV configurada no servidor e é atualizada a cada sincronismo.
+                        </p>
                       </div>
                       <div className="flex items-center gap-2">
                         <Checkbox checked={channelForm.epg_show_synopsis} onCheckedChange={(v) => setChannelForm((f) => ({ ...f, epg_show_synopsis: !!v }))} />

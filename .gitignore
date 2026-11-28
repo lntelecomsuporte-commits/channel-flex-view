@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Credenciais de EPG do servidor (nunca versionar)
+.env.nxtv
+.env.innovatv

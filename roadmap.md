@@ -1,3 +1,10 @@
+# InnovaTV EPG (account login)
+
+- [x] Sync the InnovaTV grade with the operator account on the server and publish the channel list and grade without tokens.
+- [x] Add the InnovaTV channel search and a test button that reads the synced grade; keep older name-based channel IDs working.
+- [x] Test conversion, channel matching and server credential loading (4 tests).
+- [ ] Confirm the real sync on the server (blocked: needs the user to create .env.innovatv and run sync-epg).
+
 # Mobile admin home-screen app
 
 - [x] Add separate manifest and icons for /admin without offline caching or changes to the TV manifest.
